@@ -1,0 +1,64 @@
+schema_version: "1.0"
+metadata:
+  id: "wb2api"
+  name: "WorkBuddy 2API Engine"
+  version: "1.13.0"
+  description: "WorkBuddy 账号转接代理网关，内嵌多模型 Web 面板"
+  author: "linguo2625469"
+  homepage: "https://github.com/linguo2625469/workbuddy2api-panel"
+  license: "MIT"
+
+compatibility:
+  min_host_version: "0.1.0"
+  supported_os: ["windows", "darwin", "linux"]
+  supported_arch: ["x86_64", "aarch64"]
+
+runtime:
+  type: "binary"
+  entrypoint:
+    windows: "bin/wb2api.exe"
+    darwin: "bin/wb2api"
+    linux: "bin/wb2api"
+  args: ["-config", "{CONFIG_PATH}", "-port", "{PORT}"]
+  env:
+    GIN_MODE: "release"
+  working_dir: "{DATA_DIR}"
+
+distribution:
+  repository: "https://github.com/linguo2625469/workbuddy2api-panel"
+  release_asset_pattern:
+    windows_x86_64: ".*windows.*amd64.*\\.zip"
+    darwin_aarch64: ".*darwin.*arm64.*\\.tar\\.gz"
+    linux_x86_64: ".*linux.*amd64.*\\.tar\\.gz"
+
+lifecycle:
+  policy: "idle_timeout" # persistent | idle_timeout | on_demand | external
+  idle_timeout_seconds: 300
+  startup_timeout_seconds: 15
+  stop_signal: "SIGTERM"
+  graceful_timeout_seconds: 5
+
+network:
+  listen_host: "127.0.0.1"
+  port_allocation: "dynamic" # dynamic | fixed | external
+  health_check:
+    type: "http"
+    path: "/healthz"
+    interval_seconds: 30
+    timeout_seconds: 2
+    expected_status: 200
+
+capabilities:
+  protocols: ["openai_chat", "streaming", "tool_calling"]
+  exported_models:
+    - id: "claude-3-7-sonnet"
+      upstream_model: "claude-3-7-sonnet-20250219"
+    - id: "gpt-4o"
+      upstream_model: "gpt-4o"
+
+security:
+  requires_secrets: ["accounts_token"]
+  permissions:
+    allow_internet_access: true
+    allow_local_storage: true
+    disallow_arbitrary_fs: true

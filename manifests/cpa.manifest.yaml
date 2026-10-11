@@ -1,0 +1,26 @@
+schema_version: "1.0"
+metadata:
+  id: "external-cpa"
+  name: "Local CLIProxyAPI Instance"
+  version: "7.2.115"
+  description: "挂载已在本地运行的 CLIProxyAPI 实例"
+  license: "Proprietary"
+
+runtime:
+  type: "external"
+
+lifecycle:
+  policy: "external" # 宿主不负责启停，永不发送 Kill 信号
+
+network:
+  listen_host: "127.0.0.1"
+  port_allocation: "fixed"
+  fixed_port: 28317
+  health_check:
+    type: "http"
+    path: "/health"
+    interval_seconds: 15
+    timeout_seconds: 2
+
+capabilities:
+  protocols: ["openai_chat", "streaming", "tool_calling", "gemini"]
