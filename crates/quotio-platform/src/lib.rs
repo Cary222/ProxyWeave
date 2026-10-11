@@ -579,6 +579,21 @@ pub fn delete_credential(account: &str) -> Result<(), String> {
     }
 }
 
+pub fn set_plugin_credential(plugin_id: &str, key: &str, value: &str) -> Result<(), String> {
+    let account = format!("plugin:{}:{}", plugin_id, key);
+    set_credential(&account, value)
+}
+
+pub fn get_plugin_credential(plugin_id: &str, key: &str) -> Result<Option<String>, String> {
+    let account = format!("plugin:{}:{}", plugin_id, key);
+    get_credential(&account)
+}
+
+pub fn delete_plugin_credential(plugin_id: &str, key: &str) -> Result<(), String> {
+    let account = format!("plugin:{}:{}", plugin_id, key);
+    delete_credential(&account)
+}
+
 pub fn open_file_manager(path: &Path) -> io::Result<()> {
     let target = if path.is_dir() {
         path.to_path_buf()
@@ -798,7 +813,7 @@ fn system_time_to_unix_seconds(value: SystemTime) -> Option<u64> {
 fn truncate_text(value: &str, limit: usize) -> String {
     let mut truncated = value.chars().take(limit).collect::<String>();
     if value.chars().count() > limit {
-        truncated.push_str("…");
+        truncated.push('…');
     }
     truncated
 }
@@ -810,9 +825,120 @@ pub fn set_sensitive_permissions(path: &Path) -> io::Result<()> {
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        set_windows_sensitive_permissions(path)?;
+    }
+
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = path;
+    }
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn set_windows_sensitive_permissions(path: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+        SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, SetFileSecurityW, TokenUser, DACL_SECURITY_INFORMATION,
+        PROTECTED_DACL_SECURITY_INFORMATION, TOKEN_QUERY, TOKEN_USER,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    let path_wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        let mut token: HANDLE = ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        struct HandleGuard(HANDLE);
+        impl Drop for HandleGuard {
+            fn drop(&mut self) {
+                if !self.0.is_null() {
+                    unsafe { CloseHandle(self.0) };
+                }
+            }
+        }
+        let _token_guard = HandleGuard(token);
+
+        let mut length = 0u32;
+        let _ = GetTokenInformation(token, TokenUser, ptr::null_mut(), 0, &mut length);
+        if length == 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let mut buf = vec![0u8; length as usize];
+        if GetTokenInformation(
+            token,
+            TokenUser,
+            buf.as_mut_ptr() as *mut _,
+            length,
+            &mut length,
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+
+        let token_user = &*(buf.as_ptr() as *const TOKEN_USER);
+        let mut sid_str_ptr: *mut u16 = ptr::null_mut();
+        if ConvertSidToStringSidW(token_user.User.Sid, &mut sid_str_ptr) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        struct LocalFreeGuard(*mut core::ffi::c_void);
+        impl Drop for LocalFreeGuard {
+            fn drop(&mut self) {
+                if !self.0.is_null() {
+                    unsafe { LocalFree(self.0) };
+                }
+            }
+        }
+        let _sid_guard = LocalFreeGuard(sid_str_ptr as _);
+
+        let mut len = 0;
+        while *sid_str_ptr.add(len) != 0 {
+            len += 1;
+        }
+        let sid_slice = std::slice::from_raw_parts(sid_str_ptr, len);
+        let sid_string = String::from_utf16(sid_slice).map_err(io::Error::other)?;
+
+        let sddl = format!("D:P(A;;FA;;;{})", sid_string);
+        let sddl_wide: Vec<u16> = std::ffi::OsStr::new(&sddl)
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+
+        let mut p_sd = ptr::null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl_wide.as_ptr(),
+            SDDL_REVISION_1,
+            &mut p_sd,
+            ptr::null_mut(),
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+
+        let _sd_guard = LocalFreeGuard(p_sd);
+
+        if SetFileSecurityW(
+            path_wide.as_ptr(),
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            p_sd,
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
     }
 
     Ok(())
@@ -955,6 +1081,82 @@ mod tests {
         assert_eq!(mode, 0o600);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn atomic_write_sensitive_file_sets_windows_protected_dacl() {
+        use std::os::windows::ffi::OsStrExt;
+        use std::ptr;
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertSecurityDescriptorToStringSecurityDescriptorW, SDDL_REVISION_1,
+        };
+        use windows_sys::Win32::Security::{
+            GetFileSecurityW, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        };
+
+        let dir = std::env::temp_dir().join(format!(
+            "ql_atomic_write_win_permissions_{}_{}",
+            std::process::id(),
+            current_unix_millis()
+        ));
+        let target = dir.join("auth.json");
+
+        atomic_write(&target, b"sensitive-windows-secret", true).unwrap();
+
+        let path_wide: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+        unsafe {
+            let mut len = 0u32;
+            let _ = GetFileSecurityW(
+                path_wide.as_ptr(),
+                DACL_SECURITY_INFORMATION,
+                ptr::null_mut(),
+                0,
+                &mut len,
+            );
+            assert!(len > 0);
+            let mut buf = vec![0u8; len as usize];
+            assert_ne!(
+                GetFileSecurityW(
+                    path_wide.as_ptr(),
+                    DACL_SECURITY_INFORMATION,
+                    buf.as_mut_ptr() as _,
+                    len,
+                    &mut len,
+                ),
+                0
+            );
+            let mut sddl_ptr: *mut u16 = ptr::null_mut();
+            assert_ne!(
+                ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                    buf.as_ptr() as PSECURITY_DESCRIPTOR,
+                    SDDL_REVISION_1,
+                    DACL_SECURITY_INFORMATION,
+                    &mut sddl_ptr,
+                    ptr::null_mut(),
+                ),
+                0
+            );
+            let mut sddl_len = 0;
+            while *sddl_ptr.add(sddl_len) != 0 {
+                sddl_len += 1;
+            }
+            let sddl = String::from_utf16_lossy(std::slice::from_raw_parts(sddl_ptr, sddl_len));
+            LocalFree(sddl_ptr as _);
+            assert!(
+                sddl.starts_with("D:P("),
+                "SDDL must start with D:P (protected DACL): {}",
+                sddl
+            );
+            assert!(
+                sddl.contains("FA;;;"),
+                "SDDL must grant FILE_ALL_ACCESS (FA): {}",
+                sddl
+            );
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn prune_keeps_only_latest_backup_for_same_source_file() {
         let dir = std::env::temp_dir().join(format!(
@@ -1016,5 +1218,43 @@ mod tests {
             assert_eq!(count, 1, "round {round} should keep exactly one backup");
         }
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn plugin_keyring_lifecycle_isolates_namespace_and_roundtrips() {
+        let p1 = format!("test_p1_{}", std::process::id());
+        let p2 = format!("test_p2_{}", std::process::id());
+        let key = "api_key";
+        let val1 = "secret-val-p1";
+        let val2 = "secret-val-p2";
+
+        // 确保初始干净
+        let _ = delete_plugin_credential(&p1, key);
+        let _ = delete_plugin_credential(&p2, key);
+
+        set_plugin_credential(&p1, key, val1).expect("set p1 credential");
+        set_plugin_credential(&p2, key, val2).expect("set p2 credential");
+
+        // 验证读取与命名空间隔离
+        assert_eq!(
+            get_plugin_credential(&p1, key).unwrap().as_deref(),
+            Some(val1)
+        );
+        assert_eq!(
+            get_plugin_credential(&p2, key).unwrap().as_deref(),
+            Some(val2)
+        );
+
+        // 删除 p1 不应影响 p2
+        delete_plugin_credential(&p1, key).expect("delete p1 credential");
+        assert_eq!(get_plugin_credential(&p1, key).unwrap(), None);
+        assert_eq!(
+            get_plugin_credential(&p2, key).unwrap().as_deref(),
+            Some(val2)
+        );
+
+        // 清理 p2
+        delete_plugin_credential(&p2, key).expect("delete p2 credential");
+        assert_eq!(get_plugin_credential(&p2, key).unwrap(), None);
     }
 }

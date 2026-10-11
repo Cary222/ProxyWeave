@@ -24,13 +24,13 @@
 
 | 编号 | Feature | 来源候选与原路径 | 决策/当前状态 |
 |---|---|---|---|
-| M01 | Process Supervisor | shared-child；Win32 Job Object 官方 API | 后续核验具体版本、实现与测试；shared-child 本身不等于进程树 Job Object 回收。External 禁 Kill |
-| M02 | Port Allocator | portpicker 候选 | 后续版本/许可证/测试核验；绑定探测后释放仍有 TOCTOU；就绪超时不单独证明端口冲突 |
+| M01 | Process Supervisor | Win32 Job Object 官方 API (`windows-sys` 0.61.2) | Feature 2 实施中：基于 Win32 Job Object 实现 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 进程生命周期绑定；External 严禁 Kill。详见 ADR-003 |
+| M02 | Port Allocator | 标准库 `std::net::TcpListener` 端口检测 | Feature 2 实施中：回环端口分配与占用预检；收集明确冲突证据（`AddrInUse`），就绪超时绝不单独推定为端口冲突。详见 ADR-003 |
 | M03 | Async Gateway | Axum/Hyper、TiyGate server | 待 Feature 审计；不采用 Quotio 阻塞 bridge，不引入 SQLx |
 | M04 | SSE | TiyGate protocols、eventsource-stream 候选 | 待 Feature 审计；协议正常完成证据优先，异常不补 DONE |
 | M05 | Protocol IR | TiyGate `crates/protocols/` 等实际路径待核验 | Phase 2 候选，保留原测试，禁止整体业务合并 |
 | M06 | Model Router | TiyGate/LiteLLM 设计候选 | 未审计，不预先授权重新实现同质算法 |
-| M07 | Credential Broker | Quotio `crates/quotio-platform/src/lib.rs`；keyring 3.6.3（原配置） | 已读平台文件。含业务命名空间，Windows sensitive 权限为空操作；Keyring/ACL 功能本阶段不宣称已验证 |
+| M07 | Credential Broker | Quotio `crates/quotio-platform`；`keyring` 3.6.3；`windows-sys` 0.61.2 | Feature 2 实施中：Keyring 命名空间隔离与持久化；实现真实 Windows 文件 DACL 限制（阻断继承、独占当前用户），废除空操作。详见 ADR-003 |
 | M08 | Installer | Quotio `crates/quotio-core/src/proxy_download.rs` | 下载/校验/解压候选，未引入；后续按范围核验与泛化，不能整体否定 |
 | M09 | Config Store | Quotio platform `atomic_write`/`replace_file` 与原测试 | 已读平台文件及对应 Windows/Unix 分支；原子写入不等于双副本容灾或 Windows 凭据隔离 |
 | M10 | Manifest Engine | 直接依赖 serde_yaml_ng 0.10.0 / Serde；Quotio atomic_write | Feature 1 严格契约/本地包登记实施中；来源/测试见 ADR-002 与 FEATURE1.md，待 Inspector 独立复验；非运行支持声明 |

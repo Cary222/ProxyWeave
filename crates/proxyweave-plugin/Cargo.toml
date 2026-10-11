@@ -13,3 +13,12 @@ sha2 = "=0.10.9"
 semver = "=1.0.28"
 url = "=2.5.8"
 tempfile = "=3.27.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "process"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
