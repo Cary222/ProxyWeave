@@ -1,0 +1,251 @@
+=== FEATURE 4 FULL PASS RECEIPT ===
+Timestamp: 2026-10-11T23:07:00.648Z
+
+>>> [D:/ProxyWeave] cargo fmt --all -- --check
+
+>>> [D:/ProxyWeave] cargo clippy -p quotio-desktop -p proxyweave-gateway -p proxyweave-plugin -p quotio-platform --all-targets --no-deps --offline -- -D warnings
+
+>>> [D:/ProxyWeave] cargo test --workspace --offline
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+test gateway_fixture_child ... ignored, invoked by RuntimeManager as a real Managed child
+test external_gateway_cancel_never_controls_provider_lifecycle ... ok
+
+running 1 test
+
+running 1 test
+test auth_models_nonstream_headers_error_passthrough ... ok
+
+running 1 test
+test header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown ... ok
+
+running 1 test
+test native_disconnect_during_stream_cancels_upstream_and_releases_lease ... ok
+
+running 1 test
+test native_disconnect_during_header_wait_cancels_upstream_and_releases_lease ... ok
+
+running 1 test
+test streaming_bytes_truncation_and_plain_eof_never_synthesize_done ... ok
+
+running 1 test
+test concurrent_leases_block_stop_and_release_only_after_last_drop ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.94s
+
+
+running 11 tests
+test probe::tests::identity_precedes_ready_and_busy_status_contract ... ok
+test runtime::tests::test_external_provider_refuses_stop_and_kill ... ok
+test projection::tests::def006_replacements_are_opaque_for_both_secret_key_orders ... ok
+test projection::tests::def006_errors_and_debug_never_contain_supplied_data ... ok
+test projection::tests::test_projection_replaces_all_standard_placeholders ... ok
+test projection::tests::test_projection_fails_on_unresolved_secret ... ok
+test projection::tests::def006_json_values_preserve_exact_decoded_data_and_types ... ok
+test port::tests::test_pick_unused_port_returns_valid_port ... ok
+test port::tests::test_port_conflict_detection_when_bound ... ok
+test projection::tests::test_generic_json_rendering_and_atomic_write ... ok
+test job::tests::test_job_object_kills_child_on_drop ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 13 tests
+test strict_parser_rejects_unknown_duplicate_and_multiple_documents ... ok
+test manifest_size_and_mapping_duplicates_are_rejected ... ok
+test secret_command_lines_and_projection_aliases_are_rejected ... ok
+test portable_package_path_boundaries ... ok
+test external_has_no_owned_executable_or_lifecycle_side_effects ... ok
+test mismatched_hash_or_missing_file_does_not_register ... ok
+Ϊ C:\Users\Cary\AppData\Local\Temp\.tmpNxCuBH\junction <<===>> C:\Users\Cary\AppData\Local\Temp\.tmpNxCuBH\real ����������
+test junction_source_is_rejected ... ok
+test invalid_configuration_does_not_pollute_persisted_settings ... ok
+test conflicting_duplicate_does_not_overwrite_existing_record ... ok
+test tampered_registration_or_installed_executable_fails_closed_on_reload ... ok
+test import_duplicate_settings_and_restart_reload ... ok
+test read_only_record_write_failure_keeps_prior_configuration ... ok
+test concurrent_import_on_clones_is_idempotent ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 14 tests
+test managed_fixture_child ... ignored, invoked only as an isolated Managed subprocess
+test zero_retry_conflict_has_no_spawn_and_no_projection ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test real_managed_singleflight_spawns_once_and_busy_is_preserved ... ok
+test def005_correct_busy_is_not_replaced_by_failure_or_timeout ... ok
+
+running 1 test
+
+running 1 test
+test def002_http200_wrong_identity_is_not_ready ... ok
+
+running 1 test
+test abort_during_start_reclaims_job_and_marks_failed ... ok
+
+running 1 test
+test def005_pure_http_timeout_remains_timeout_without_stale_failure ... ok
+test def004_conflict_reselects_port_and_templates_reach_real_child ... ok
+
+running 1 test
+test def005_malformed_http_preserves_safe_error_without_url_or_body ... ok
+
+running 1 test
+test def005_later_ready_supersedes_previous_identity_failure ... ok
+
+running 1 test
+test def003_starting_visible_and_queued_stop_cleans_delayed_child ... ok
+
+running 1 test
+test def006_actual_managed_args_env_and_keyring_projection_preserve_data ... ok
+
+running 1 test
+
+running 1 test
+test def001_exited_child_reconciles_and_restarts_with_live_new_pid ... ok
+
+running 1 test
+test def005_missing_and_wrong_identity_preserve_safe_failure ... ok
+
+test result: ok. 13 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.63s
+
+
+running 4 tests
+test test_port_conflict_explicit_distinction ... ok
+test test_job_object_kills_process_on_drop ... ok
+running 
+test test_generic_managed_projection_and_spawn_without_hardcoding ... ok
+test test_external_service_zero_kill_protection ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test test_host_events_bounded_fifo ... ok
+test test_desktop_gateway_lifecycle_and_backend_attachment ... ok
+test test_desktop_state_master_key_and_config_persistence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 8 tests
+test tests::replace_file_failure_preserves_existing_target ... ok
+test tests::replace_file_replaces_existing_target ... ok
+test tests::prune_keeps_only_latest_backup_for_same_source_file ... ok
+test tests::atomic_write_sensitive_file_sets_windows_protected_dacl ... ok
+test tests::atomic_write_replace_failure_cleans_temp_file_and_preserves_target_directory ... ok
+test tests::backup_then_restore_leaves_a_single_backup ... ok
+test tests::plugin_keyring_lifecycle_isolates_namespace_and_roundtrips ... ok
+test tests::atomic_write_replaces_existing_file_beyond_max_path ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 7 tests
+test tests::default_local_settings_use_unoccupied_management_port ... ok
+test tests::rose_theme_uses_stable_snake_case_wire_value ... ok
+test tests::legacy_codex_launch_profile_defaults_dream_skin_to_disabled ... ok
+test tests::management_snapshot_collects_first_refresh_payload ... ok
+test tests::management_write_requests_keep_proxy_wire_keys ... ok
+test tests::routing_strategy_response_accepts_current_and_legacy_shapes ... ok
+test tests::api_call_contract_uses_management_api_wire_keys ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> [D:/ProxyWeave/apps/desktop] npm test
+
+> proxyweave-desktop@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.9 D:/ProxyWeave/apps/desktop
+
+ ✓ src/shell.test.tsx (2 tests) 12ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  07:07:41
+   Duration  889ms (transform 163ms, setup 0ms, import 384ms, tests 12ms, environment 0ms)
+
+
+>>> [D:/ProxyWeave/apps/desktop] npm run build
+
+> proxyweave-desktop@0.1.0 build
+> tsc && vite build
+
+vite v7.3.5 building client environment for production...
+transforming...
+✓ 46 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   3.09 kB │ gzip:   1.23 kB
+dist/assets/index-57j4LhSv.css  128.65 kB │ gzip:  22.77 kB
+dist/assets/window-C-nCAz0k.js   15.16 kB │ gzip:   3.82 kB
+dist/assets/index-DSkRMRgE.js   448.17 kB │ gzip: 127.67 kB
+✓ built in 1.35s
+
+>>> [D:/ProxyWeave/apps/desktop] npx @tauri-apps/cli build --debug --no-bundle
+
+> proxyweave-desktop@0.1.0 build
+> tsc && vite build
+
+vite v7.3.5 building client environment for production...
+transforming...
+✓ 46 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   3.09 kB │ gzip:   1.23 kB
+dist/assets/index-57j4LhSv.css  128.65 kB │ gzip:  22.77 kB
+dist/assets/window-C-nCAz0k.js   15.16 kB │ gzip:   3.82 kB
+dist/assets/index-DSkRMRgE.js   448.17 kB │ gzip: 127.67 kB
+✓ built in 1.36s
+

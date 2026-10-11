@@ -4,3 +4,4 @@
 /docs/verification/feature2-*.txt -text
 /docs/verification/feature3-*.txt -text
 /docs/references/licenses/Axum-Reverse-Proxy-MIT.txt -text
+/docs/verification/feature4-*.txt -text

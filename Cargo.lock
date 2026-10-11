@@ -3066,13 +3066,19 @@ dependencies = [
 name = "quotio-desktop"
 version = "0.7.7"
 dependencies = [
+ "getrandom 0.3.4",
+ "proxyweave-gateway",
  "proxyweave-plugin",
  "quotio-platform",
  "quotio-types",
+ "reqwest",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

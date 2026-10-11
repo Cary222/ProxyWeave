@@ -1,6 +1,6 @@
 # ProxyWeave Reference Source Registry（参考源档案）
 
-版本：v2.2 — Phase 0 Windows 基座通过；F1 已独立 Verified；F2 六具体 DEF 已 Verified、整体 IN_REVIEW；F3 实施中，真实插件/最终桌面仍开放。
+版本：v2.3 — Phase 0 Windows 基座通过；F1 已独立 Verified；F2 六具体 DEF 已 Verified；F3 已独立 Verified；F4 桌面宿主已实现并验证，真实插件与最终原生桌面 MCP 验收仍开放。
 
 ## 状态纪律
 
@@ -36,7 +36,7 @@
 | M10 | Manifest Engine | 直接依赖 serde_yaml_ng 0.10.0 / Serde；Quotio atomic_write | Feature 1 严格契约/本地包登记已 Inspector Verified；来源/测试见 ADR-002 与 FEATURE1.md；非运行支持声明 |
 | M11 | Lifecycle | DSH 可逆副作用设计候选 | 未审计，后续按实际 Rust 依赖选型 |
 | M12 | IDE Handoff | Quotio `crates/quotio-core/src/agent_config.rs` | 登记为 Phase 3 候选；不是 Phase 0 必须引入资产 |
-| M13 | Desktop Shell | Quotio `apps/desktop/src-tauri/`、React bootstrap | 已直接复用；本轮 Windows 构建/测试与窗口/托盘/关闭/单实例行为验证通过；其他平台未验证 |
+| M13 | Desktop Shell | Quotio `apps/desktop/src-tauri/`、React bootstrap | 已直接复用；本轮 Windows 构建/测试与窗口/托盘/关闭/单实例行为验证通过；Feature 4 极简桌面宿主、IPC 胶水、网关/插件/事件管理与测试调用 UI 已实现并通过构建与测试，详见 ADR-005 与 FEATURE4.md |
 | M14 | API Doctor | tower-http trace 候选 | 未引入；版本、脱敏契约与测试开发前核验 |
 | M15 | Compatibility Flight | DSH 交互参考与协议测试候选 | 未引入；Phase 2 功能验收，Phase 4 发布回归 |
 

@@ -578,7 +578,7 @@ security:
 |---|---|---|---|
 | **Phase -1 Gate** | **项目命名与权威规范门禁** | 🟢 **已通过 (PASSED)** | 1. 确定正式产品名 `ProxyWeave`；<br>2. 建立独立权威仓库 `https://github.com/Cary222/ProxyWeave`；<br>3. 编写权威开发政策与参考源登记表；<br>4. 统一团队提交作者身份与签名规范。 |
 | **Phase 0 Gate** | **脚手架审计与工程初始化门禁** | 🟢 **本轮 Windows 范围通过 (PASSED)** | Git 实读固定 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 / MIT；原副本 build/test 后原样引入并分轮裁剪；目标 fmt/check/test 与 embedded Tauri build 通过，窗口/托盘/关闭/单实例实测通过。证据与未验证边界见 `docs/verification/PHASE0.md`；非全平台或完整产品验收。 |
-| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | 🟡 **Feature 1 实施中，未 Verified** | 1. 固化 Manifest Schema 1.0 契约；<br>2. 跑通 Axum 0.7 异步网关；<br>3. 跑通端口初筛与冲突重试恢复；<br>4. 实现首个 Managed 插件 (wb2api) 端到端调用。 |
+| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | 🟡 **F1/F3 Verified，F2 DEF Verified，F4 送审中** | 1. 固化 Manifest Schema 1.0 契约（F1 Verified）；<br>2. 跑通 Axum 0.8 异步网关与流式透传（F3 Verified）；<br>3. 跑通进程生命周期、DACL、Keyring、端口与探针（F2 DEF Verified）；<br>4. 桌面宿主与 UI 测试调用闭环已开发验证（F4 ReadyForReview）；最终原生桌面 MCP 验收仍开放。 |
 | **Phase 2 Gate** | **协议编解码与高级流式管道门禁** | ⚪ **待启动 (PENDING)** | 1. 移植 TiyGate IR 协议转换模块；<br>2. 跑通流式终止符规范补发与异常防御；<br>3. 完成 Compatibility Flight 质检套件自测。 |
 | **Phase 3 Gate** | **桌面控制台与插件市场门禁** | ⚪ **待启动 (PENDING)** | 1. React + Tailwind CSS 极简暗色控制台；<br>2. Git-Native 插件发现与下载校验；<br>3. IDE Handoff 自动配置写入测试通过。 |
 | **Phase 4 Gate** | **发布与全平台流水线门禁** | ⚪ **待启动 (PENDING)** | 1. GitHub Actions 多平台自动化构建；<br>2. 跨平台可执行资产打包与安装包发布；<br>3. 完整性校验与安全通告审计。 |

@@ -7,39 +7,13 @@ use tauri::{
     AppHandle, Manager,
 };
 
-struct PluginRegistry(proxyweave_plugin::Registry);
+pub mod host;
+use host::DesktopState;
 
 #[tauri::command]
-async fn import_local_plugin(
-    registry: tauri::State<'_, PluginRegistry>,
-    manifest_path: String,
-) -> Result<proxyweave_plugin::ImportResult, String> {
-    let registry = registry.0.clone();
-    tauri::async_runtime::spawn_blocking(move || registry.import(manifest_path))
-        .await
-        .map_err(|_| "plugin import task failed".to_string())?
-}
-
-#[tauri::command]
-async fn list_local_plugins(
-    registry: tauri::State<'_, PluginRegistry>,
-) -> Result<Vec<proxyweave_plugin::PluginRecord>, String> {
-    let registry = registry.0.clone();
-    tauri::async_runtime::spawn_blocking(move || registry.list())
-        .await
-        .map_err(|_| "plugin list task failed".to_string())?
-}
-
-#[tauri::command]
-async fn save_plugin_settings(
-    registry: tauri::State<'_, PluginRegistry>,
-    id: String,
-    settings: std::collections::BTreeMap<String, serde_json::Value>,
-) -> Result<proxyweave_plugin::PluginRecord, String> {
-    let registry = registry.0.clone();
-    tauri::async_runtime::spawn_blocking(move || registry.save_settings(&id, settings))
-        .await
-        .map_err(|_| "plugin settings task failed".to_string())?
+async fn quit_app(app: AppHandle, state: tauri::State<'_, DesktopState>) -> Result<(), String> {
+    host::graceful_exit(&state, &app).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -58,11 +32,6 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
         let _ = panel.hide();
     }
     Ok(())
-}
-
-#[tauri::command]
-fn quit_app(app: AppHandle) {
-    app.exit(0);
 }
 
 #[tauri::command]
@@ -149,7 +118,9 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             // Fail closed on corrupt registration without touching external processes.
             registry.list().map_err(std::io::Error::other)?;
-            app.manage(PluginRegistry(registry));
+            let desktop_state =
+                DesktopState::new(profile, registry).map_err(std::io::Error::other)?;
+            app.manage(desktop_state);
             let show = MenuItem::with_id(app, "show", "Open ProxyWeave", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -162,7 +133,13 @@ pub fn run() {
                     "show" => {
                         let _ = show_main_window(app.clone());
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        let app_clone = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let state = app_clone.state::<DesktopState>();
+                            host::graceful_exit(&state, &app_clone).await;
+                        });
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -200,9 +177,25 @@ pub fn run() {
             quit_app,
             show_menubar,
             get_platform_info,
-            import_local_plugin,
-            list_local_plugins,
-            save_plugin_settings
+            host::import_local_plugin,
+            host::list_local_plugins,
+            host::save_plugin_settings,
+            host::get_plugin_runtime_status,
+            host::start_plugin,
+            host::stop_plugin,
+            host::restart_plugin,
+            host::get_plugin_secrets_status,
+            host::save_plugin_secret,
+            host::delete_plugin_secret,
+            host::get_gateway_status,
+            host::get_gateway_master_key,
+            host::regenerate_gateway_master_key,
+            host::start_gateway,
+            host::stop_gateway,
+            host::set_gateway_port,
+            host::select_plugin,
+            host::get_host_events,
+            host::test_gateway_models
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
