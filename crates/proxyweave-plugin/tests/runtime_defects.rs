@@ -27,6 +27,9 @@ fn managed_fixture_child() {
     let listener = TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
     let identity = std::env::var("FIXTURE_IDENTITY").unwrap();
     let code = std::env::var("FIXTURE_STATUS").unwrap();
+    let mode = std::env::var("FIXTURE_MODE").unwrap_or_default();
+    let mut requests = 0;
+    let private_marker = "private-peer-marker-never-publish";
     for connection in listener.incoming() {
         let mut connection = connection.unwrap();
         connection
@@ -37,7 +40,24 @@ fn managed_fixture_child() {
         if String::from_utf8_lossy(&request[..n]).starts_with("GET /exit ") {
             std::process::exit(0);
         }
-        let _ = write!(connection, "HTTP/1.1 {code} Fixture\r\nX-Fixture: {identity}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        requests += 1;
+        if mode == "timeout" {
+            // Accept HTTP but never deliver headers within the Manifest probe deadline.
+            std::thread::sleep(Duration::from_millis(250));
+            continue;
+        }
+        if mode == "malformed" {
+            let _ = write!(connection, "{private_marker}\r\n\r\n");
+            continue;
+        }
+        let identity_header = if mode == "missing" {
+            String::new()
+        } else if mode == "recover" && requests > 1 {
+            "X-Fixture: review-fixture\r\n".into()
+        } else {
+            format!("X-Fixture: {identity}\r\n")
+        };
+        let _ = write!(connection, "HTTP/1.1 {code} Fixture\r\n{identity_header}X-Private: {private_marker}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{private_marker}", private_marker.len());
     }
 }
 
@@ -331,4 +351,173 @@ async fn abort_during_start_reclaims_job_and_marks_failed() {
         manager.get_status("review-fixture").await,
         RuntimeStatus::Stopped
     );
+}
+
+fn diagnostic_record(mode: &str, identity: &str, status: u16) -> PluginRecord {
+    let mut record = record(0, identity, status, 0);
+    if let proxyweave_plugin::manifest::Runtime::Managed { env, .. } = &mut record.manifest.runtime
+    {
+        env.insert("FIXTURE_MODE".into(), mode.into());
+    }
+    // Include a credential-like URL marker to detect accidental reqwest error echo.
+    record.manifest.network.health_check.path = "/healthz?token=private-url-token".into();
+    record.manifest.lifecycle.startup_timeout_ms = 1000;
+    record
+}
+
+fn assert_sanitized(value: &impl std::fmt::Debug) {
+    let text = format!("{value:?}");
+    for private in [
+        "private-peer-marker-never-publish",
+        "private-url-token",
+        "private-wrong-identity",
+        "X-Fixture",
+        "review-fixture",
+    ] {
+        assert!(
+            !text.contains(private),
+            "probe diagnostic exposed private data"
+        );
+    }
+}
+
+#[tokio::test]
+async fn def005_missing_and_wrong_identity_preserve_safe_failure() {
+    for (mode, identity, code) in [
+        ("missing", "private-wrong-identity", 200),
+        ("", "private-wrong-identity", 200),
+        ("", "private-wrong-identity", 503),
+    ] {
+        let temp = sandbox();
+        let manager = RuntimeManager::new();
+        let status = manager
+            .start_plugin(
+                &diagnostic_record(mode, identity, code),
+                temp.path(),
+                Some(proxyweave_plugin::port::pick_unused_port().unwrap()),
+                temp.path(),
+                None,
+            )
+            .await
+            .unwrap();
+        let RuntimeStatus::Failed { ref error } = status else {
+            panic!("expected identity failure");
+        };
+        assert!(
+            error.contains("last probe failure: Health check identity mismatch or missing header")
+        );
+        assert_sanitized(&status);
+        assert_eq!(manager.get_status("review-fixture").await, status);
+        let pid = wait_for_spawn(temp.path()).await;
+        assert!(alive(pid));
+        manager.stop_plugin("review-fixture").await.unwrap();
+        wait_for_exit(pid).await;
+    }
+}
+
+#[tokio::test]
+async fn def005_later_ready_supersedes_previous_identity_failure() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let (_, pid) = ready(
+        manager
+            .start_plugin(
+                &diagnostic_record("recover", "private-wrong-identity", 200),
+                temp.path(),
+                Some(proxyweave_plugin::port::pick_unused_port().unwrap()),
+                temp.path(),
+                None,
+            )
+            .await
+            .unwrap(),
+    );
+    assert!(alive(pid));
+    assert_eq!(pids(temp.path()), vec![pid]);
+    assert!(matches!(
+        manager.get_status("review-fixture").await,
+        RuntimeStatus::Ready { .. }
+    ));
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
+}
+
+#[tokio::test]
+async fn def005_pure_http_timeout_remains_timeout_without_stale_failure() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let status = manager
+        .start_plugin(
+            &diagnostic_record("timeout", "review-fixture", 200),
+            temp.path(),
+            Some(proxyweave_plugin::port::pick_unused_port().unwrap()),
+            temp.path(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        status,
+        RuntimeStatus::Failed {
+            error: "Readiness probe timed out after 1s".into()
+        }
+    );
+    assert_sanitized(&status);
+    let pid = wait_for_spawn(temp.path()).await;
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
+}
+
+#[tokio::test]
+async fn def005_correct_busy_is_not_replaced_by_failure_or_timeout() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let status = manager
+        .start_plugin(
+            &diagnostic_record("", "review-fixture", 503),
+            temp.path(),
+            Some(proxyweave_plugin::port::pick_unused_port().unwrap()),
+            temp.path(),
+            None,
+        )
+        .await
+        .unwrap();
+    let RuntimeStatus::Busy {
+        pid: Some(pid),
+        ref reason,
+        ..
+    } = status
+    else {
+        panic!("expected declared Busy");
+    };
+    assert_eq!(reason, "Manifest-declared unavailable HTTP status 503");
+    assert_sanitized(&status);
+    assert!(alive(pid));
+    assert_eq!(manager.get_status("review-fixture").await, status);
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
+}
+
+#[tokio::test]
+async fn def005_malformed_http_preserves_safe_error_without_url_or_body() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let status = manager
+        .start_plugin(
+            &diagnostic_record("malformed", "review-fixture", 200),
+            temp.path(),
+            Some(proxyweave_plugin::port::pick_unused_port().unwrap()),
+            temp.path(),
+            None,
+        )
+        .await
+        .unwrap();
+    let RuntimeStatus::Failed { ref error } = status else {
+        panic!("expected HTTP failure");
+    };
+    assert!(error.contains("last probe failure: HTTP request failed"));
+    assert_sanitized(&status);
+    assert_eq!(manager.get_status("review-fixture").await, status);
+    let pid = wait_for_spawn(temp.path()).await;
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
 }

@@ -69,14 +69,14 @@ pub async fn probe_http(
         .build()
     {
         Ok(c) => c,
-        Err(e) => {
+        Err(_) => {
             return ProbeReport {
                 status: ProbeStatus::Failed {
-                    error: format!("Failed to build HTTP client: {}", e),
+                    error: "Failed to build HTTP client".into(),
                 },
                 status_code: None,
                 latency_ms: 0,
-                detail: format!("Client build error: {}", e),
+                detail: "HTTP client build failed".into(),
             };
         }
     };
@@ -114,16 +114,16 @@ pub async fn probe_http(
                     status: ProbeStatus::Starting,
                     status_code: None,
                     latency_ms,
-                    detail: format!("Connection refused or not yet listening: {}", err),
+                    detail: "Connection failed or not yet listening".into(),
                 }
             } else {
                 ProbeReport {
                     status: ProbeStatus::Failed {
-                        error: format!("HTTP error: {}", err),
+                        error: "HTTP request failed".into(),
                     },
                     status_code: None,
                     latency_ms,
-                    detail: format!("HTTP request error: {}", err),
+                    detail: "HTTP request failed".into(),
                 }
             }
         }

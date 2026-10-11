@@ -1,0 +1,219 @@
+ÒÑ¸´ÖÆ         1 ¸öÎÄ¼þ¡£
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.69s
+     Running unittests src\lib.rs (target\debug\deps\proxyweave_plugin-999c43044b016147.exe)
+
+running 8 tests
+test probe::tests::identity_precedes_ready_and_busy_status_contract ... ok
+test projection::tests::test_projection_fails_on_unresolved_secret ... ok
+test projection::tests::test_projection_replaces_all_standard_placeholders ... ok
+test runtime::tests::test_external_provider_refuses_stop_and_kill ... ok
+test port::tests::test_pick_unused_port_returns_valid_port ... ok
+test port::tests::test_port_conflict_detection_when_bound ... ok
+test projection::tests::test_generic_json_rendering_and_atomic_write ... ok
+test job::tests::test_job_object_kills_child_on_drop ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\local_registry.rs (target\debug\deps\local_registry-e656817ece954a0f.exe)
+
+running 13 tests
+test secret_command_lines_and_projection_aliases_are_rejected ... ok
+test manifest_size_and_mapping_duplicates_are_rejected ... ok
+test strict_parser_rejects_unknown_duplicate_and_multiple_documents ... ok
+test portable_package_path_boundaries ... ok
+test mismatched_hash_or_missing_file_does_not_register ... ok
+Îª C:\Users\Cary\AppData\Local\Temp\.tmpxSpl5J\junction <<===>> C:\Users\Cary\AppData\Local\Temp\.tmpxSpl5J\real ´´½¨µÄÁª½Ó
+test external_has_no_owned_executable_or_lifecycle_side_effects ... ok
+test junction_source_is_rejected ... ok
+test invalid_configuration_does_not_pollute_persisted_settings ... ok
+test tampered_registration_or_installed_executable_fails_closed_on_reload ... ok
+test read_only_record_write_failure_keeps_prior_configuration ... ok
+test conflicting_duplicate_does_not_overwrite_existing_record ... ok
+test import_duplicate_settings_and_restart_reload ... ok
+test concurrent_import_on_clones_is_idempotent ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\runtime_defects.rs (target\debug\deps\runtime_defects-6f46811ded9e14f8.exe)
+
+running 13 tests
+test managed_fixture_child ... ignored, invoked only as an isolated Managed subprocess
+test zero_retry_conflict_has_no_spawn_and_no_projection ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test def005_later_ready_supersedes_previous_identity_failure ... ok
+
+running 1 test
+test def004_conflict_reselects_port_and_templates_reach_real_child ... ok
+test def003_starting_visible_and_queued_stop_cleans_delayed_child ... ok
+test def005_malformed_http_preserves_safe_error_without_url_or_body ... ok
+
+running 1 test
+test abort_during_start_reclaims_job_and_marks_failed ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test def005_correct_busy_is_not_replaced_by_failure_or_timeout ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test real_managed_singleflight_spawns_once_and_busy_is_preserved ... ok
+test def001_exited_child_reconciles_and_restarts_with_live_new_pid ... ok
+
+running 1 test
+test def005_pure_http_timeout_remains_timeout_without_stale_failure ... ok
+test def002_http200_wrong_identity_is_not_ready ... ok
+
+running 1 test
+test def005_missing_and_wrong_identity_preserve_safe_failure ... ok
+
+test result: ok. 12 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.47s
+
+     Running tests\runtime_lifecycle.rs (target\debug\deps\runtime_lifecycle-39bdd74b8c8d324c.exe)
+
+running 4 tests
+test test_port_conflict_explicit_distinction ... ok
+test test_job_object_kills_process_on_drop ... ok
+running 
+´íÎó: ²»Ö§³ÖÊäÈëÖØÐÂ¶¨Ïò£¬Á¢¼´ÍË³ö´Ë½ø³Ì¡£
+test test_generic_managed_projection_and_spawn_without_hardcoding ... ok
+test test_external_service_zero_kill_protection ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+
+     Running unittests src\lib.rs (target\debug\deps\quotio_desktop_lib-4d9bc05d98ebe393.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\quotio_desktop-c6296bd5e2d67777.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\quotio_platform-a11b44900280ce12.exe)
+
+running 8 tests
+test tests::replace_file_failure_preserves_existing_target ... ok
+test tests::prune_keeps_only_latest_backup_for_same_source_file ... ok
+test tests::replace_file_replaces_existing_target ... ok
+test tests::atomic_write_sensitive_file_sets_windows_protected_dacl ... ok
+test tests::atomic_write_replace_failure_cleans_temp_file_and_preserves_target_directory ... ok
+test tests::plugin_keyring_lifecycle_isolates_namespace_and_roundtrips ... ok
+test tests::backup_then_restore_leaves_a_single_backup ... ok
+test tests::atomic_write_replaces_existing_file_beyond_max_path ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src\lib.rs (target\debug\deps\quotio_types-3e831721157010f0.exe)
+
+running 7 tests
+test tests::rose_theme_uses_stable_snake_case_wire_value ... ok
+test tests::management_snapshot_collects_first_refresh_payload ... ok
+test tests::api_call_contract_uses_management_api_wire_keys ... ok
+test tests::management_write_requests_keep_proxy_wire_keys ... ok
+test tests::default_local_settings_use_unoccupied_management_port ... ok
+test tests::legacy_codex_launch_profile_defaults_dream_skin_to_disabled ... ok
+test tests::routing_strategy_response_accepts_current_and_legacy_shapes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests proxyweave_plugin
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quotio_desktop_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quotio_platform
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quotio_types
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.83s
+
+added 98 packages in 5s
+
+20 packages are looking for funding
+  run `npm fund` for details
+
+> proxyweave-desktop@0.1.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90mD:/ProxyWeave/apps/desktop[39m
+
+ [32mâœ“[39m src/shell.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 05:01:27
+[2m   Duration [22m 377ms[2m (transform 81ms, setup 0ms, import 198ms, tests 10ms, environment 0ms)[22m
+
+
+> proxyweave-desktop@0.1.0 build
+> tsc && vite build
+
+[36mvite v7.3.5 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mâœ“[39m 42 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  3.09 kB[22m[1m[22m[2m â”‚ gzip:   1.23 kB[22m
+[2mdist/[22m[35massets/index-_9BmrAfQ.css  [39m[1m[2m118.07 kB[22m[1m[22m[2m â”‚ gzip:  20.98 kB[22m
+[2mdist/[22m[36massets/window-DoGxedOA.js  [39m[1m[2m 15.16 kB[22m[1m[22m[2m â”‚ gzip:   3.82 kB[22m
+[2mdist/[22m[36massets/index-BLdgPMxm.js   [39m[1m[2m404.67 kB[22m[1m[22m[2m â”‚ gzip: 119.93 kB[22m
+[32mâœ“ built in 1.19s[39m
+
+> proxyweave-desktop@0.1.0 tauri
+> tauri build --debug --no-bundle
+
+        Info `tauri-build` dependency has workspace inheritance enabled. The features array won't be automatically rewritten. Expected features: []
+        Info `tauri` dependency has workspace inheritance enabled. The features array won't be automatically rewritten. Expected features: [macos-private-api]
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> proxyweave-desktop@0.1.0 build
+> tsc && vite build
+
+[36mvite v7.3.5 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mâœ“[39m 42 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  3.09 kB[22m[1m[22m[2m â”‚ gzip:   1.23 kB[22m
+[2mdist/[22m[35massets/index-_9BmrAfQ.css  [39m[1m[2m118.07 kB[22m[1m[22m[2m â”‚ gzip:  20.98 kB[22m
+[2mdist/[22m[36massets/window-DoGxedOA.js  [39m[1m[2m 15.16 kB[22m[1m[22m[2m â”‚ gzip:   3.82 kB[22m
+[2mdist/[22m[36massets/index-BLdgPMxm.js   [39m[1m[2m404.67 kB[22m[1m[22m[2m â”‚ gzip: 119.93 kB[22m
+[32mâœ“ built in 1.24s[39m
+   Compiling quotio-desktop v0.7.7 (D:\ProxyWeave\apps\desktop\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.98s
+       Built application at: D:\ProxyWeave\target\debug\quotio-desktop.exe

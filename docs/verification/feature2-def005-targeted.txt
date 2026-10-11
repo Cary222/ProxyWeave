@@ -1,0 +1,54 @@
+   Compiling serde_yaml_ng v0.10.0
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.02s
+     Running tests\runtime_defects.rs (target\debug\deps\runtime_defects-a9ff92051cf09acf.exe)
+
+running 13 tests
+test abort_during_start_reclaims_job_and_marks_failed ... 
+running 1 test
+ok
+test def001_exited_child_reconciles_and_restarts_with_live_new_pid ... 
+running 1 test
+
+running 1 test
+ok
+test def002_http200_wrong_identity_is_not_ready ... 
+running 1 test
+ok
+test def003_starting_visible_and_queued_stop_cleans_delayed_child ... 
+running 1 test
+ok
+test def004_conflict_reselects_port_and_templates_reach_real_child ... 
+running 1 test
+ok
+test def005_correct_busy_is_not_replaced_by_failure_or_timeout ... 
+running 1 test
+ok
+test def005_later_ready_supersedes_previous_identity_failure ... 
+running 1 test
+ok
+test def005_malformed_http_preserves_safe_error_without_url_or_body ... 
+running 1 test
+ok
+test def005_missing_and_wrong_identity_preserve_safe_failure ... 
+running 1 test
+
+running 1 test
+
+running 1 test
+ok
+test def005_pure_http_timeout_remains_timeout_without_stale_failure ... 
+running 1 test
+ok
+test managed_fixture_child ... ignored, invoked only as an isolated Managed subprocess
+test real_managed_singleflight_spawns_once_and_busy_is_preserved ... 
+running 1 test
+ok
+test zero_retry_conflict_has_no_spawn_and_no_projection ... ok
+
+test result: ok. 12 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 15.09s
+
+    Checking indexmap v2.14.0
+    Checking serde_yaml_ng v0.10.0
+    Checking proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.69s

@@ -1,0 +1,149 @@
+�Ѹ���         1 ���ļ���
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+   Compiling quotio-desktop v0.7.7 (D:\ProxyWeave\apps\desktop\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.04s
+     Running unittests src\lib.rs (target\debug\deps\proxyweave_plugin-999c43044b016147.exe)
+
+running 8 tests
+test probe::tests::identity_precedes_ready_and_busy_status_contract ... ok
+test projection::tests::test_projection_fails_on_unresolved_secret ... ok
+test projection::tests::test_projection_replaces_all_standard_placeholders ... ok
+test runtime::tests::test_external_provider_refuses_stop_and_kill ... ok
+test port::tests::test_pick_unused_port_returns_valid_port ... ok
+test port::tests::test_port_conflict_detection_when_bound ... ok
+test job::tests::test_job_object_kills_child_on_drop ... ok
+test projection::tests::test_generic_json_rendering_and_atomic_write ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\local_registry.rs (target\debug\deps\local_registry-e656817ece954a0f.exe)
+
+running 13 tests
+test secret_command_lines_and_projection_aliases_are_rejected ... ok
+test manifest_size_and_mapping_duplicates_are_rejected ... ok
+test strict_parser_rejects_unknown_duplicate_and_multiple_documents ... ok
+test portable_package_path_boundaries ... ok
+Ϊ C:\Users\Cary\AppData\Local\Temp\.tmpBXE1js\junction <<===>> C:\Users\Cary\AppData\Local\Temp\.tmpBXE1js\real ����������
+test mismatched_hash_or_missing_file_does_not_register ... ok
+test external_has_no_owned_executable_or_lifecycle_side_effects ... ok
+test junction_source_is_rejected ... ok
+test invalid_configuration_does_not_pollute_persisted_settings ... ok
+test read_only_record_write_failure_keeps_prior_configuration ... ok
+test tampered_registration_or_installed_executable_fails_closed_on_reload ... ok
+test conflicting_duplicate_does_not_overwrite_existing_record ... ok
+test import_duplicate_settings_and_restart_reload ... ok
+test concurrent_import_on_clones_is_idempotent ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\runtime_defects.rs (target\debug\deps\runtime_defects-6f46811ded9e14f8.exe)
+
+running 13 tests
+test managed_fixture_child ... ignored, invoked only as an isolated Managed subprocess
+test zero_retry_conflict_has_no_spawn_and_no_projection ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test def004_conflict_reselects_port_and_templates_reach_real_child ... ok
+
+running 1 test
+
+thread 'managed_fixture_child' (58244) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:27:67:
+called `Result::unwrap()` on an `Err` value: Os { code: 10048, kind: AddrInUse, message: "通常每个套接字地址(协议/网络地址/端口)只允许使用一次。" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test managed_fixture_child ... FAILED
+
+failures:
+
+failures:
+    managed_fixture_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+test def005_correct_busy_is_not_replaced_by_failure_or_timeout ... FAILED
+
+running 1 test
+test abort_during_start_reclaims_job_and_marks_failed ... ok
+test def003_starting_visible_and_queued_stop_cleans_delayed_child ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+thread 'managed_fixture_child' (7348) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:27:67:
+called `Result::unwrap()` on an `Err` value: Os { code: 10048, kind: AddrInUse, message: "通常每个套接字地址(协议/网络地址/端口)只允许使用一次。" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test managed_fixture_child ... FAILED
+
+failures:
+
+failures:
+    managed_fixture_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+test def005_later_ready_supersedes_previous_identity_failure ... ok
+test real_managed_singleflight_spawns_once_and_busy_is_preserved ... ok
+test def005_pure_http_timeout_remains_timeout_without_stale_failure ... FAILED
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+thread 'managed_fixture_child' (66468) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:27:67:
+called `Result::unwrap()` on an `Err` value: Os { code: 10048, kind: AddrInUse, message: "通常每个套接字地址(协议/网络地址/端口)只允许使用一次。" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test managed_fixture_child ... FAILED
+
+failures:
+
+failures:
+    managed_fixture_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+test def005_missing_and_wrong_identity_preserve_safe_failure ... FAILED
+test def001_exited_child_reconciles_and_restarts_with_live_new_pid ... ok
+test def005_malformed_http_preserves_safe_error_without_url_or_body ... ok
+test def002_http200_wrong_identity_is_not_ready ... ok
+
+failures:
+
+---- def005_correct_busy_is_not_replaced_by_failure_or_timeout stdout ----
+
+thread 'def005_correct_busy_is_not_replaced_by_failure_or_timeout' (55592) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:490:9:
+expected declared Busy
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- def005_pure_http_timeout_remains_timeout_without_stale_failure stdout ----
+
+thread 'def005_pure_http_timeout_remains_timeout_without_stale_failure' (51192) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:458:5:
+assertion `left == right` failed
+  left: Failed { error: "Managed process exited during startup: exit code: 101" }
+ right: Failed { error: "Readiness probe timed out after 1s" }
+
+---- def005_missing_and_wrong_identity_preserve_safe_failure stdout ----
+
+thread 'def005_missing_and_wrong_identity_preserve_safe_failure' (62144) panicked at crates\proxyweave-plugin\tests\runtime_defects.rs:406:9:
+assertion failed: error.contains("last probe failure: Health check identity mismatch or missing header")
+
+
+failures:
+    def005_correct_busy_is_not_replaced_by_failure_or_timeout
+    def005_missing_and_wrong_identity_preserve_safe_failure
+    def005_pure_http_timeout_remains_timeout_without_stale_failure
+
+test result: FAILED. 9 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.41s
+
+error: test failed, to rerun pass `-p proxyweave-plugin --test runtime_defects`

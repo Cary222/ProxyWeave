@@ -406,6 +406,7 @@ impl RuntimeManager {
         let timeout = Duration::from_millis(record.manifest.lifecycle.startup_timeout_ms);
 
         let mut final_status = RuntimeStatus::Starting;
+        let mut last_probe_failure = None;
         while probe_start.elapsed() < timeout {
             if let Some(exit) = child
                 .try_wait()
@@ -442,8 +443,9 @@ impl RuntimeManager {
                 ProbeStatus::Starting | ProbeStatus::Timeout => {
                     tokio::time::sleep(Duration::from_millis(150)).await;
                 }
-                ProbeStatus::Failed { .. } => {
-                    // Could still be warming up
+                ProbeStatus::Failed { error } => {
+                    // Probe errors are sanitized at their source; a later Ready/Busy still wins.
+                    last_probe_failure = Some(error);
                     tokio::time::sleep(Duration::from_millis(150)).await;
                 }
                 ProbeStatus::Stopped => {
@@ -454,7 +456,10 @@ impl RuntimeManager {
 
         if final_status == RuntimeStatus::Starting {
             final_status = RuntimeStatus::Failed {
-                error: format!("Readiness probe timed out after {:?}", timeout),
+                error: last_probe_failure.map_or_else(
+                    || format!("Readiness probe timed out after {:?}", timeout),
+                    |error| format!("Readiness probe timed out after {timeout:?}; last probe failure: {error}"),
+                ),
             };
         }
 
