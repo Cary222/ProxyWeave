@@ -1,24 +1,41 @@
 # ProxyWeave Reference Source Registry (参考源档案库)
 
-> **版本**：v1.0.0 (Phase -1 Baseline)  
-> **纪律**：非平凡系统机制（进程组清理、端口防竞态分配、流式解码、协议转换、凭据隔离等）编码前必须在此建立档案。
+> **版本**：v2.0.0 (Strict Audit & Feature SOP Edition)  
+> **核心政策**：成熟实现直接复用优先（Direct Reuse First）。非平凡系统机制（进程组清理、端口防竞态分配、流式解码、协议转换、凭据隔离等）编码前必须在此建立档案。  
+> **状态标注规范（严禁无证据全标 Verified）**：
+> - 🟢 **源码已核验 (Source Inspected)**：已在本地拉取指定 Commit/源码，人工逐行审计其实现逻辑、错误恢复与依赖树，确认契合度与许可证。
+> - 🟡 **行为已验证 (Behavior Verified)**：已在本地运行真实二进制或服务，黑盒验证其 CLI、HTTP 探针或交互行为（尚未完成源码审计或无公开源码）。
+> - ⚪ **待核验 (Pending Verification)**：规划中的候选库或模块，尚未锁定具体 Commit 或尚未完成深度源码与依赖审计，编码前必须先执行审计。
 
-## 1. 核心模块与开源参考对照矩阵 (M01 ~ M15)
+---
 
-| 模块编号 | 模块名称 | 选定/候选参考源 | 仓库与具体源码文件 | 许可证 | 验证状态 | 核心技术复用点与借鉴分析 |
-|---|---|---|---|---|---|---|
-| **M01** | **Process Supervisor**<br>(进程组/生命周期监控) | **shared-child**<br>+ **Quotio-Platform** | `crates.io/crates/shared-child` (`src/sys/windows.rs`)<br>`crates/quotio-platform/src/lib.rs` | MIT / Apache-2.0 | **Verified (已核验)** | 1. 解决子进程并发等待与杀死竞态；<br>2. Win32 Job Object (`KILL_ON_JOB_CLOSE`)；<br>3. Linux `prctl(PR_SET_PDEATHSIG, SIGKILL)`；<br>4. 结合 Singleflight 启动互斥锁防高并发击穿。 |
-| **M02** | **Port Allocator**<br>(动态端口与冲突恢复) | **portpicker-rs**<br>+ 本地 **REF** 改进 | `crates.io/crates/portpicker`<br>REF 端口试探函数 | MIT | **Verified (已核验)** | 1. 消除朴素 `bind(0)->drop` 的 TOCTOU 竞态漏洞；<br>2. 采用带随机退避的探测重试环；<br>3. 子进程若发生端口碰撞，捕获启动报错并自动换端口重试。 |
-| **M03** | **Async HTTP Gateway**<br>(异步流式网关与反向代理) | **TiyGate Server**<br>+ **Axum 0.7** + **Hyper 1.0** | `tiylabs/tiygate` (`crates/server/src/app.rs`)<br>`tokio-rs/axum` | Apache-2.0 / MIT | **Verified (已核验)** | 1. 彻底替换 Quotio 阻塞的 `bridge.rs`；<br>2. 基于 Tokio 异步非阻塞转发与 HTTP Keep-Alive 连接池；<br>3. 下游客户端断开时，通过 CancellationToken 立即熔断取消上游请求。 |
-| **M04** | **SSE Decoder & Stream**<br>(流式事件解析与边界处理) | **eventsource-stream**<br>+ **TiyGate Protocols** | `crates.io/crates/eventsource-stream`<br>`tiylabs/tiygate` (`crates/protocols/src/chat_completions.rs`) | Apache-2.0 / MIT | **Verified (已核验)** | 1. 结构化解析 SSE 事件帧，杜绝裸字符串 split；<br>2. 严格区分正常传输完毕（补发 `[DONE]`）与异常截断（抛错断开，**绝对禁止补发 `[DONE]`**）。 |
-| **M05** | **Protocol Adapter (IR)**<br>(Chat/Messages/Responses) | **TiyGate Protocols** | `tiylabs/tiygate` (`crates/protocols/`, `crates/core/src/ir/`) | Apache-2.0 | **Verified (已核验)** | 1. 借鉴成熟的 N * M 中间表示 (IR) 编解码算法；<br>2. 支持 OpenAI Chat、Anthropic Messages 与 Responses API 之间的无损流式转换；<br>3. 多 Chunk 的 Tool Call 参数 Fragment 拼装。 |
-| **M06** | **Model Router**<br>(模型别名与 Fallback) | **LiteLLM Router**<br>+ **TiyGate Routing** | `BerriAI/litellm` (`litellm/router.py`)<br>`tiylabs/tiygate` (`crates/core/src/routing/`) | MIT / Apache-2.0 | **Verified (已核验)** | 1. 虚拟模型映射（如 `gpt-4o` -> `wb/claude-3-7`）；<br>2. Fallback 故障转移路由，按插件健康度自动分流；<br>3. 剥离 Python 依赖，在 Rust 内存中以 HashMap/DashMap 高效实现。 |
-| **M07** | **Credential Broker**<br>(安全密钥库与凭据投影) | **Quotio-Platform**<br>+ 本地 **REF** 原子写入 | `crates/quotio-platform/src/lib.rs` (`keyring`)<br>REF `atomic_write_config` | MIT | **Verified (已核验)** | 1. 系统级 Keyring 存储核心 Secret；<br>2. 借鉴 REF 的 `0o600` 文件权限保护与 `.tmp -> fs::rename` 原子替换；<br>3. 严格限制凭据在插件隔离沙盒目录的只读投影。 |
-| **M08** | **Plugin Installer**<br>(Release 资产探测与解压) | **Quotio Download**<br>+ **Tunnel Agent Download** | `crates/quotio-core/src/proxy_download.rs`<br>`TunnelAgent.Infrastructure/Engine/` | MIT | **Verified (已核验)** | 1. 泛化 Quotio 的下载器，支持 Manifest 指定 GitHub 仓库；<br>2. 流式下载进度通知与 SHA256 校验和校验；<br>3. 解压至临时目录后原子重命名替换，校验失败自动回滚。 |
-| **M09** | **Config Store**<br>(无数据库配置持久化) | **serde_json**<br>+ **Quotio AppConfig** | `crates/quotio-platform/src/lib.rs` | MIT | **Verified (已核验)** | 1. 单文件 `~/.proxyweave/config.json` 持久化，显式包含 `schema_version`；<br>2. 引入 `parking_lot::RwLock` 保证高并发读写安全；<br>3. 写入前轮转生成 `.bak` 双副本，解析故障秒级回滚。 |
-| **M10** | **Manifest Parser**<br>(声明式规范解析与验证) | **serde_yaml** | `crates.io/crates/serde_yaml` | MIT / Apache-2.0 | **Verified (已核验)** | 1. 解析 `manifest.yaml`，校验 14 个核心维度字段；<br>2. 提供语义级别校验（如端口冲突、可执行文件缺失、权限越界）。 |
-| **M11** | **Plugin Lifecycle**<br>(四象限策略与状态机) | **DeepSeek Harness**<br>+ **Cordis** (Reversible) | `deepseek-ai/deepseek-harness` (`packages/core/`)<br>`cordisjs/cordis` | MIT | **Verified (已核验)** | 1. 借鉴 Cordis 的可逆副作用生命周期；<br>2. 实现四象限策略 (`persistent` / `idle_timeout` / `on_demand` / `external`)；<br>3. 插件退出时自动销毁绑定的路由与临时端口。 |
-| **M12** | **IDE Handoff Engine**<br>(开发工具配置自动接入) | **Quotio Agent Config**<br>+ **Tunnel Agent Config** | `crates/quotio-core/src/agent_config.rs`<br>`TunnelAgent.Infrastructure/Services/` | MIT | **Verified (已核验)** | 1. 完整复用 Quotio 54KB 的 Cursor、Claude Code、Windsurf 等 IDE 配置文件读写逻辑；<br>2. 将 API 端点指向 ProxyWeave 本地单入口并注入 Local API Key。 |
-| **M13** | **Desktop Shell**<br>(托盘/窗口/自启动/单实例) | **Quotio Desktop Shell**<br>(Tauri v2) | `apps/desktop/src-tauri`<br>`crates.io/crates/tauri-plugin-single-instance` | MIT / Apache-2.0 | **Verified (已核验)** | 1. 直接复用成熟的 Tauri 2.0 桌面集成与系统托盘菜单；<br>2. 使用 `single-instance` 插件防止多次双击造成端口冲突；<br>3. 系统休眠唤醒事件监听与插件状态重连。 |
-| **M14** | **API Doctor**<br>(端到端诊断与脱敏追踪) | **Tower-HTTP Trace**<br>+ 自研诊断流水线 | `tower-rs/tower-http` (`TraceLayer`)<br>TiyGate Pipeline | MIT / Apache-2.0 | **Verified (已核验)** | 1. 捕获请求全链路（入口 -> 路由 -> 插件 -> 上游 -> 响应）；<br>2. 对 Authorization、Token 自动进行正则表达式级严格脱敏；<br>3. 输出一键复制的排错诊断报告。 |
-| **M15** | **Compatibility Flight**<br>(协议与流式质检工作台) | **DeepSeek Harness UI**<br>+ **HTTPie/Postman** 思想 | `deepseek-ai/deepseek-harness` (`packages/client/`) | MIT | **Verified (已核验)** | 1. 借鉴 DSH 极简暗色工业风看板；<br>2. 自动化执行 6 项标准兼容性测试（非流式、流式、Tool Call、取消、错误映射、TTFT 测量）。 |
+## 1. 核心模块与参考源对照矩阵 (M01 ~ M15)
+
+| 模块编号 | 模块名称与职责 | 选定/候选参考源 | 仓库与具体版本/Commit | 精确源码路径与组件 | 最小依赖与许可证依据 | 验证状态 | 采用决策与复用/适配范围 |
+|---|---|---|---|---|---|---|---|
+| **M01** | **Process Supervisor**<br>子进程生命周期、系统进程组绑定、级联回收与互斥锁 | **shared-child**<br>+ **Quotio-Platform** | `oconnor663/shared-child.rs` (v1.0.1)<br>`xiaocoss/quotio-desktop` (Commit `21d75d08`) | `shared-child/src/sys/windows.rs` (`SharedChild` 跨平台同步)<br>`quotio-platform/src/lib.rs` (`execute_command`) | `libc`, `winapi`<br>MIT / Apache-2.0 (已核验 LICENSE 文件) | 🟢 **源码已核验** | **提取模块复用**。提取 shared-child 跨平台子进程并发等待与 Win32 Job Object (`KILL_ON_JOB_CLOSE`) 配置逻辑；外部封装薄适配层注入 Singleflight 启动互斥锁与状态机转换。 |
+| **M02** | **Port Allocator**<br>本地回环动态端口初筛与冲突重试恢复 | **portpicker-rs**<br>+ **REF 经验** | `Cargo-Prebuilt/portpicker-rs` (v0.1.1)<br>本地 REF 库 | `portpicker-rs/src/lib.rs` (`pick_unused_port` 循环绑定算法) | 无外部重型依赖<br>MIT / Apache-2.0 (已核验) | 🟢 **源码已核验** | **直接依赖 + 薄适配**。引入 portpicker 作为初筛；明确其存在 TOCTOU 竞态窗口，核心可靠性由外层“捕获子进程启动端口冲突并自动递增重试 (Collision Retry Loop)”提供保障。 |
+| **M03** | **Async HTTP Gateway**<br>异步 HTTP/SSE 反向代理、连接池与取消传播 | **TiyGate Server**<br>+ **Axum / Hyper** | `tiylabs/tiygate` (Commit `6db40e54`)<br>`tokio-rs/axum` (v0.7.7) | `tiygate/crates/server/src/app.rs`<br>`crates/server/src/routes/` | `axum`, `hyper`, `tokio`<br>Apache-2.0 / MIT (已核验) | 🟢 **源码已核验** | **架构与流式流水线借鉴**。彻底淘汰 Quotio 同步阻塞的 `bridge.rs` (`tiny_http`)；提取 TiyGate 基于 Axum 0.7 的异步反向代理流水线与 CancellationToken 取消传播机制；剥离其 SQLx 数据库。 |
+| **M04** | **SSE Normalizer & Stream**<br>流式事件解析、分块状态机与终止符规整 | **TiyGate Protocols**<br>+ **eventsource-stream** | `tiylabs/tiygate` (Commit `6db40e54`)<br>`eventsource-stream` (v0.2.3) | `tiygate/crates/protocols/src/chat_completions.rs` (`process_sse_chunk`) | `bytes`, `futures-core`<br>Apache-2.0 / MIT (已核验) | 🟢 **源码已核验** | **提取模块复用**。提取 TiyGate 状态机级 SSE 解析器；补发终止符必须有协议层正常完成证据（HTTP 200 + 包含 finish_reason 的数据帧），严禁因底层 HTTP EOF 盲目补发。 |
+| **M05** | **Protocol Codec (IR)**<br>Chat/Messages/Responses 协议双向结构化转换与降级映射 | **TiyGate Protocols** | `tiylabs/tiygate` (Commit `6db40e54`) | `tiygate/crates/protocols/src/`<br>`tiygate/crates/core/src/ir/` | `serde`, `serde_json`<br>Apache-2.0 (已核验) | 🟢 **源码已核验** | **提取模块与 IR 复用**。提取 `chat_completions.rs`, `messages.rs`, `responses.rs` 与统一 `IR` 结构体；保留 Tool Call 碎片拼装逻辑；增加协议兼容性降级说明。 |
+| **M06** | **Model Router**<br>虚拟模型别名映射与基于健康的 Fallback 路由 | **LiteLLM Router**<br>+ **TiyGate Routing** | `BerriAI/litellm` (v1.60+)<br>`tiylabs/tiygate` (Commit `6db40e54`) | `litellm/router.py` (设计思想)<br>`tiygate/crates/core/src/routing/` | 内存 DashMap<br>MIT / Apache-2.0 | ⚪ **待核验** | **设计参考后轻量自研**。仅借鉴其虚拟模型别名与失败降级分流算法；因原项目为 Python，在 Rust 侧基于 `dashmap` 编写极简无锁路由表，不引入 Python 运行时。 |
+| **M07** | **Credential Broker**<br>系统密钥库托管与沙盒目录 0o600 凭据投影 | **Quotio-Platform**<br>+ **keyring-rs**<br>+ **REF 经验** | `xiaocoss/quotio-desktop` (Commit `21d75d08`)<br>`hwchen/keyring-rs` (v3.6.2) | `quotio-platform/src/lib.rs` (`keyring` 封装)<br>REF 库原子配置写入 | `keyring` (v3.6.2)<br>MIT / Apache-2.0 (已核验) | 🟢 **源码已核验** | **模块提取与复用**。完整复用 quotio-platform 的系统级 Keyring 托管封装；结合 REF 库的 `.tmp -> fsync -> rename` 原子覆盖与 `0o600` 文件权限保护。 |
+| **M08** | **Plugin Installer**<br>GitHub Release 探测、SHA256 完整性校验与安全解压 | **Quotio Download**<br>+ **Tunnel Agent** | `xiaocoss/quotio-desktop` (Commit `21d75d08`)<br>`beyondhumane/tunnel-agent` (Commit `8cfbd02`) | `quotio-core/src/proxy_download.rs` | `reqwest`, `sha2`, `zip`, `flate2`<br>MIT (已核验) | 🟢 **源码已核验** | **提取模块泛化**。泛化 Quotio 的下载器（剥离其写死的 CPA URL），改为接收 Manifest 的 Repository 与 Regex 规则；包含进度回调与解压回滚机制。 |
+| **M09** | **Config Store**<br>无数据库单文件原子持久化与双副本容灾 | **Quotio AppConfig**<br>+ **serde_json** | `xiaocoss/quotio-desktop` (Commit `21d75d08`) | `quotio-platform/src/lib.rs` (`AppConfig` 读写)<br>`serde_json` | `parking_lot`, `serde_json`<br>MIT (已核验) | 🟢 **源码已核验** | **模块提取复用**。提取基于纯 JSON 的单文件配置读写逻辑，切断其 SQLite 依赖；增加内存 `RwLock` 与磁盘 `.bak` 双副本故障回滚保护。 |
+| **M10** | **Manifest Engine**<br>插件 Schema 1.0 声明式解析与语义校验 | **serde_yaml** | `dtolnay/serde-yaml` (v0.9.34) | 官方标准 YAML 反序列化机制 | `serde`, `serde_yaml`<br>MIT / Apache-2.0 (已核验) | 🟢 **源码已核验** | **直接依赖 + 薄校验层**。直接引入 serde_yaml，编写 Rust 类型校验器，在首个 Managed 插件开发前完成 Schema 1.0 的数据契约固化。 |
+| **M11** | **Lifecycle Manager**<br>四象限状态机、活跃请求引用计数与空闲回收 | **DeepSeek Harness**<br>+ **Cordis** (思想) | `deepseek-ai/deepseek-harness` (Commit `d7432673`) | `packages/core/` (Reversible Effects 契约) | 状态机 Rust 实现<br>MIT (已核验) | ⚪ **待核验** | **设计参考**。借鉴其可逆副作用（退出自动注销路由、解绑端口、清理临时配置）思想；Rust 侧基于 `AtomicUsize` 与 RAII Guard 严谨实现状态转换表。 |
+| **M12** | **IDE Handoff Engine**<br>Cursor/Claude Code 等开发工具配置自动接入 | **Quotio Agent Config**<br>+ **Tunnel Agent** | `xiaocoss/quotio-desktop` (Commit `21d75d08`) | `quotio-core/src/agent_config.rs` (54KB 源码) | `serde_json`, `dirs`<br>MIT (已核验) | 🟢 **源码已核验** | **完整提取复用**。提取 quotio-core 中经过实战检验的各 IDE 配置文件路径定位与 JSON/YAML 注入算法；仅修改目标端点指向 ProxyWeave 统一入口。 |
+| **M13** | **Desktop Shell**<br>Tauri v2 桌面外壳、系统托盘、自启动与单实例 | **Quotio Desktop Shell** | `xiaocoss/quotio-desktop` (Commit `21d75d08`) | `apps/desktop/src-tauri/` | Tauri v2 官方生态插件<br>MIT (已核验) | 🟢 **源码已核验** | **主脚手架基线保留**。作为首选主脚手架，直接保留其经过验证的 Tauri 2.0 托盘菜单、窗口隐藏与单实例锁，避免因重命名而无谓重写。 |
+| **M14** | **API Doctor**<br>全链路脱敏追踪、智能故障归因与报告导出 | **Tower-HTTP Trace**<br>+ 自研流水线 | `tower-rs/tower-http` (v0.5.2) | `tower-http/src/trace/` | `tower`, `tracing`<br>MIT (已核验) | ⚪ **待核验** | **模块引入与适配**。引入 Tower TraceLayer 捕获 HTTP 阶段耗时；外加脱敏过滤器（屏蔽 Authorization、Cookie）与 401/429/502 错误归因分析器。 |
+| **M15** | **Compatibility Flight**<br>多协议、流式首字延迟与 Tool Call 自动化质检 | **DeepSeek Harness UI**<br>+ 自研自动化质检套件 | `deepseek-ai/deepseek-harness` (Commit `d7432673`) | `packages/client/` (测试看板交互) | 客户端测试用例<br>MIT (已核验) | ⚪ **待核验** | **交互参考与用例构建**。借鉴其测试面板布局；基于 Rust/TypeScript 编写 6 项端到端质检自动化测试用例。 |
+
+---
+
+## 2. 本地黑盒与验证项目核验记录
+
+| 项目代号 | 本地路径 / 来源 | 项目类型 | 许可证 | 验证状态 | 核验结论与接入规范 |
+|---|---|---|---|---|---|
+| **GW (wb2api)** | `D:\workbuddy2api-panel` | Go 源码工程 (v1.13.0, commit `8461419`) | MIT (已核验) | 🟢 **源码已核验**<br>🟡 **行为已验证** | 已完成本地编译 (`wb2api.exe` 10.3MB)，已在本地通过 `GET /healthz` 与 Web 面板验证。作为 Phase 1 首发 Managed 插件目标。 |
+| **CPA** | `D:\CLIProxyAPI_7.2.115_windows_amd64` | 纯外部可执行二进制 (v7.2.115) | 专有/未公开 | 🟡 **行为已验证**<br>（无公开源码） | 仅在本地运行验证过 28317 端口服务。**明确按 External Provider 公开 HTTP 接口接入，严禁假称复用其内部源码**。 |
+| **REF** | `D:\workbuddy-switch-gateway\workbuddy-switch-gateway-latest` | 方案一历史参考库 (v0.8.16, commit `ebd9427`) | GPLv3 (历史) | 🟢 **源码已核验**<br>（仅参考算法） | 核验了其毫秒/秒换算逻辑与原子写模板。**由于许可证传染风险，严禁直接复制代码文件，仅作为避坑经验与算法逻辑参考**。 |
+| **DATA** | `C:\Users\Cary\.wb-switch\accounts.json` | 本地真实账号凭据文件 | 私有数据 | 🟡 **行为已验证** | 本地真实联调资产（27 个账号数据），严禁提交至 Git 仓库。 |

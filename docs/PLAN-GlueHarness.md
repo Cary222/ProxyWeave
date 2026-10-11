@@ -1,12 +1,14 @@
-# GlueHarness (暂定名 / 候选 APIDock / RelayCraft) 产品与技术架构规划书 (Plan)
+# [历史文档归档] GlueHarness 早期架构规划草案 (Historical Archive)
 
-> **定位**：永不过时的轻量级 AI/Code 反代与模型中继“胶水层”桌面基座  
-> **核心哲学**：上游易逝，胶水永存 · Everything is a Plugin · 极简原生 · 强引导性 · 零数据库负担 · **Reference-First 坚决不盲目造轮子**  
-> **版本**：v2.0.0 (Comprehensive Engineering Edition)  
-> **状态**：规划设计冻结，待 Launch Gate 准入裁定
-> **历史归档提示 (Archive Notice)**：  
-> 本规划书为立项初期的 v2.0.0 早期架构演进草案。项目现已正式命名为 **ProxyWeave**。  
-> 最新、权威且经过脚手架与开源源码完整审计的 v3.0.0 规范请查阅：根目录 [`../Plan.md`](../Plan.md) 及 [`PLAN-ProxyWeave.md`](./PLAN-ProxyWeave.md)。
+> ⚠️ **历史文档归档声明 (Historical Archive Notice)**：  
+> 本文档为 ProxyWeave 项目在立项早期（使用代号 GlueHarness / APIDock / RelayCraft 时期）的初版架构探索草案 (v2.0.0)。  
+> **本项目已正式定名为 ProxyWeave，并全面升级为 v3.0.0 生产级工程规划与强制复用规范。本文档仅保留作为历史演进过程记录，不再作为当前研发和实现的依据。**  
+> **当前唯一权威规划与技术规范请参见**：
+> - 根目录核心规划：[`../Plan.md`](../Plan.md)
+> - 架构设计归档镜像：[`PLAN-ProxyWeave.md`](./PLAN-ProxyWeave.md)
+> - 参考源登记档案库：[`references/REFERENCE_REGISTRY.md`](./references/REFERENCE_REGISTRY.md)
+> - 架构决策记录：[`architecture/ADR/README.md`](./architecture/ADR/README.md)
+> - 第三方声明与致谢：[`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)
 
 ---
 

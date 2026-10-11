@@ -1,3 +1,10 @@
+# ==============================================================================
+# ProxyWeave Plugin Manifest (Schema 1.0 Draft)
+# 模块目标: WorkBuddy 2API Engine (Managed 模式)
+# 验证状态: 待验证 (Pending Live Verification)
+# 说明: 本文件为 Schema 1.0 语法样例，尚未在 ProxyWeave 运行态完成端到端加载与联调测试。
+# 权限声明说明: permissions 字段为声明式契约与用户告知机制，并非操作系统级强隔离安全沙箱。
+# ==============================================================================
 schema_version: "1.0"
 metadata:
   id: "wb2api"
@@ -27,9 +34,9 @@ runtime:
 distribution:
   repository: "https://github.com/linguo2625469/workbuddy2api-panel"
   release_asset_pattern:
-    windows_x86_64: ".*windows.*amd64.*\\.zip"
-    darwin_aarch64: ".*darwin.*arm64.*\\.tar\\.gz"
-    linux_x86_64: ".*linux.*amd64.*\\.tar\\.gz"
+    windows_x86_64: ".*windows.*amd64.*\.zip"
+    darwin_aarch64: ".*darwin.*arm64.*\.tar\.gz"
+    linux_x86_64: ".*linux.*amd64.*\.tar\.gz"
 
 lifecycle:
   policy: "idle_timeout" # persistent | idle_timeout | on_demand | external
@@ -58,6 +65,7 @@ capabilities:
 
 security:
   requires_secrets: ["accounts_token"]
+  # 声明式权限需求（供用户知情同意与宿主环境限制，不代表底层操作系统级沙箱防护）
   permissions:
     allow_internet_access: true
     allow_local_storage: true

@@ -1,87 +1,69 @@
+# ==============================================================================
+# ProxyWeave Plugin Manifest (Schema 1.0 Draft)
+# 模块目标: Wild-Work Multi-Channel Engine (Managed 模式草案)
+# 验证状态: 待验证 (Pending Live Verification)
+# 说明: 本文件为 Schema 1.0 语法样例草案，尚未在 ProxyWeave 运行态完成端到端加载与联调测试。
+# ==============================================================================
 schema_version: "1.0"
-id: "wild-work"
-name: "Wild-Work Multi-Channel Engine"
-version: "2.6.0"
-author: "rockswang"
-description: "多渠道账号聚合引擎（支持 WorkBuddy、TraeWork、Qoder、MonkeyCode、商汤小浣熊、讯飞 Loomy 等 12 渠道）"
-homepage: "https://github.com/rockswang/wild-work"
+metadata:
+  id: "wild-work"
+  name: "Wild-Work Multi-Channel Engine"
+  version: "2.6.0"
+  author: "rockswang"
+  description: "多渠道账号聚合引擎（支持 WorkBuddy、TraeWork、Qoder 等多渠道）"
+  homepage: "https://github.com/rockswang/wild-work"
+  license: "MIT"
 
-# 1. 远端同步与构建产物定义 (Git-Native / Release 自动拉取)
-source:
-  type: "github_release"
-  repo: "rockswang/wild-work"
-  asset_match:
-    windows_amd64: "wild-work-.*-windows-amd64\\.zip"
-    darwin_arm64: "wild-work-.*-darwin-arm64\\.tar\\.gz"
-    linux_amd64: "wild-work-.*-linux-amd64\\.tar\\.gz"
+compatibility:
+  min_host_version: "0.1.0"
+  supported_os: ["windows", "darwin", "linux"]
+  supported_arch: ["x86_64", "aarch64"]
 
-# 2. 运行规约与环境注入
+distribution:
+  repository: "https://github.com/rockswang/wild-work"
+  release_asset_pattern:
+    windows_x86_64: "wild-work-.*-windows-amd64\.zip"
+    darwin_aarch64: "wild-work-.*-darwin-arm64\.tar\.gz"
+    linux_x86_64: "wild-work-.*-linux-amd64\.tar\.gz"
+
 runtime:
   type: "binary"
-  executable:
-    windows: "wild-work.exe"
-    darwin: "wild-work"
-    linux: "wild-work"
-  args: 
-    - "--headless"
-    - "--port"
-    - "{AUTO_PORT}"
-    - "--data-dir"
-    - "./data"
+  entrypoint:
+    windows: "bin/wild-work.exe"
+    darwin: "bin/wild-work"
+    linux: "bin/wild-work"
+  args: ["--headless", "--port", "{PORT}", "--data-dir", "{DATA_DIR}"]
   env:
-    PORT: "{AUTO_PORT}"
-    HOST: "127.0.0.1"
     GIN_MODE: "release"
+  working_dir: "{DATA_DIR}"
 
-# 3. 健康检查与就绪探针 (用于按需冷启动时的就绪判定)
-health_check:
-  type: "http"
-  path: "/v1/models"
-  expected_status: 200
-  timeout_ms: 3000
-
-# 4. 生命周期策略 (Serverless 按需休眠与冷启动)
 lifecycle:
-  idle_ttl_seconds: 300              # 连续 5 分钟无调用，自动 SIGTERM 回收进程 (0MB 内存)
-  max_cold_start_timeout_ms: 2500    # 首次唤醒请求挂起上限
+  policy: "idle_timeout"
+  idle_timeout_seconds: 300
+  startup_timeout_seconds: 15
+  stop_signal: "SIGTERM"
+  graceful_timeout_seconds: 5
 
-# 5. 协议清洗与中间件流水线 (Pipeline Middlewares)
-pipeline_middlewares:
-  developer_to_system_role: true     # 自动将下游 Agent 的 developer 角色转为 system
-  sticky_session: true               # 开启粘性会话，保障长上下文 Prompt Cache 命中率
-  stream_done_guard: true            # 针对异常断开自动补全 data: [DONE]
+network:
+  listen_host: "127.0.0.1"
+  port_allocation: "dynamic"
+  health_check:
+    type: "http"
+    path: "/v1/models"
+    interval_seconds: 30
+    timeout_seconds: 3
+    expected_status: 200
 
-# 6. 路由与模型映射暴露 (统一汇聚到基座 8080)
-exports:
-  base_url: "http://127.0.0.1:{AUTO_PORT}"
-  route_prefix: "wild"
-  models:
-    - id: "codebuddy/claude-3-7-sonnet"
-      alias: ["wild/claude-3-7-sonnet", "wild/cb-claude-3-7"]
-      stream_passthrough: true
-    - id: "trae/claude-3-7-sonnet"
-      alias: ["wild/trae-claude-3-7", "wild/trae"]
-      stream_passthrough: true
-    - id: "qoder/claude-3-7-sonnet"
-      alias: ["wild/qoder-claude-3-7", "wild/qoder"]
-      stream_passthrough: true
-    - id: "raccoon/chat"
-      alias: ["wild/raccoon"]
-      stream_passthrough: true
-    - id: "loomy/chat"
-      alias: ["wild/loomy"]
-      stream_passthrough: true
+capabilities:
+  protocols: ["openai_chat", "streaming", "tool_calling"]
+  # 流式规整配置：仅在正常接收完整尾帧且遗漏终止符时补齐，上游异常截断时坚决不补发 [DONE]
+  stream_normalizer:
+    guarantee_normal_termination: true
+    forbid_done_on_error: true
 
-# 7. 用户动态配置清单 (客户端自动渲染配置表单)
-config_schema:
-  - key: "auth_token"
-    label: "Web 访问令牌 (可选)"
-    type: "password"
-    required: false
-    description: "如果需要保护 wild-work 的 Web 面板，可在此设置访问密钥"
-  - key: "data_dir"
-    label: "数据与凭据存储目录"
-    type: "string"
-    default: "./data"
-    required: true
-    description: "wild-work 存放 auths 与账号状态的目录"
+security:
+  requires_secrets: ["auth_token"]
+  permissions:
+    allow_internet_access: true
+    allow_local_storage: true
+    disallow_arbitrary_fs: true

@@ -1,3 +1,10 @@
+# ==============================================================================
+# ProxyWeave Plugin Manifest (Schema 1.0 Draft)
+# 模块目标: Local CLIProxyAPI Instance (External Provider 模式)
+# 验证状态: 待验证 (Pending Live Verification)
+# 说明: 本文件为 Schema 1.0 语法样例，尚未在 ProxyWeave 运行态完成端到端反向代理联调测试。
+# 外部模式铁律: 宿主不拥有该外部进程生命周期，绝对禁止向该端口对应的外部服务发送 Kill 信号。
+# ==============================================================================
 schema_version: "1.0"
 metadata:
   id: "external-cpa"
@@ -21,6 +28,11 @@ network:
     path: "/health"
     interval_seconds: 15
     timeout_seconds: 2
+    expected_status: 200
 
 capabilities:
   protocols: ["openai_chat", "streaming", "tool_calling", "gemini"]
+
+security:
+  permissions:
+    external_service: true
