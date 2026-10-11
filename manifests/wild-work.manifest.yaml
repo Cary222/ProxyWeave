@@ -22,9 +22,9 @@ compatibility:
 distribution:
   repository: "https://github.com/rockswang/wild-work"
   release_asset_pattern:
-    windows_x86_64: "wild-work-.*-windows-amd64\.zip"
-    darwin_aarch64: "wild-work-.*-darwin-arm64\.tar\.gz"
-    linux_x86_64: "wild-work-.*-linux-amd64\.tar\.gz"
+    windows_x86_64: 'wild-work-.*-windows-amd64\.zip'
+    darwin_aarch64: 'wild-work-.*-darwin-arm64\.tar\.gz'
+    linux_x86_64: 'wild-work-.*-linux-amd64\.tar\.gz'
 
 runtime:
   type: "binary"

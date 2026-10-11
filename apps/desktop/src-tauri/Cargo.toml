@@ -1,0 +1,22 @@
+[package]
+name = "quotio-desktop"
+version = "0.7.7"
+description = "ProxyWeave desktop shell derived from Quotio"
+authors = ["Quotio contributors"]
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "quotio_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+quotio-platform = { path = "../../../crates/quotio-platform" }
+quotio-types = { path = "../../../crates/quotio-types" }
+tauri.workspace = true
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance.workspace = true

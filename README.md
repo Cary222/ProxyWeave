@@ -6,12 +6,28 @@
 > **Slogan**：Plug In. Route Anywhere.（即插即用，随心路由）  
 > **定位**：Local-first AI Proxy Application Platform & Desktop Workbench（本地优先的 AI 代理应用集成平台与统一工作台）  
 > **核心哲学**：上游易逝，平台长存 · Everything is a Plugin（万物皆插件） · **成熟实现直接复用优先 (Direct Reuse First)**  
-> **项目状态**：Pre-development · 架构规划与脚手架准入阶段 (Phase -1 规范冻结完成，Phase 0 脚手架审计与基线准备进行中，尚未编写产品业务代码)
+> **项目状态**：Phase 0 最小桌面基座已实现；当前 Windows 构建与窗口/托盘/关闭/单实例实测完成。网关、插件、协议与 IDE 功能尚未实现；其他平台未验证。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2021%20%7C%202024-orange.svg)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB.svg)](https://v2.tauri.app/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+
+---
+
+## 当前 Windows 基座运行
+
+安装 Rust/MSVC Windows 构建工具、Node.js 与 WebView2 后：
+
+```cmd
+npm run desktop:install
+set CARGO_BUILD_JOBS=1
+npm run desktop:dev
+```
+
+独立内嵌前端的验证构建：`npm --prefix apps/desktop run tauri -- build --debug --no-bundle`。默认产物为 `target/debug/quotio-desktop.exe`（内部上游名称暂保留）；无需 Vite 服务。不要将普通 `cargo build` 的 devUrl 产物当作独立桌面验收。
+
+命令/结果、隔离环境与模块来源见 [Phase 0 验证记录](docs/verification/PHASE0.md)。网关和插件入口目前不可用。
 
 ---
 
@@ -55,7 +71,7 @@
 基于 Tauri v2 + Rust 构建桌面平台，使用版本化本地单文件配置与操作系统原生凭证库，彻底杜绝把外部数据库 (MySQL/PostgreSQL)、Redis 或云端控制面作为个人使用的前提。核心常驻目标内存 < 25MB。
 
 ### 5. Independent Core, Open Ecosystem · 上游独立与黑盒接入
-插件及其上游项目各自维护、独立升级。对于本地“黑盒项目”，若存在源码（如本地 `D:\workbuddy2api-panel` Go 源码），核验后可按模块复用；若仅有可执行二进制或已运行的 HTTP 服务（如 `D:\CLIProxyAPI_...`），则一律按公开接口以 External 模式接入，**严禁假称已复用其内部源码**。
+插件及其上游项目各自维护、独立升级。对于本地“黑盒项目”，若存在源码（如本地 `D:\workbuddy2api-panel` Go 源码），核验后可按模块复用；若仅有可执行二进制或已运行的 HTTP 服务（如 `D:\CLIProxyAPI_...`），则仍按进程所有权划分 Managed/External；已运行且不由宿主拥有的服务仅按公开接口以 External 模式挂载，**严禁假称已复用其内部源码**。
 
 ---
 
@@ -88,7 +104,7 @@ ProxyWeave 确立了清晰的**三层分工体系与核心职责解耦**：
 - **API Gateway**：专管对外单端口（默认 `127.0.0.1:8080`）的 HTTP/SSE 连接与背压取消传播。
 - **Model Router**：专管虚拟模型别名映射与基于插件健康度的 Fallback 故障转移。
 - **Protocol Adapter**：基于 IR 中间表示，专管 OpenAI Chat、Responses 与 Anthropic Messages 协议转换、状态机与能力降级。
-- **Credential Broker**：专管系统 Keyring 凭据托管与沙盒目录 `0o600` 最小权限临时配置投影。
+- **Credential Broker**：专管系统 Keyring 凭据托管与私有目录临时配置投影（Unix `0o600`；Windows ACL 独立设计并验证，尚未实现）。
 - **Plugin Registry**：专管插件来源、Manifest 解析、版本固定与 SHA256 完整性校验。
 
 ---
@@ -216,10 +232,10 @@ ProxyWeave 坚持 **成熟实现直接复用优先**：非平凡系统机制坚�
 
 | 项目 | 在 ProxyWeave 中的角色 | 重点借鉴与复用范围 | 隔离与剥离边界 | 验证状态 |
 | --- | --- | --- | --- | --- |
-| **[Quotio Desktop](https://github.com/xiaocoss/quotio-desktop)** | **首选主脚手架基线** | Tauri v2 桌面壳、系统托盘、`quotio-platform` (跨平台路径与 Keyring 凭据托管)、`agent_config.rs` (IDE 接入)、`proxy_download.rs` (下载器) | 彻底剥离 Codex 多开、Kiro 专属集成、额度轮询及多账号业务；替换同步阻塞的 `bridge.rs`；切断 SQLite 依赖 | 🟢 **源码已核验**<br>(Commit `21d75d08`) |
-| **[TiyGate](https://github.com/tiylabs/tiygate)** | **网关与协议模块参考** | Axum 0.7 异步网关流水线、N*M 协议 IR 中间表示编解码、SSE 状态机与 Tool Call 碎片拼装 | 坚决剥离其 10 余个表的 SQLx 数据库迁移依赖、管理员 REST API 与企业 OAuth | 🟢 **源码已核验**<br>(Commit `6db40e54`) |
-| **[Tunnel Agent](https://github.com/beyondhumane/tunnel-agent)** | **多引擎管理与交互参考** | 多异构引擎统一调度交互体验、GitHub Release 资产探测锁定流程、Win32 Job Object 单元测试用例 | 坚决不引入其 C#/.NET 运行时与 Avalonia 技术栈 | 🟢 **源码已核验**<br>(Commit `8cfbd02`) |
-| **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** | **微内核设计哲学参考** | Everything is a Plugin、Cordis 可逆副作用生命周期（Reversible Effects，退出自动销毁端口与配置）、暗色工业风看板 | 坚决不引入其重型 Node.js/Agent 运行时与复杂智能体体系 | ⚪ **待核验**<br>(Commit `d7432673`) |
+| **[Quotio Desktop](https://github.com/xiaocoss/quotio-desktop)** | 已采用的桌面基线 | 窗口、托盘、单实例、React 窗口交互、通用平台工具与类型 | 剥离 AppCore/CPA/SQLite/Codex/Kiro/更新器；IDE 与下载器留待后续 | Windows 构建/测试/桌面实测通过；完整 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 |
+| **[TiyGate](https://github.com/tiylabs/tiygate)** | 后续协议模块候选 | IR/SSE 局部模块及其测试，开发前再审计 | 不整体引入 SQLx 业务系统 | 仅核验 Git `6db40e54663455fb99d675bd8985e4dc50f68a14`，功能未验证 |
+| **[Tunnel Agent](https://github.com/beyondhumane/tunnel-agent)** | 后续系统机制参考 | 资产发现、Job Object 等按 Feature 核验 | 不引入 .NET/Avalonia 运行时 | 仅核验 Git `9bfb7779b80de5e205a388e2e02d5840a3ed8b47`，功能未验证 |
+| **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** | 设计参考 | 微内核与可逆副作用 | 不引入 Agent 运行时 | 仅核验 Git `d743267388641bc76f17c45ce8b4c231aed1d32c`，功能未验证 |
 
 ---
 
@@ -230,22 +246,21 @@ ProxyWeave 坚持 **成熟实现直接复用优先**：非平凡系统机制坚�
 | 阶段 | 主要交付物 | 关键验收门禁 | 状态 |
 | --- | --- | --- | --- |
 | **Phase -1 · 准入与治理** | 品牌确立 (ProxyWeave)、独立 GitHub 仓库、产品宗旨 README、Plan.md 架构规范冻结 | 需求边界清晰，参考源档案建立，无未经审计的盲目开发 | **Done (已完成)** |
-| **Phase 0 · 脚手架采用与解耦** | 引入 Quotio Desktop (`21d75d08`)，本地验证可编译构建 (`npm run build` + `cargo check`)，剥离特定业务代码 | 桌面壳与托盘正常工作，跨平台系统抽象通过测试，工作区纯净 | **In Progress (进行中)** |
-| **Phase 1 · 核心契约与运行时** | **最小 Manifest Schema 1.0 冻结**、**凭证安全传递与沙箱目录 0o600 投影**、`PluginSupervisor` 进程组清理、端口冲突重试恢复、首发 Managed (`wb2api`) 与 External (`CPA`) 挂载 | 退出连带回收无孤儿进程，并发冷启动无端口碰撞，禁杀外部进程 | Planned |
-| **Phase 2 · 异步网关与协议** | Axum 0.7 异步 HTTP/SSE 流式网关、TiyGate 协议 IR 编解码、SSE 终止符状态机、协议兼容矩阵与模型别名路由 | 客户端流式输出流畅，中断请求即刻取消上游，异常断开坚决不补发 `[DONE]` | Planned |
-| **Phase 3 · 插件引擎与持久化** | Manifest 完整解析校验引擎、带 SHA256 完整性校验的资产下载器、版本固定与安全回滚、配置单文件原子写入 (`.tmp -> fsync -> rename`) 与 `.bak` 双副本 | 插件一键解析安装，配置损坏秒级自动回滚 | Planned |
-| **Phase 4 · 桌面看板与诊断** | 极简暗色工业风 UI、API Doctor 脱敏排障链、Compatibility Flight 质检工作台、IDE Handoff 自动写入 | 诊断链准确归因故障，质检套件通过，Cursor/Claude Code 顺畅接入 | Planned |
-| **Phase 5 · 生态索引与发布** | 官方插件源 `proxyweave-registry`、Windows (MSI/NSIS) / macOS (DMG) / Linux (AppImage) CI 构建与发布 | 多平台安装包构建正常，发布 v0.1.0-alpha 公开版本 | Planned |
+| **Phase 0 · 脚手架采用与解耦** | 最小 Tauri/React 桌面基座、锁文件与模块溯源 | 当前 Windows 构建/测试、窗口、托盘、关闭、单实例；其他平台不在本轮验收 | **Passed · Windows 本轮范围** |
+| **Phase 1 · 核心契约与运行时** | Manifest Schema 1.0、凭据传递契约、异步网关、所有权与进程回收、端口恢复、首个 Managed wb2api | 契约/Windows ACL/Job Object 在首个 Managed 前验证；External 禁止 Kill | Planned |
+| **Phase 2 · 协议与流式** | IR 编解码、SSE 状态机、Compatibility Flight | 异常中断不补 `[DONE]`；按能力分级而非无损承诺 | Planned |
+| **Phase 3 · 控制台与生态** | API Doctor、资产发现/校验、IDE Handoff | 各模块先审计/提取/验证 | Planned |
+| **Phase 4 · 全平台发布** | 兼容性回归、安装包与 CI | Windows/macOS/Linux 分别验收 | Planned |
 
 ---
 
 ## 📁 仓库核心文档导航 (Documentation Map)
 
-- 📜 **[Plan.md](./Plan.md)**：项目最高权威规划书 (v3.0.0)，涵盖 12 章节详细推导。
-- 🏛️ **[docs/PLAN-ProxyWeave.md](./docs/PLAN-ProxyWeave.md)**：架构设计归档镜像。
+- 📜 **[Plan.md](./Plan.md)**：项目最高权威规划书 (v3.1.0)，涵盖 12 章节详细推导。
+- 🏛️ **[docs/PLAN-ProxyWeave.md](./docs/PLAN-ProxyWeave.md)**：权威规划入口（历史镜像由 Git 保存，避免双份状态漂移）。
 - 📦 **[docs/references/REFERENCE_REGISTRY.md](./docs/references/REFERENCE_REGISTRY.md)**：15 大核心模块开源参考源登记档案库。
-- ⚖️ **[docs/architecture/ADR/](./docs/architecture/ADR/)**：架构决策记录 (ADR-01 至 ADR-07)。
-- 🧩 **[manifests/](./manifests/)**：已验证插件 Manifest 样例清单。
+- ⚖️ **[docs/architecture/ADR/](./docs/architecture/ADR/)**：架构决策索引（当前 ADR-001 与历史决策摘录）。
+- 🧩 **[manifests/](./manifests/)**：YAML/正则解析通过的候选样例；Schema 语义与插件运行尚未验收。
 - 📜 **[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)**：第三方开源许可与致谢。
 - 🗄️ **[docs/PLAN-GlueHarness.md](./docs/PLAN-GlueHarness.md)**：[已归档] 早期 GlueHarness 草案历史记录。
 

@@ -1,0 +1,1196 @@
+{
+  "sourceCommit": "21d75d08b38a23f97fbd534a1768a829cb147f2c",
+  "stage": "Unmodified upstream dependency closure, pre-adaptation",
+  "files": [
+    {
+      "source": "Cargo.lock",
+      "target": "Cargo.lock",
+      "sha256": "6902c8041917300d6f13b3d3ffec99f59694f0da912fe45ac039b59d4cb354d9"
+    },
+    {
+      "source": "Cargo.toml",
+      "target": "Cargo.toml",
+      "sha256": "959f22e0a06f8198aa8a1e4da091ce8d171cbe701a8d461463e99e3a754f8670"
+    },
+    {
+      "source": "apps/desktop/.gitignore",
+      "target": "apps/desktop/.gitignore",
+      "sha256": "7de305cac27bcbfd4dd2b0e6e12f229a9bc6ff72888ce64cf955f1292319b327"
+    },
+    {
+      "source": "apps/desktop/README.md",
+      "target": "apps/desktop/README.md",
+      "sha256": "f9b4ce97f76f8971fb5aba03faf6ac72a9107b8ccc1a4e9587e5dfe546cc1119"
+    },
+    {
+      "source": "apps/desktop/index.html",
+      "target": "apps/desktop/index.html",
+      "sha256": "8f776b9f5a82af6a3b8b0ce92c14aebf844aae7fd0f2438cb7915db084984ecc"
+    },
+    {
+      "source": "apps/desktop/package-lock.json",
+      "target": "apps/desktop/package-lock.json",
+      "sha256": "c32484fcc0c6ddc0e36ecaf128792bf79f3126de56e54642e3177e013e0a3757"
+    },
+    {
+      "source": "apps/desktop/package.json",
+      "target": "apps/desktop/package.json",
+      "sha256": "b58300463aa5463ad9af2e3edc89a6600adcd6e094b7fa61ac7af02045071c8a"
+    },
+    {
+      "source": "apps/desktop/public/about/about-bg.svg",
+      "target": "apps/desktop/public/about/about-bg.svg",
+      "sha256": "1bca9cb30222140da8fe6c369e67c27f307900034cd1a2ed4c554c11d2586891"
+    },
+    {
+      "source": "apps/desktop/public/about/about-icons.svg",
+      "target": "apps/desktop/public/about/about-icons.svg",
+      "sha256": "6654ad8950d791638ae58ad6967ddd231a7213ec7ae934f4cf6f42d027f7ce43"
+    },
+    {
+      "source": "apps/desktop/public/about/brand-orbit.svg",
+      "target": "apps/desktop/public/about/brand-orbit.svg",
+      "sha256": "b40f98edfbc71042bf6f88320b4deb409a910e7f290c0d5ce5068bc4e8335cac"
+    },
+    {
+      "source": "apps/desktop/public/about/card-noise.svg",
+      "target": "apps/desktop/public/about/card-noise.svg",
+      "sha256": "96e2cef3f38517691f8782a6788a094c144e6a3675482f1426083bfeb21578aa"
+    },
+    {
+      "source": "apps/desktop/public/about/quotio-mark.svg",
+      "target": "apps/desktop/public/about/quotio-mark.svg",
+      "sha256": "2cf64803ebe2c390e31c381aea007142d3d042e33b5849dd309d2a3c1f104d10"
+    },
+    {
+      "source": "apps/desktop/public/agents/agent-icons.svg",
+      "target": "apps/desktop/public/agents/agent-icons.svg",
+      "sha256": "ab996c90a0dda0287254dd59853fd72a28b61eedaaf301fb0fe697f361612a47"
+    },
+    {
+      "source": "apps/desktop/public/agents/agents-bg.svg",
+      "target": "apps/desktop/public/agents/agents-bg.svg",
+      "sha256": "6bd48dc4d82b45592d8c6d2fc1913980830aa48d3149e4ed6d6229e626a02812"
+    },
+    {
+      "source": "apps/desktop/public/agents/card-noise.svg",
+      "target": "apps/desktop/public/agents/card-noise.svg",
+      "sha256": "a35326130d505af3ac64d7406efbf0de2d8dc689857eeebcb7def0e91f7d65c5"
+    },
+    {
+      "source": "apps/desktop/public/agents/route-flow.svg",
+      "target": "apps/desktop/public/agents/route-flow.svg",
+      "sha256": "c926fb3c822af2420bfd705028a89001e19d24c6c0528e0a84bf37977bb20386"
+    },
+    {
+      "source": "apps/desktop/public/dashboard/card-noise.svg",
+      "target": "apps/desktop/public/dashboard/card-noise.svg",
+      "sha256": "ac5338f60345739685f1551930c8566057d20662956ef61637315f61aa2c893a"
+    },
+    {
+      "source": "apps/desktop/public/dashboard/chart-cost-area.svg",
+      "target": "apps/desktop/public/dashboard/chart-cost-area.svg",
+      "sha256": "c6237eb0ef81aa43d17f7bc3702efa7ab8a232161cb76737e0c1307fab9d7a90"
+    },
+    {
+      "source": "apps/desktop/public/dashboard/dashboard-bg.svg",
+      "target": "apps/desktop/public/dashboard/dashboard-bg.svg",
+      "sha256": "85a9b26f758721ddd3f789ba2b9d890a22547bedc7a38313c6702c2549338b5a"
+    },
+    {
+      "source": "apps/desktop/public/dashboard/ui-icons.svg",
+      "target": "apps/desktop/public/dashboard/ui-icons.svg",
+      "sha256": "4de41a771bf7d874636a9787b464e16dc48a002a0e3d2ceff676d1133e3ea5cc"
+    },
+    {
+      "source": "apps/desktop/public/floating/floating-window-icons.svg",
+      "target": "apps/desktop/public/floating/floating-window-icons.svg",
+      "sha256": "fe00bb79a2b591ff0c5db9b79123e87de9f0ae46df623e99405c546f07e12db3"
+    },
+    {
+      "source": "apps/desktop/public/logs/card-noise.svg",
+      "target": "apps/desktop/public/logs/card-noise.svg",
+      "sha256": "13d1b2adbfb324d6f63dc5bfd11958bb92d947308d1cd78a7833cb0f3dabc8c5"
+    },
+    {
+      "source": "apps/desktop/public/logs/latency-sparkline.svg",
+      "target": "apps/desktop/public/logs/latency-sparkline.svg",
+      "sha256": "0a921ae442e628038df0f08303ae415deebde1fe160780c66ccdd21666be59ad"
+    },
+    {
+      "source": "apps/desktop/public/logs/log-icons.svg",
+      "target": "apps/desktop/public/logs/log-icons.svg",
+      "sha256": "0e75598e2928bd241b6107fd88c592d861e680114987c0eb8d529f6afac61d3d"
+    },
+    {
+      "source": "apps/desktop/public/logs/logs-bg.svg",
+      "target": "apps/desktop/public/logs/logs-bg.svg",
+      "sha256": "96779aab1957948ede6c09e7772035b23605f3f2e6d7031a4df71fd9249bb3e8"
+    },
+    {
+      "source": "apps/desktop/public/logs/request-health.svg",
+      "target": "apps/desktop/public/logs/request-health.svg",
+      "sha256": "6f58bf3150387efe6256c2f737203e5ed7c4550118a0f4630201adb11dc60f4c"
+    },
+    {
+      "source": "apps/desktop/public/nav-icons.svg",
+      "target": "apps/desktop/public/nav-icons.svg",
+      "sha256": "62caf3d9647f9afce9ec9f730cf9b84d31155e5d1a2d4bd4e52680cd734b591c"
+    },
+    {
+      "source": "apps/desktop/public/providers/card-noise.svg",
+      "target": "apps/desktop/public/providers/card-noise.svg",
+      "sha256": "b689b189c90f8295350772389d2900fe2e70fb96ac9bfa8de79e69f6f20acdb8"
+    },
+    {
+      "source": "apps/desktop/public/providers/codex-openai-knot-v1.png",
+      "target": "apps/desktop/public/providers/codex-openai-knot-v1.png",
+      "sha256": "bf9f326e9c2e5edb06dd26549d9bb56ea6a5d3ed4c5a9d14c5ae8bc6ff9a692b"
+    },
+    {
+      "source": "apps/desktop/public/providers/integration-pattern.svg",
+      "target": "apps/desktop/public/providers/integration-pattern.svg",
+      "sha256": "9dcad04d931b87041303de6cfa9438934e322f4e9d5ffcba88406943ec395553"
+    },
+    {
+      "source": "apps/desktop/public/providers/provider-icons.svg",
+      "target": "apps/desktop/public/providers/provider-icons.svg",
+      "sha256": "6c6d881f4c55949305a21b4f506847cfea2e0637e12573d50a5614ec71875bb9"
+    },
+    {
+      "source": "apps/desktop/public/providers/providers-bg.svg",
+      "target": "apps/desktop/public/providers/providers-bg.svg",
+      "sha256": "60226c2ed883b508b82a7ac923118965009eab875f5c869b1d15c6c938ad8449"
+    },
+    {
+      "source": "apps/desktop/public/quota/card-noise.svg",
+      "target": "apps/desktop/public/quota/card-noise.svg",
+      "sha256": "b689b189c90f8295350772389d2900fe2e70fb96ac9bfa8de79e69f6f20acdb8"
+    },
+    {
+      "source": "apps/desktop/public/quota/health-dots.svg",
+      "target": "apps/desktop/public/quota/health-dots.svg",
+      "sha256": "1e8fb25cc3ef4ff83cf0d032ae5c0134f6c5349c8db047d8d927a156fd8c35fa"
+    },
+    {
+      "source": "apps/desktop/public/quota/progress-bars.svg",
+      "target": "apps/desktop/public/quota/progress-bars.svg",
+      "sha256": "5da27668cf0496d422fa49c32e7b1fb8d2ed186eee604c7e3a72e9a7440e30c3"
+    },
+    {
+      "source": "apps/desktop/public/quota/provider-logos.svg",
+      "target": "apps/desktop/public/quota/provider-logos.svg",
+      "sha256": "719bffb648161335466a7e72b9e51f7486409f7ee7dae342cb692634c950ae9f"
+    },
+    {
+      "source": "apps/desktop/public/quota/quota-bg.svg",
+      "target": "apps/desktop/public/quota/quota-bg.svg",
+      "sha256": "f4cd2c3b4906386dd1b305466295a8ac1ae9bd0291e8b30c65af8e797f828a05"
+    },
+    {
+      "source": "apps/desktop/public/quota/quota-icons.svg",
+      "target": "apps/desktop/public/quota/quota-icons.svg",
+      "sha256": "61c195012e62f11aec2de8df0cf89a5161c69539bfb8f986ef179ca8520a8fe5"
+    },
+    {
+      "source": "apps/desktop/public/rose/README.md",
+      "target": "apps/desktop/public/rose/README.md",
+      "sha256": "092c3b9c6e3a8cdf182d581a20eee82e46099fc905d6e7799960b57bb305e32e"
+    },
+    {
+      "source": "apps/desktop/public/rose/about-character-cutout-v1.png",
+      "target": "apps/desktop/public/rose/about-character-cutout-v1.png",
+      "sha256": "129402b9fd133bbba81772192d3237e633e068ebd87402fae1de7d590b67c9fa"
+    },
+    {
+      "source": "apps/desktop/public/rose/character-avatar.png",
+      "target": "apps/desktop/public/rose/character-avatar.png",
+      "sha256": "05bb701ea949de028b827dbe0560d34ac37aa69c471dade545a4061182522ace"
+    },
+    {
+      "source": "apps/desktop/public/rose/character-dashboard-hero-cutout-v4.png",
+      "target": "apps/desktop/public/rose/character-dashboard-hero-cutout-v4.png",
+      "sha256": "48d681848c093c6b90804d1ed35939e86b73d28d8f45d62a10cbc8fa797e15f1"
+    },
+    {
+      "source": "apps/desktop/public/rose/character-dashboard-hero-v2.png",
+      "target": "apps/desktop/public/rose/character-dashboard-hero-v2.png",
+      "sha256": "aef04aca5d99caa3fce8eba5fb0348e22cdc7f3a56f4ffbc1114cd12320251c6"
+    },
+    {
+      "source": "apps/desktop/public/rose/character-hero.webp",
+      "target": "apps/desktop/public/rose/character-hero.webp",
+      "sha256": "9583b3a59d2bf787bedf714ac69f052f7560cd23dfe2d051ec867be7a01fcd7e"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-assets.md",
+      "target": "apps/desktop/public/rose/cloud-assets.md",
+      "sha256": "d66e50cc8ee49b7eb1522bc42b0f0e6fd79afac746c46ab0a5cd1b9f801a870b"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-avatar-wreath.svg",
+      "target": "apps/desktop/public/rose/cloud-avatar-wreath.svg",
+      "sha256": "6eb829b3c7311b6db52ff7b809672df66d7f0bc371f74ed4c0b7ab1ba824b96e"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-botanical-sprig.svg",
+      "target": "apps/desktop/public/rose/cloud-botanical-sprig.svg",
+      "sha256": "b2eed905d703ee585dd2fc735dc65a5e05ec722d4f3560fc2696ab0bd799434f"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-card-9slice.svg",
+      "target": "apps/desktop/public/rose/cloud-card-9slice.svg",
+      "sha256": "ee5f3f38a105de84b9cf6e77efbe6afd8f9a65c0e28a9a38adec69b1ef5eeb8d"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-dashboard-corner.svg",
+      "target": "apps/desktop/public/rose/cloud-dashboard-corner.svg",
+      "sha256": "8d6b174a0e0e733da01150d069501ce9f1697590942dd05d48fa96d458497273"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-filigree-corner.svg",
+      "target": "apps/desktop/public/rose/cloud-filigree-corner.svg",
+      "sha256": "03694f8a408a7d3aa390f74c2f0bc2c3df26ad807832635ff491a6141c51cf4f"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-panel-9slice.svg",
+      "target": "apps/desktop/public/rose/cloud-panel-9slice.svg",
+      "sha256": "71f4d23c7275ee5a13a416419839703b09f7997fa82aaa4b41977ba41f631c85"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-rail-junction.svg",
+      "target": "apps/desktop/public/rose/cloud-rail-junction.svg",
+      "sha256": "eef27808a3d1a653f73e5845b57856264ed8d32eb14329d3e1e6ce4a979b37a4"
+    },
+    {
+      "source": "apps/desktop/public/rose/cloud-segment-bracket.svg",
+      "target": "apps/desktop/public/rose/cloud-segment-bracket.svg",
+      "sha256": "48a20997e616d35ae755c6ffc372abbe11351a0089a3f9a2681732756c861cc3"
+    },
+    {
+      "source": "apps/desktop/public/rose/empty-endpoints.png",
+      "target": "apps/desktop/public/rose/empty-endpoints.png",
+      "sha256": "81a5bc073d858656c021d7db167e13cef8ee937b27432ef04037e88e874c582d"
+    },
+    {
+      "source": "apps/desktop/public/rose/manifest.json",
+      "target": "apps/desktop/public/rose/manifest.json",
+      "sha256": "68610e68ef1027e32bac772de6a2818497061747edc9dfc0043428686e524596"
+    },
+    {
+      "source": "apps/desktop/public/rose/rose-bg.webp",
+      "target": "apps/desktop/public/rose/rose-bg.webp",
+      "sha256": "c58d9893ed5e3d758305db2e6902efc62603cbdec8e56d4941e0bb92fe92ea41"
+    },
+    {
+      "source": "apps/desktop/public/rose/rose-corner.png",
+      "target": "apps/desktop/public/rose/rose-corner.png",
+      "sha256": "23ac8003d28f726b1db9e6c72d68f2cf7a39755a0af9c3ed349781cb2291ba51"
+    },
+    {
+      "source": "apps/desktop/public/rose/rose-mark.svg",
+      "target": "apps/desktop/public/rose/rose-mark.svg",
+      "sha256": "dd4d05a833ae84358ef46c996603f2a00170c056c0cc4af0ca1e8554b4cf08cd"
+    },
+    {
+      "source": "apps/desktop/public/rose/rose-petals.png",
+      "target": "apps/desktop/public/rose/rose-petals.png",
+      "sha256": "9dcd7a8236e37a15021f006dfa9848b4b0005f1cdbddba3a99a13a5f6b038830"
+    },
+    {
+      "source": "apps/desktop/public/rose/sidebar-footer-floral-v1.png",
+      "target": "apps/desktop/public/rose/sidebar-footer-floral-v1.png",
+      "sha256": "aa3cbd023f792df4ef1528ae0c0b593e9e04afc986abf036a8e7e97f0a305b44"
+    },
+    {
+      "source": "apps/desktop/public/rose/sidebar-rose-logo-v2.png",
+      "target": "apps/desktop/public/rose/sidebar-rose-logo-v2.png",
+      "sha256": "29b5c0f11099eda5c29c62072663abd78c166634ab4fcfaa4bfc4ffacd795804"
+    },
+    {
+      "source": "apps/desktop/public/settings/card-noise.svg",
+      "target": "apps/desktop/public/settings/card-noise.svg",
+      "sha256": "a8e5a4c1e84472589e0ac4025075257acf2fb65a49c775a92e94731ba98cb051"
+    },
+    {
+      "source": "apps/desktop/public/settings/connection-flow.svg",
+      "target": "apps/desktop/public/settings/connection-flow.svg",
+      "sha256": "c2edf31504a5e7a6025b9cb9d8e67db711b80c093b133e0142aaaeda3e5351e6"
+    },
+    {
+      "source": "apps/desktop/public/settings/settings-bg.svg",
+      "target": "apps/desktop/public/settings/settings-bg.svg",
+      "sha256": "1ab331fe0e772638e7c84e3c511219868f1723fb5f86cb302272b08c595e823a"
+    },
+    {
+      "source": "apps/desktop/public/settings/settings-icons.svg",
+      "target": "apps/desktop/public/settings/settings-icons.svg",
+      "sha256": "99964787f460c9706808f7e56440418286b66839edcc41347b704b696bb6a470"
+    },
+    {
+      "source": "apps/desktop/public/tauri.svg",
+      "target": "apps/desktop/public/tauri.svg",
+      "sha256": "3f32698a9cb64f4d06d4df89ecb903418347589a17d297208a7f68741a8b5672"
+    },
+    {
+      "source": "apps/desktop/public/twofa/card-noise.svg",
+      "target": "apps/desktop/public/twofa/card-noise.svg",
+      "sha256": "b689b189c90f8295350772389d2900fe2e70fb96ac9bfa8de79e69f6f20acdb8"
+    },
+    {
+      "source": "apps/desktop/public/twofa/countdown-ring.svg",
+      "target": "apps/desktop/public/twofa/countdown-ring.svg",
+      "sha256": "8bea39c1cedf1ffc8cd4fd2524b2d9a5cd5eb52fc8d4692fd3a6fa527e518811"
+    },
+    {
+      "source": "apps/desktop/public/twofa/twofa-bg.svg",
+      "target": "apps/desktop/public/twofa/twofa-bg.svg",
+      "sha256": "de98ea4ddc4a50e0fe18de234c186f7a79cadc0bd5d250f64fa83f99ce1495e1"
+    },
+    {
+      "source": "apps/desktop/public/twofa/twofa-icons.svg",
+      "target": "apps/desktop/public/twofa/twofa-icons.svg",
+      "sha256": "a67fec34d78a672ed902a3c0e052ef9b3d9b7ec7d0510544765695d64da2bf22"
+    },
+    {
+      "source": "apps/desktop/public/twofa/vault-empty.svg",
+      "target": "apps/desktop/public/twofa/vault-empty.svg",
+      "sha256": "1510b6a74d69bed63cb1a731c293824498a5d739c32a029997bad99206aaa1d1"
+    },
+    {
+      "source": "apps/desktop/public/vite.svg",
+      "target": "apps/desktop/public/vite.svg",
+      "sha256": "4a748afd443918bb16591c834c401dae33e87861ab5dbad0811c3a3b4a9214fb"
+    },
+    {
+      "source": "apps/desktop/src-tauri/.gitignore",
+      "target": "apps/desktop/src-tauri/.gitignore",
+      "sha256": "e1b11c0407131ad35a1f11d8ec2545c53de147a76f05e264e5b500a14b977332"
+    },
+    {
+      "source": "apps/desktop/src-tauri/Cargo.toml",
+      "target": "apps/desktop/src-tauri/Cargo.toml",
+      "sha256": "38883237cf97819a888c10a1fafcd017939aed7c1f91992f9869587040b611c2"
+    },
+    {
+      "source": "apps/desktop/src-tauri/build.rs",
+      "target": "apps/desktop/src-tauri/build.rs",
+      "sha256": "4ae2333b11623039cc115e29b696e7ff5cdfcd5b7d628280ddf48fa733e6418d"
+    },
+    {
+      "source": "apps/desktop/src-tauri/capabilities/default.json",
+      "target": "apps/desktop/src-tauri/capabilities/default.json",
+      "sha256": "f3417b48b39c9f41f2a766611225a44d30f80c9e24d506f5cd1fe154a003087f"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/128x128.png",
+      "target": "apps/desktop/src-tauri/icons/128x128.png",
+      "sha256": "19b4fec485db7df51a691fcce72a3dd6f983e754fc4262da7154e4a4c688f69e"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/128x128@2x.png",
+      "target": "apps/desktop/src-tauri/icons/128x128@2x.png",
+      "sha256": "6c7660390d65217fe8de0892862254f47aee77e0af7096c75b8bfe168c5403f7"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/32x32.png",
+      "target": "apps/desktop/src-tauri/icons/32x32.png",
+      "sha256": "1c6782dc65c8111c12cbc1882a0fea5e71ab8e51b18da2ce9580f5c88860ed02"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square107x107Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square107x107Logo.png",
+      "sha256": "54f7a0f58c96a4b023c1edc4b53fc443e27dace50e345f6936fa29bc20f785ca"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square142x142Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square142x142Logo.png",
+      "sha256": "fec1e2080ca73cd4c4a123b23b1cd364059a8a8efeba3076e21dfefed390693b"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square150x150Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square150x150Logo.png",
+      "sha256": "65fb570cb0e61ffce02ad67784cb200a0bf058400300980a46fa0d0c8f43a77a"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square284x284Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square284x284Logo.png",
+      "sha256": "ea0b7c5d4b1d1ab9c91d2f7c9b069c8dfbf4557b0649a5777d47332cde610262"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square30x30Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square30x30Logo.png",
+      "sha256": "cc72279c41b4ed343e8db7e7541ceef7b6b23edaa83d4e7338421dfcb8d63c33"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square310x310Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square310x310Logo.png",
+      "sha256": "9733a89c539115de3c49bd06720bfc99639d9a918f5df48a810e267cf3554119"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square44x44Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square44x44Logo.png",
+      "sha256": "10be9840e58fb018eb9029601d42008e16c0c9cfa66b8f9467fee94f600160d4"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square71x71Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square71x71Logo.png",
+      "sha256": "2937fc83324cd9a1fddcfefd5927c791af31996a6840bfb3e2f1d578ad4129de"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/Square89x89Logo.png",
+      "target": "apps/desktop/src-tauri/icons/Square89x89Logo.png",
+      "sha256": "12aed0e7ee06cb631427dc9da72c0c7ecf03857fbc4884d0c31f78314feb6c7f"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/StoreLogo.png",
+      "target": "apps/desktop/src-tauri/icons/StoreLogo.png",
+      "sha256": "91a54024dd47230991546088f2e75d3e3199b3ccc9fe40f3f6b7d3bf1cbf7776"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/icon.icns",
+      "target": "apps/desktop/src-tauri/icons/icon.icns",
+      "sha256": "3dc10493b7de48a61de58f768f8a5708d3a44a068c148cedf0502b9b9b71ba5d"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/icon.ico",
+      "target": "apps/desktop/src-tauri/icons/icon.ico",
+      "sha256": "392206b573a809997f3ff16fe68f456a52e931c372107eade9572b329bbe3321"
+    },
+    {
+      "source": "apps/desktop/src-tauri/icons/icon.png",
+      "target": "apps/desktop/src-tauri/icons/icon.png",
+      "sha256": "273cd669e07c455ad1c7c095890a37984652157cee73128a867300067dfb80e7"
+    },
+    {
+      "source": "apps/desktop/src-tauri/src/lib.rs",
+      "target": "apps/desktop/src-tauri/src/lib.rs",
+      "sha256": "77114f2fc964a22f9eb07e4c3736069b2bdfbe2ca89e3d8eda6247c41d58f968"
+    },
+    {
+      "source": "apps/desktop/src-tauri/src/main.rs",
+      "target": "apps/desktop/src-tauri/src/main.rs",
+      "sha256": "775da4c5aabcd565eca4287a4b4a63c394c7ce2c21184be70622e51b5532c65b"
+    },
+    {
+      "source": "apps/desktop/src-tauri/tauri.conf.json",
+      "target": "apps/desktop/src-tauri/tauri.conf.json",
+      "sha256": "04865364bf6a9b31191c4a5469d71a1b01aacc62c81d8367d5800cde6b4e6484"
+    },
+    {
+      "source": "apps/desktop/src/App.css",
+      "target": "apps/desktop/src/App.css",
+      "sha256": "64ba340775e28b564ad5cba40e57677fa4e11b91f250461085d7a8fd9efacd50"
+    },
+    {
+      "source": "apps/desktop/src/App.tsx",
+      "target": "apps/desktop/src/App.tsx",
+      "sha256": "30c1bb5b79151e4d9d83039e109620835a93593389d3156a3dae5fa07b51581f"
+    },
+    {
+      "source": "apps/desktop/src/MenuBarPanel.tsx",
+      "target": "apps/desktop/src/MenuBarPanel.tsx",
+      "sha256": "e0d7fdc2c52aa1bfe73dc8a560c8cd97fb2edd8d046abeb8c2df3905de50596f"
+    },
+    {
+      "source": "apps/desktop/src/assets/react.svg",
+      "target": "apps/desktop/src/assets/react.svg",
+      "sha256": "35ef61ed53b323ae94a16a8ec659b3d0af3880698791133f23b084085ab1c2e5"
+    },
+    {
+      "source": "apps/desktop/src/components/AddAccountModal.tsx",
+      "target": "apps/desktop/src/components/AddAccountModal.tsx",
+      "sha256": "1efd68e2692aa1cd2fe247d05335d3f711c286861abc3484e67e8455b0e3650b"
+    },
+    {
+      "source": "apps/desktop/src/components/AppShell.tsx",
+      "target": "apps/desktop/src/components/AppShell.tsx",
+      "sha256": "b1f1bacfaa8773b2d2c39c59e48460414d8dd1ede7d22ff9551fa3fc021e2caf"
+    },
+    {
+      "source": "apps/desktop/src/components/HealthDots.tsx",
+      "target": "apps/desktop/src/components/HealthDots.tsx",
+      "sha256": "b5d0ece661032a66b310e2a146f18c1a81419affd2c2a07f77ebbc95f3925289"
+    },
+    {
+      "source": "apps/desktop/src/components/Mfa2faQuickPanel.tsx",
+      "target": "apps/desktop/src/components/Mfa2faQuickPanel.tsx",
+      "sha256": "75d7b641cb3da462b08c19b1b4e38c89d08c2089b84742fcc29bca17f0fc0e49"
+    },
+    {
+      "source": "apps/desktop/src/components/ProxyInstabilityBanner.tsx",
+      "target": "apps/desktop/src/components/ProxyInstabilityBanner.tsx",
+      "sha256": "41001ede7207cdfd0a9ec39cb855ef6b83de9a2f9bbfa85622b1b9fd2ad086e0"
+    },
+    {
+      "source": "apps/desktop/src/components/Select.tsx",
+      "target": "apps/desktop/src/components/Select.tsx",
+      "sha256": "20b3a2cdd41ba37e2ef9d58ce000f83e3857125e949f9a95251341b342293ff1"
+    },
+    {
+      "source": "apps/desktop/src/components/Switch.tsx",
+      "target": "apps/desktop/src/components/Switch.tsx",
+      "sha256": "5c6cd0003ae5e5d33890e46ab10a9e5fe5b12dba4a2fa1785f46263f8d021f3a"
+    },
+    {
+      "source": "apps/desktop/src/components/TunnelCard.tsx",
+      "target": "apps/desktop/src/components/TunnelCard.tsx",
+      "sha256": "92d624360ffba6a2b8a4586cb68bfa5b82b7d6d399d9b8e9e6fc5a121c2af64f"
+    },
+    {
+      "source": "apps/desktop/src/components/UpdateDialog.tsx",
+      "target": "apps/desktop/src/components/UpdateDialog.tsx",
+      "sha256": "430e8f9d4a9e0369d1cb58f76795dfc26232985d6e4f15d3010c12f839d85263"
+    },
+    {
+      "source": "apps/desktop/src/components/about-rose.css",
+      "target": "apps/desktop/src/components/about-rose.css",
+      "sha256": "ce6afee395b95f7cb5d35f8260927f4e762626b219b50da3380cd49b52f6fe6d"
+    },
+    {
+      "source": "apps/desktop/src/components/about.css",
+      "target": "apps/desktop/src/components/about.css",
+      "sha256": "3c50b4bc53393e723f246b1107123626e7e3552d31245d74dafcfd8484e7549c"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/AccountSummaryPanel.tsx",
+      "target": "apps/desktop/src/components/dashboard/AccountSummaryPanel.tsx",
+      "sha256": "48b26ed15ea9cf2292026d50d8be849baa22a58809e1e3ee5db49624fbd93749"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/DashboardScreen.tsx",
+      "target": "apps/desktop/src/components/dashboard/DashboardScreen.tsx",
+      "sha256": "b1f8c690e57d7fb3a66acf24e0dea36197626726cdbf9f54e8db3b5b21163179"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/ModelPricesDialog.tsx",
+      "target": "apps/desktop/src/components/dashboard/ModelPricesDialog.tsx",
+      "sha256": "98361eb10ec3256e2b8e4cce2a539dfc2e66e155ddef5ea304f22e52e311a9a8"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/UsageChartsPanel.tsx",
+      "target": "apps/desktop/src/components/dashboard/UsageChartsPanel.tsx",
+      "sha256": "5625b53a95f5b1d433dc036955c496aaad5ba5230fa043dde22689b718d9e774"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/UsageFilterBar.tsx",
+      "target": "apps/desktop/src/components/dashboard/UsageFilterBar.tsx",
+      "sha256": "8842df4b6f70738b6e2c9106fa469ea58933120fa89c2ab9a6f120f82d8c7b83"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/UsageKpiGrid.tsx",
+      "target": "apps/desktop/src/components/dashboard/UsageKpiGrid.tsx",
+      "sha256": "d38aad51133c7271fb450a0e11f04e6c17e32bf44426c933a13cda10232b5f0b"
+    },
+    {
+      "source": "apps/desktop/src/components/dashboard/dashboard.css",
+      "target": "apps/desktop/src/components/dashboard/dashboard.css",
+      "sha256": "a749852fb9026135105709014b5ab66fd1158f152b9c1f244ace24f55bc14dbf"
+    },
+    {
+      "source": "apps/desktop/src/components/icons.tsx",
+      "target": "apps/desktop/src/components/icons.tsx",
+      "sha256": "ed0fd9088b9ee12dd04ceab3ce945e1576d2f3ada9b534aea797620176fe9aa9"
+    },
+    {
+      "source": "apps/desktop/src/components/rose-theme.css",
+      "target": "apps/desktop/src/components/rose-theme.css",
+      "sha256": "89f854b5657f3be999a884cc96bed4958d3a5959425d59a50354abfe2c1a5be5"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/AgentsScreen.tsx",
+      "target": "apps/desktop/src/components/sections/AgentsScreen.tsx",
+      "sha256": "6486d366bd425fdcf93cae85746079b95a4b0182a36775df0750d3f4fa69cf03"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/ApiKeysScreen.tsx",
+      "target": "apps/desktop/src/components/sections/ApiKeysScreen.tsx",
+      "sha256": "61576ab9400dcd1c0b256077bdc756e9889df641fdae2ce357093ab4b56be5b1"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/LogsScreen.tsx",
+      "target": "apps/desktop/src/components/sections/LogsScreen.tsx",
+      "sha256": "c427dfcdb4d7bccad9c90b1d58ca03d6c7c46063e4ba660c02159fcea864cd30"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/ProvidersScreen.tsx",
+      "target": "apps/desktop/src/components/sections/ProvidersScreen.tsx",
+      "sha256": "59551b02113db3d8956c65c60d01ccbbe52edfb142fe57df2b6c71340a75c323"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/QuotaScreen.tsx",
+      "target": "apps/desktop/src/components/sections/QuotaScreen.tsx",
+      "sha256": "edc39220b7ae1631cc1aaa80a9e4566330ba9d597e9d0af190c2142d1ca8f9ac"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/SettingsScreen.tsx",
+      "target": "apps/desktop/src/components/sections/SettingsScreen.tsx",
+      "sha256": "403e114f3fbb4bd01ace424fd7ad1260e1d1422aee947ad710b0bf420e1979ca"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/TwoFactorAuthScreen.tsx",
+      "target": "apps/desktop/src/components/sections/TwoFactorAuthScreen.tsx",
+      "sha256": "7c8c9fb9e35de2fcc97f76e0ecd3f3d6189efe7b5d8159afc791234560d0a824"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/agents-rose.css",
+      "target": "apps/desktop/src/components/sections/agents-rose.css",
+      "sha256": "071a0f44f19a43f3922c95eb0b3c9d4e795419dca8c35484ae7659d8d098f52a"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/agents.css",
+      "target": "apps/desktop/src/components/sections/agents.css",
+      "sha256": "602aaefb1af3783b53c697f27ea23f5b509e1eda26fdfc3d9ade763757be022d"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/api-keys-floral.css",
+      "target": "apps/desktop/src/components/sections/api-keys-floral.css",
+      "sha256": "62166360beda0d90fe8c0a09bda103a06537ab0c87a44f91a8823ad522f63a88"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/logs-rose.css",
+      "target": "apps/desktop/src/components/sections/logs-rose.css",
+      "sha256": "cecc1942ef540377a7197eb59b352fb10672a56839c3d61793638c455827fa68"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/logs.css",
+      "target": "apps/desktop/src/components/sections/logs.css",
+      "sha256": "461ecd57dbd475d671cfd2436a921947c8e88e5b58b39714d9e0b51028510448"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/providers-rose.css",
+      "target": "apps/desktop/src/components/sections/providers-rose.css",
+      "sha256": "cb1158a2cb2d492a2a5bb6b700a11193d92b01679e52e5a28785ccb8abadaf58"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/providers.css",
+      "target": "apps/desktop/src/components/sections/providers.css",
+      "sha256": "1698df229685c657997f559d014e975315e926b7fea5b524f0ea388638c7642a"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/quota-rose.css",
+      "target": "apps/desktop/src/components/sections/quota-rose.css",
+      "sha256": "8eb946e6195f00b170ad8e5d33165a810a2506643b9505d900afe49f5acd325b"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/quota.css",
+      "target": "apps/desktop/src/components/sections/quota.css",
+      "sha256": "96f91adeb120267bf2c24f782d8c679d7edbc7f523d7af0dd2513ab3eebabc13"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/settings-rose.css",
+      "target": "apps/desktop/src/components/sections/settings-rose.css",
+      "sha256": "055ce7d940c1a99991223f85a3c76ee95a80659482c940b1404e7b7ae8337b86"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/settings.css",
+      "target": "apps/desktop/src/components/sections/settings.css",
+      "sha256": "99c8cb679764f83de62cd68de5bd885d9cdfd0b7826414bebf08460309ed1f35"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/twofa-rose.css",
+      "target": "apps/desktop/src/components/sections/twofa-rose.css",
+      "sha256": "6aa21d2d921c459b0a153bfb3043cf9502d3223f6d6a2a2ac2dc1a6456e32a6e"
+    },
+    {
+      "source": "apps/desktop/src/components/sections/twofa.css",
+      "target": "apps/desktop/src/components/sections/twofa.css",
+      "sha256": "1227c0d39af14220d92d60690563f52e7fd376bec915992d93b1a6db1a44412c"
+    },
+    {
+      "source": "apps/desktop/src/components/shell.css",
+      "target": "apps/desktop/src/components/shell.css",
+      "sha256": "57747fe063766032e87db626292fd456e735abfc4734c8de7f7c37cabd112ca7"
+    },
+    {
+      "source": "apps/desktop/src/dev/mockBackend.test.ts",
+      "target": "apps/desktop/src/dev/mockBackend.test.ts",
+      "sha256": "3b35dda89039018c647d4eb1dec9011f333e7844b2b7921e1a553fafdb589e21"
+    },
+    {
+      "source": "apps/desktop/src/dev/mockBackend.ts",
+      "target": "apps/desktop/src/dev/mockBackend.ts",
+      "sha256": "7cf3fdcc93a952ffdec6cda8d985a30a63c30c7debe7616376b3dd763df56c39"
+    },
+    {
+      "source": "apps/desktop/src/i18n.tsx",
+      "target": "apps/desktop/src/i18n.tsx",
+      "sha256": "72dc37b1b541aeabf9a41ca103d53557209d6d836ea89bf3a627cef88d3c946e"
+    },
+    {
+      "source": "apps/desktop/src/lib/codexReasoning.test.ts",
+      "target": "apps/desktop/src/lib/codexReasoning.test.ts",
+      "sha256": "94e98e8e6485a392faaa6ffe4b6f669225c17f1fad63d1916d359d43f4f196f9"
+    },
+    {
+      "source": "apps/desktop/src/lib/codexReasoning.ts",
+      "target": "apps/desktop/src/lib/codexReasoning.ts",
+      "sha256": "95b277d2badda090da3aa367546db92fbf0e7a50bb5041e5bf1c0b825b703ec2"
+    },
+    {
+      "source": "apps/desktop/src/lib/format.test.ts",
+      "target": "apps/desktop/src/lib/format.test.ts",
+      "sha256": "a55e443fca90c3443eb8b12823607a80a4185e53299e4222e05cc9d2baa6f044"
+    },
+    {
+      "source": "apps/desktop/src/lib/format.ts",
+      "target": "apps/desktop/src/lib/format.ts",
+      "sha256": "c9a5afd8d3978a3921b7603fe58154eace97bcecabab6d0f313ef35b1abd60c1"
+    },
+    {
+      "source": "apps/desktop/src/lib/mfaVault.test.ts",
+      "target": "apps/desktop/src/lib/mfaVault.test.ts",
+      "sha256": "55b8186f70ab8fb4cccc52e37a5b8f74e3b233f6f8bddf0bc3c35ddd277f959d"
+    },
+    {
+      "source": "apps/desktop/src/lib/mfaVault.ts",
+      "target": "apps/desktop/src/lib/mfaVault.ts",
+      "sha256": "f2798500f7db5ab05a618093505885ff2f2a276d1d7e12a66b29b3a3c4a42181"
+    },
+    {
+      "source": "apps/desktop/src/lib/providerLogos.tsx",
+      "target": "apps/desktop/src/lib/providerLogos.tsx",
+      "sha256": "9b87d953c6d56885a829e9cf1aa5e60d3bd9b6b0275223159aa93b74015443ee"
+    },
+    {
+      "source": "apps/desktop/src/lib/proxyInstability.ts",
+      "target": "apps/desktop/src/lib/proxyInstability.ts",
+      "sha256": "397c411e5bda62efa65a26655f05bceec90a3d8d1198a53b60000318a433d6f3"
+    },
+    {
+      "source": "apps/desktop/src/lib/tauri.ts",
+      "target": "apps/desktop/src/lib/tauri.ts",
+      "sha256": "2e7b03047237a77379a1b5fbed66b0394e99352cfa9c41a4aecbdaeffd55f9a2"
+    },
+    {
+      "source": "apps/desktop/src/lib/theme.test.ts",
+      "target": "apps/desktop/src/lib/theme.test.ts",
+      "sha256": "21d51488e775757fc3b73d3b561845e2d7d7f1410bd1b6350e1a010fe70d6958"
+    },
+    {
+      "source": "apps/desktop/src/lib/theme.ts",
+      "target": "apps/desktop/src/lib/theme.ts",
+      "sha256": "cd6ce6cf32940f9bd02aaf7f0f64e2ace77f4818561798fc380fa45a97d5bb6d"
+    },
+    {
+      "source": "apps/desktop/src/lib/updater.ts",
+      "target": "apps/desktop/src/lib/updater.ts",
+      "sha256": "a0bf7477124ef613b629380f4a1f907a6fb292d783bbbf90f4d825b4009d7af9"
+    },
+    {
+      "source": "apps/desktop/src/main.tsx",
+      "target": "apps/desktop/src/main.tsx",
+      "sha256": "2a13af031c24d6bafda63d5d7af86227e695e20c9128228e9d9df80f5d84f14a"
+    },
+    {
+      "source": "apps/desktop/src/menubar.css",
+      "target": "apps/desktop/src/menubar.css",
+      "sha256": "1cb6b4ffe2b6f8f0b022484ca4903a6f6e0764a719483be81198d908be39f10b"
+    },
+    {
+      "source": "apps/desktop/src/state/usageDashboard.ts",
+      "target": "apps/desktop/src/state/usageDashboard.ts",
+      "sha256": "61a0830f65b7b1ee5ee2819e18062bcc3d8456b2cb16f3da0e3062c45c8d056e"
+    },
+    {
+      "source": "apps/desktop/src/state/usageRange.ts",
+      "target": "apps/desktop/src/state/usageRange.ts",
+      "sha256": "087929ac688c725398ca086e9fed4c976b3c5692cbca82a36eba72b1ff000a14"
+    },
+    {
+      "source": "apps/desktop/src/state/useAppState.ts",
+      "target": "apps/desktop/src/state/useAppState.ts",
+      "sha256": "e742cd0e1736501b883aaee1c524f820c7b01feb687e87d13191310776c5c809"
+    },
+    {
+      "source": "apps/desktop/src/state/useUpdater.ts",
+      "target": "apps/desktop/src/state/useUpdater.ts",
+      "sha256": "6b3bdf179885dc7d0c75a976485c059046e0eed6aedf266c1aa5ad58afffbbdd"
+    },
+    {
+      "source": "apps/desktop/src/types.ts",
+      "target": "apps/desktop/src/types.ts",
+      "sha256": "bb395f0033a2de9062c8b06967c985281b2ed9502ad1b54903e3c7eb0817061d"
+    },
+    {
+      "source": "apps/desktop/src/vite-env.d.ts",
+      "target": "apps/desktop/src/vite-env.d.ts",
+      "sha256": "424faf9241dd699dda995b367ed36665732da1e6ec1f33b2fd40394488ecac92"
+    },
+    {
+      "source": "apps/desktop/tsconfig.json",
+      "target": "apps/desktop/tsconfig.json",
+      "sha256": "cb4dd1777bc7f478cb417906c32099ae5e661865b3181df116ac70790e9a1a7e"
+    },
+    {
+      "source": "apps/desktop/tsconfig.node.json",
+      "target": "apps/desktop/tsconfig.node.json",
+      "sha256": "6ec602b8aa146888c76f0b41ca3515f91f95919f6e6417a4670decaba8fcb982"
+    },
+    {
+      "source": "apps/desktop/vite.config.ts",
+      "target": "apps/desktop/vite.config.ts",
+      "sha256": "d0c7e96eb844636ee7e73113ff6d194eb942d15398a00989d36335400ac8a86d"
+    },
+    {
+      "source": "crates/quotio-core/Cargo.toml",
+      "target": "crates/quotio-core/Cargo.toml",
+      "sha256": "81e6a7d821ee33c407d5d34156d91306e44f54c0b738dbc4fb1e7f644b92fead"
+    },
+    {
+      "source": "crates/quotio-core/src/agent_config.rs",
+      "target": "crates/quotio-core/src/agent_config.rs",
+      "sha256": "7b6471a13d96d617ff4db0fdca137bc249f60f388598e7b4ba812893aa91324d"
+    },
+    {
+      "source": "crates/quotio-core/src/agents.rs",
+      "target": "crates/quotio-core/src/agents.rs",
+      "sha256": "5dd32e4478727b2377f3710f43491662b0587bdfdc3deb20a207c22d03dcb42e"
+    },
+    {
+      "source": "crates/quotio-core/src/bridge.rs",
+      "target": "crates/quotio-core/src/bridge.rs",
+      "sha256": "9acd7c81744afc2b4cd3b2437a1d45a782075df4835b2e7e121eb7e142fe68c8"
+    },
+    {
+      "source": "crates/quotio-core/src/codex_catalog.rs",
+      "target": "crates/quotio-core/src/codex_catalog.rs",
+      "sha256": "8b9853edb0c008893bd67abd272be8e2c48890b0f8ea6d4d06f9c9519b419713"
+    },
+    {
+      "source": "crates/quotio-core/src/codex_launch.rs",
+      "target": "crates/quotio-core/src/codex_launch.rs",
+      "sha256": "6a383222292ab971f54be7db04e9b2da73c3dd70e92bd1076c533b606ebc110f"
+    },
+    {
+      "source": "crates/quotio-core/src/codex_session_visibility.rs",
+      "target": "crates/quotio-core/src/codex_session_visibility.rs",
+      "sha256": "56c771a69a95482e88d421708268822004a1f59337c1f0ff1406746ea2e85dcb"
+    },
+    {
+      "source": "crates/quotio-core/src/dream_skin.rs",
+      "target": "crates/quotio-core/src/dream_skin.rs",
+      "sha256": "f0d6b50d8c1fcc5b288f8765471303f63b71de76bea269d7f128da8d58b89fd9"
+    },
+    {
+      "source": "crates/quotio-core/src/kiro_idc.rs",
+      "target": "crates/quotio-core/src/kiro_idc.rs",
+      "sha256": "7fac4a4deb05a777497ff8641ab2baeda80fb95ec0392be415950a1bb8fae46e"
+    },
+    {
+      "source": "crates/quotio-core/src/kiro_sidecar.rs",
+      "target": "crates/quotio-core/src/kiro_sidecar.rs",
+      "sha256": "a364cfa6e3d39457bb6014080e9388e2a29c245670867c8ad7caa7047b9b5b30"
+    },
+    {
+      "source": "crates/quotio-core/src/lib.rs",
+      "target": "crates/quotio-core/src/lib.rs",
+      "sha256": "c78f1b8d044babe4bac976939a6d593689d6ab1879e164e3fba3c12f2fad6053"
+    },
+    {
+      "source": "crates/quotio-core/src/management.rs",
+      "target": "crates/quotio-core/src/management.rs",
+      "sha256": "6fa942f35bb22c90c4e4de0d9f985942310a208375b58c2edb3ba4a554e5ebe4"
+    },
+    {
+      "source": "crates/quotio-core/src/native_oauth.rs",
+      "target": "crates/quotio-core/src/native_oauth.rs",
+      "sha256": "93b6205455b129b7f8f20b3d45f6f1d2e7c4c81a184692879ff6f8196de08ef6"
+    },
+    {
+      "source": "crates/quotio-core/src/proxy_download.rs",
+      "target": "crates/quotio-core/src/proxy_download.rs",
+      "sha256": "912661491c5dd419a84d044898297d1119449dc6899e44850825f06b86b3b6c9"
+    },
+    {
+      "source": "crates/quotio-core/src/quota.rs",
+      "target": "crates/quotio-core/src/quota.rs",
+      "sha256": "f8491f0e735c1110aa29b5d26be60585be4d02b6ec2339a63dd37ea678c1869b"
+    },
+    {
+      "source": "crates/quotio-core/src/scheduler.rs",
+      "target": "crates/quotio-core/src/scheduler.rs",
+      "sha256": "ad4b208608a0d4ab98b95ac52ae8fbab75b13c29fac9c65c3c352917484b1e9b"
+    },
+    {
+      "source": "crates/quotio-core/src/tunnel.rs",
+      "target": "crates/quotio-core/src/tunnel.rs",
+      "sha256": "8ab8e9f0e8d91e584f7740ffca75c0670d8de9d5748e057c46edd4e06e34c0ef"
+    },
+    {
+      "source": "crates/quotio-core/src/usage_store.rs",
+      "target": "crates/quotio-core/src/usage_store.rs",
+      "sha256": "2a8edebc6ec49d76db222b9af19cf1294aa4a6f2c0cb074b82bc5cb59b305739"
+    },
+    {
+      "source": "crates/quotio-platform/Cargo.toml",
+      "target": "crates/quotio-platform/Cargo.toml",
+      "sha256": "adf800ef604df950802679c0cc9951b28f93c2673106ba1ef2b610440b71b41b"
+    },
+    {
+      "source": "crates/quotio-platform/src/lib.rs",
+      "target": "crates/quotio-platform/src/lib.rs",
+      "sha256": "458c31c15892414d2ca4bdc7fc2c75382501a2b2d65ee57140a7280d4000fea9"
+    },
+    {
+      "source": "crates/quotio-types/Cargo.toml",
+      "target": "crates/quotio-types/Cargo.toml",
+      "sha256": "987c525ee89c7c24733ed70f44e933df0ea01f2ccdc728c1113b4f3f3e12597c"
+    },
+    {
+      "source": "crates/quotio-types/src/lib.rs",
+      "target": "crates/quotio-types/src/lib.rs",
+      "sha256": "5af54123838d2cc90df26c0c0d5232afd9424094b4cbd7544022cc4d41a14858"
+    },
+    {
+      "source": "package.json",
+      "target": "package.json",
+      "sha256": "29cebe45b49e2e0387e00a525220e15401526f6a8d79b1233f80220aeb6de9a5"
+    },
+    {
+      "source": "resources/dream-skin/INTEGRATION.md",
+      "target": "resources/dream-skin/INTEGRATION.md",
+      "sha256": "63d9d6e58e6e0fcd22148ba271816f2d780e2f6d0219e1cf53caac60cc215cbc"
+    },
+    {
+      "source": "resources/dream-skin/LICENSE",
+      "target": "resources/dream-skin/LICENSE",
+      "sha256": "0e8f0b5cc9f0d8103079fa6e4caf6955ba85ef7e2a7da8683e755df361382e4c"
+    },
+    {
+      "source": "resources/dream-skin/NOTICE.md",
+      "target": "resources/dream-skin/NOTICE.md",
+      "sha256": "ff72626124533b0f320f71eedbcd4ee54918ff0851f49d5658d19fa0abb4d90b"
+    },
+    {
+      "source": "resources/dream-skin/README.upstream.md",
+      "target": "resources/dream-skin/README.upstream.md",
+      "sha256": "d6d9cb2eaf14eb174158ca63704892e7918caa423bfd82c4db61f8cb387ee9f0"
+    },
+    {
+      "source": "resources/dream-skin/UPSTREAM-SNAPSHOT.md",
+      "target": "resources/dream-skin/UPSTREAM-SNAPSHOT.md",
+      "sha256": "7c3cbbde7dd2f586cf68e9b6ff62041ed231def7fba79466386e033e2b32bcd6"
+    },
+    {
+      "source": "resources/dream-skin/windows/assets/dream-reference.png",
+      "target": "resources/dream-skin/windows/assets/dream-reference.png",
+      "sha256": "31bde93bb02d6723e0b6aa0ead675577604120acb0a6799163dd37f5cdd0a08e"
+    },
+    {
+      "source": "resources/dream-skin/windows/assets/dream-skin.css",
+      "target": "resources/dream-skin/windows/assets/dream-skin.css",
+      "sha256": "5c176cbf062141f2c140cd11520fe6df098a146b980f440001b3701b16ba3eab"
+    },
+    {
+      "source": "resources/dream-skin/windows/assets/renderer-inject.js",
+      "target": "resources/dream-skin/windows/assets/renderer-inject.js",
+      "sha256": "8c7e1f5a135cf4b3f087f9380dcab6592e13f8dbccb84197aca52c9b8e516d5f"
+    },
+    {
+      "source": "resources/dream-skin/windows/scripts/common-windows.ps1",
+      "target": "resources/dream-skin/windows/scripts/common-windows.ps1",
+      "sha256": "3e6e5afa8a0cc13201d2378b25eccdb53ec7d582fb0150e92505e671e072f71e"
+    },
+    {
+      "source": "resources/dream-skin/windows/scripts/config-utf8.ps1",
+      "target": "resources/dream-skin/windows/scripts/config-utf8.ps1",
+      "sha256": "63e49561178f287a6fa439b705d96701011c8aeac6ce3698c00a85ee6a943533"
+    },
+    {
+      "source": "resources/dream-skin/windows/scripts/injector.mjs",
+      "target": "resources/dream-skin/windows/scripts/injector.mjs",
+      "sha256": "fc9e1fe3639550071627d4f0157db267afe16fb7ef5382d92a377fc38574dddb"
+    },
+    {
+      "source": "resources/dream-skin/windows/scripts/restore-dream-skin.ps1",
+      "target": "resources/dream-skin/windows/scripts/restore-dream-skin.ps1",
+      "sha256": "babeb09f2725b3ee8349a5b376cbdc38c0d6b1f024174b8ec81281f93075eb38"
+    },
+    {
+      "source": "resources/dream-skin/windows/scripts/start-dream-skin.ps1",
+      "target": "resources/dream-skin/windows/scripts/start-dream-skin.ps1",
+      "sha256": "896c704989b05023f2924fcde53645af76d604313aead5ff572e1dc5a9602271"
+    },
+    {
+      "source": "resources/dream-skin/windows/tests/run-runtime-tests.ps1",
+      "target": "resources/dream-skin/windows/tests/run-runtime-tests.ps1",
+      "sha256": "c4b37d52199871190b4f3cba7805def780741d51835811929e60d1fea502f765"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/aurora/theme.css",
+      "target": "resources/dream-skin/windows/themes/aurora/theme.css",
+      "sha256": "b92cf9642b59fd19adf45757a09a99e31b8d047c286b62a3f8e3ced0428850c3"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/aurora/theme.json",
+      "target": "resources/dream-skin/windows/themes/aurora/theme.json",
+      "sha256": "f707bdac62f9610dc8b1216fdabc88e39d85caa9ae16e25efca5ab36200c8e2c"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/clear-custom/background.jpg",
+      "target": "resources/dream-skin/windows/themes/clear-custom/background.jpg",
+      "sha256": "39feb8649c08bfdef01f4352131aa8d80c99d4ed61e30ee24a6566325bef7f36"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/clear-custom/theme.css",
+      "target": "resources/dream-skin/windows/themes/clear-custom/theme.css",
+      "sha256": "c43ae9d54cedd91a33499b6f659780576238b2c8465af7f8586dd4f9799d82a1"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/clear-custom/theme.json",
+      "target": "resources/dream-skin/windows/themes/clear-custom/theme.json",
+      "sha256": "372a01c9bcd090551894dbeab0fcdde8c6f813545687cbde95a6d3a3f3a934ec"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/dream/theme.css",
+      "target": "resources/dream-skin/windows/themes/dream/theme.css",
+      "sha256": "242d0e3b950ded4dce138f510610c9cb94d246d43ab0c282f9470680a44bb745"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/dream/theme.json",
+      "target": "resources/dream-skin/windows/themes/dream/theme.json",
+      "sha256": "1b95865f580bc72e935bb10f38c6238d92b44261c28db1e71d907eec8956781d"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/hatsune-miku/background.jpg",
+      "target": "resources/dream-skin/windows/themes/hatsune-miku/background.jpg",
+      "sha256": "c499ca84155d23f49695c6962ec5cee69234ded0f83f3f33465adbd646531138"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/hatsune-miku/theme.css",
+      "target": "resources/dream-skin/windows/themes/hatsune-miku/theme.css",
+      "sha256": "40473ea5a6ff08a3183ac83a120a224501f0c46ee15439fe66b6badcc05751e5"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/hatsune-miku/theme.json",
+      "target": "resources/dream-skin/windows/themes/hatsune-miku/theme.json",
+      "sha256": "0a43a2b72d4e4345be701a8b0fc68a0fb557cd103b85957e76df54db433b142e"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/inspiration-cosmos/background.jpg",
+      "target": "resources/dream-skin/windows/themes/inspiration-cosmos/background.jpg",
+      "sha256": "9beeca0c9c7c4e20b88342bdc3d018b26905076ea26d7bbcd0cefd7d95ad7b86"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/inspiration-cosmos/theme.css",
+      "target": "resources/dream-skin/windows/themes/inspiration-cosmos/theme.css",
+      "sha256": "f17b9b24a82edbf29a02a453be62d117c9ce79d69d9f26409f6c36333d09c3de"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/inspiration-cosmos/theme.json",
+      "target": "resources/dream-skin/windows/themes/inspiration-cosmos/theme.json",
+      "sha256": "e0569bb1407e41814e8e2ba982d0ea5001513defe44afa276f769a2fb63572c6"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/midnight/theme.css",
+      "target": "resources/dream-skin/windows/themes/midnight/theme.css",
+      "sha256": "1f38e364a634d34c1be1b76a61cdbc2befc36dba44c5a9da8a972709f9559455"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/midnight/theme.json",
+      "target": "resources/dream-skin/windows/themes/midnight/theme.json",
+      "sha256": "6fd59d7b84d3d149c8896f9c9dda0cdf5a180ab32df0d04ef1b13efe3c0030eb"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/pink-custom/background.jpg",
+      "target": "resources/dream-skin/windows/themes/pink-custom/background.jpg",
+      "sha256": "a38eb2ec7c4a2aa701b061fba3bb250e5be96b554185b249a26bb21fc37ecd75"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/pink-custom/hero-pink-floral-v1.jpg",
+      "target": "resources/dream-skin/windows/themes/pink-custom/hero-pink-floral-v1.jpg",
+      "sha256": "c700c78864a5dbdbdc9a7cd3f7fb9650235ee585fa2a8241ad3b0b2dd11adab7"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/pink-custom/theme.css",
+      "target": "resources/dream-skin/windows/themes/pink-custom/theme.css",
+      "sha256": "0a7ba24eff8c5771f64dd6b8997a1cb8730b717a509c897304192726cf1ddf4d"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/pink-custom/theme.json",
+      "target": "resources/dream-skin/windows/themes/pink-custom/theme.json",
+      "sha256": "567cca4d1366fade7263d468f64e5ca8830ad28258ca6c5e77143d3d993eabce"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/purple-night/background.jpg",
+      "target": "resources/dream-skin/windows/themes/purple-night/background.jpg",
+      "sha256": "464b95ec40c5dc71d369616387ab9fca55e6d74a5ff6bc44332dd47413ae9eb2"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/purple-night/theme.css",
+      "target": "resources/dream-skin/windows/themes/purple-night/theme.css",
+      "sha256": "0b8ec25838917f77bf1ca096d0d07ea15be21be84e265e32c02b244b9c6427d8"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/purple-night/theme.json",
+      "target": "resources/dream-skin/windows/themes/purple-night/theme.json",
+      "sha256": "193ef182b953b6d107fbd96c0c48e907c8fd29d836537606c75502b8f3bfd58e"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/red-white-scifi/background.jpg",
+      "target": "resources/dream-skin/windows/themes/red-white-scifi/background.jpg",
+      "sha256": "575c1903564df31efe0d5199f4dca4dbf65c4847009c748de669a523fc4f063b"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/red-white-scifi/theme.css",
+      "target": "resources/dream-skin/windows/themes/red-white-scifi/theme.css",
+      "sha256": "e1fe43e93ded6ef9a6c66aa1250573a6dfc2cee98a1f0ee351220b792fb9f888"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/red-white-scifi/theme.json",
+      "target": "resources/dream-skin/windows/themes/red-white-scifi/theme.json",
+      "sha256": "054d717a35cbd75dfb53d313a06366e013ea7d6a246b23a9b87e6199d1edf997"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/stage-black-gold/background.jpg",
+      "target": "resources/dream-skin/windows/themes/stage-black-gold/background.jpg",
+      "sha256": "ec755c0f1c10b60c27e3bb84b6c0f0431e2a2de0b59e639567b19d32f941a218"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/stage-black-gold/theme.css",
+      "target": "resources/dream-skin/windows/themes/stage-black-gold/theme.css",
+      "sha256": "8b72d5c9ec7db772d3039ffd6597ee0a0deaa5613bbdfebaf5cd7e48095cb937"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/stage-black-gold/theme.json",
+      "target": "resources/dream-skin/windows/themes/stage-black-gold/theme.json",
+      "sha256": "f0441274bc6bd8244fd29d93e7cbec74ec09b591faae8d5fdd56966a168c8e0a"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/wealth-worker/background.jpg",
+      "target": "resources/dream-skin/windows/themes/wealth-worker/background.jpg",
+      "sha256": "d7f4805aba805cca3cd6a5b4befa72150448e87695c4c077491a7ca3ff12b1fe"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/wealth-worker/theme.css",
+      "target": "resources/dream-skin/windows/themes/wealth-worker/theme.css",
+      "sha256": "7527782de13d6bb53879e0eb5e4313d604db9151bdbea9ccdda2207edf91fca8"
+    },
+    {
+      "source": "resources/dream-skin/windows/themes/wealth-worker/theme.json",
+      "target": "resources/dream-skin/windows/themes/wealth-worker/theme.json",
+      "sha256": "5cddc88b1e599b2543e07eaf30a1782f3f8563561ea6e2238c75d6c7792eca8d"
+    },
+    {
+      "source": "resources/kiro/windows/README.md",
+      "target": "resources/kiro/windows/README.md",
+      "sha256": "941438bcbf773e98d0e1ae41bac3f4706b65e91f8e3efe2ef32307a2fc24594f"
+    },
+    {
+      "source": "resources/proxy/darwin/README.md",
+      "target": "resources/proxy/darwin/README.md",
+      "sha256": "9e5c2207c6dc53fd87772a89f7a0819b6044f70063c39cdede715e717064840e"
+    },
+    {
+      "source": "resources/proxy/linux/README.md",
+      "target": "resources/proxy/linux/README.md",
+      "sha256": "597a72976e598d82824dbb9fea4c01bcbeb5c509e39eb0de62554642bbd1f7fa"
+    },
+    {
+      "source": "resources/proxy/windows/README.md",
+      "target": "resources/proxy/windows/README.md",
+      "sha256": "c9fcf5f9a4380f4883077a9da4a138ca477ef8950942ea7f5feafc338a3a5452"
+    }
+  ]
+}

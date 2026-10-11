@@ -1,0 +1,14 @@
+{
+  "scope": "Windows isolated target run; embedded frontend; UIAutomation InvokePattern/WM_CLOSE",
+  "executable": "D:/temp-audit/proxyweave-phase0-upstream/target/debug/quotio-desktop.exe",
+  "processId": 58948,
+  "mainWindowHandle": 4528264,
+  "coldWindow": {"visible": true, "title": "ProxyWeave", "text": "Phase 0 — Desktop baseline", "providersEnabled": false},
+  "tray": {"overflowClass": "TopLevelWindowForOverflowXamlIsland", "iconName": "ProxyWeave", "InvokePattern": true},
+  "customClose": {"dialog": ["取消", "最小化到托盘", "退出程序"], "minimizeToTray": "main hidden; process alive; panel shown"},
+  "trayInteraction": {"invoke": "opens/toggles upstream tray panel, not direct restore", "panelOpenProxyWeave": "restores main; hides panel"},
+  "nativeClose": {"message": "WM_CLOSE", "result": "main hidden; process alive"},
+  "singleInstance": {"secondExitCode": 0, "result": "original PID remains; original main HWND restored"},
+  "explicitQuit": {"action": "关闭 -> 退出程序", "processAliveAfter": false, "windowsAfter": []},
+  "limitations": ["Tray context-menu quit not independently exercised in this run", "Alt+F4 target key sequence not separately exercised; native close verified by WM_CLOSE", "Not a release installer or other-platform validation"]
+}

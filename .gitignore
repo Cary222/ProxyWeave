@@ -1,7 +1,7 @@
 # Rust / Cargo build artifacts
 /target/
 **/*.rs.bk
-Cargo.lock
+# Desktop application: commit Cargo.lock for reproducible builds.
 
 # Node / Web artifacts
 node_modules/
@@ -46,5 +46,6 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Pi agent metadata
+/.pi/tasks/
 .pi-glla/
 .narrafork/

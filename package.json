@@ -1,0 +1,12 @@
+{
+  "name": "proxyweave-workspace", "private": true, "version": "0.1.0",
+  "scripts": {
+    "desktop:install": "cd apps/desktop && npm ci",
+    "desktop:dev": "npm --prefix apps/desktop run tauri dev",
+    "desktop:build": "npm --prefix apps/desktop run tauri -- build --no-bundle",
+    "web:dev": "npm --prefix apps/desktop run dev",
+    "web:build": "npm --prefix apps/desktop run build",
+    "test:frontend": "npm --prefix apps/desktop test",
+    "cargo:check": "cargo check --workspace --locked -j 1"
+  }
+}

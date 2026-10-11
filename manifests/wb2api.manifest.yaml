@@ -34,9 +34,9 @@ runtime:
 distribution:
   repository: "https://github.com/linguo2625469/workbuddy2api-panel"
   release_asset_pattern:
-    windows_x86_64: ".*windows.*amd64.*\.zip"
-    darwin_aarch64: ".*darwin.*arm64.*\.tar\.gz"
-    linux_x86_64: ".*linux.*amd64.*\.tar\.gz"
+    windows_x86_64: '.*windows.*amd64.*\.zip'
+    darwin_aarch64: '.*darwin.*arm64.*\.tar\.gz'
+    linux_x86_64: '.*linux.*amd64.*\.tar\.gz'
 
 lifecycle:
   policy: "idle_timeout" # persistent | idle_timeout | on_demand | external

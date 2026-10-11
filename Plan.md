@@ -7,7 +7,7 @@
 > **技术定位**：Local-first AI API Plugin Host（本地优先的 AI API 插件宿主与统一工作台）  
 > **核心哲学**：上游易逝，平台长存 · Everything is a Plugin（万物皆插件） · **成熟实现直接复用优先 (Direct Reuse First)**  
 > **主开发规划路径**：`Plan.md`（根目录权威文档）与 `docs/PLAN-ProxyWeave.md`（架构设计归档）  
-> **当前阶段纪律**：**仅允许调研核验、源码审计、方案论证与规划修订；严禁编写任何产品业务代码！**
+> **当前阶段**：**Phase 0 已通过（本轮 Windows 最小桌面基座范围），Phase 1 待启动**。已先验证固定上游，再分步引入/适配/裁剪并完成构建、测试及桌面实测；未实现网关、市场、协议或 IDE 功能，其他平台未验证。
 
 ---
 
@@ -56,8 +56,8 @@
 | **GATE-02** | 宗旨文档与开源协议 | `README.md` 与 `LICENSE` (MIT) 就位 | Commit `e323089` 归档 | 🟢 **Done (已通过)** |
 | **GATE-03** | 权威规划与架构规范冻结 | 根目录 `Plan.md` 与镜像完成编制 | 本规划书编制核验 | 🟢 **Done (已通过)** |
 | **GATE-04** | 脚手架与复用政策确立 | 确立直接复用优先与严禁 AI 重写条文 | `ADR-001` 就位 | 🟢 **Done (已通过)** |
-| **GATE-05** | 参考源档案全量核验 | 15 大核心模块逐行源码审计完成 | `REFERENCE_REGISTRY.md` 建立，待完成全量逐行审计 | 🟡 **In Progress (进行中)** |
-| **GATE-06** | 零业务代码红线守护 | 核心功能目录保持纯净，无伪造代码 | 工作区代码树审计确认 | 🟢 **Done (已通过)** |
+| **GATE-05** | 参考源档案与按 Feature 前置审计 | 登记候选源；仅对本阶段实际引入闭包完成审计，其他模块开发前再核验 | 本阶段实际引入范围及来源已登记；后续候选仍待开发前核验 | 🟢 **本轮前置审计完成** |
+| **GATE-06** | 阶段范围守护 | Phase -1 零产品代码；Phase 0 仅桌面基座，不引入网关、协议或插件功能 | 本轮仅桌面胶水，不含网关/插件 runtime | 🟢 **范围符合** |
 
 ---
 
@@ -81,7 +81,7 @@
 ### 1.3 本地黑盒与验证项目的分类接入原则
 针对本地开发与联调涉及的历史项目与现存服务，确立严谨的技术接入原则：
 - **存在公开源码的项目 (如 `D:\workbuddy2api-panel`)**：在全面核验其 Go 源码（v1.13.0, commit `8461419`）、构建流程与 MIT 许可证后，允许作为首发 Managed 插件进行模块级复用或二进制内嵌打包。
-- **仅有可执行二进制或运行服务的项目 (如 `D:\CLIProxyAPI_...`)**：仅在本地运行验证过 28317 端口服务，无公开源码。**必须严格按 External Provider 公开 HTTP 接口方式接入，绝对禁止假称已复用其内部源码！**
+- **已有运行服务 (如 `D:\CLIProxyAPI_...`)**：本阶段未实测其 28317 端口；本地未核验内部源码，不能推断项目没有公开源码。**Managed / External 取决于进程所有权，而不是源码可得性；已有服务仅按 External Provider 挂载，禁发 Kill，禁止假称复用其源码。**
 - **存在许可证冲突的历史工程 (如方案一参考库 `D:\workbuddy-switch-gateway\...`)**：因其包含历史 GPL-3.0 代码，**严禁直接复制代码文件，仅作为避坑经验与算法逻辑参考**（如时间戳毫秒与秒换算、`0o600` 临时配置原子写入机制）。
 
 
@@ -105,29 +105,21 @@
 
 #### 1. 基础元数据与核验状态
 - **仓库地址**：`https://github.com/xiaocoss/quotio-desktop`
-- **锁定 Commit**：`21d75d0822181ceea1d33465bbd69d2d091a134a`
+- **锁定 Commit**：`21d75d08b38a23f97fbd534a1768a829cb147f2c`
 - **开源许可证**：MIT License（完全商用友好，无传染性）
-- **技术栈**：Tauri v2 + Rust 1.80+ + React 18 + Vite + Tailwind CSS
-- **核验状态**：🟢 **源码已核验 (Source Code Verified)**
-
+- **技术栈（真实配置）**：Tauri v2 + Rust 2021 Workspace + React 19.1 + Vite 7 + npm（`apps/desktop/package-lock.json`）
+- **核验状态**：Git HEAD、v0.7.7 标签、干净工作区及 MIT 版权已核验；独立副本与裁剪后基座的构建/测试、当前 Windows 桌面行为已验证通过。详见 `docs/verification/PHASE0.md`，其他平台及插件功能未验收。
 #### 2. 源码模块逐项审计与取舍决策
 
-```text
-quotio-desktop (21d75d08)
-├── crates/
-│   ├── quotio-platform/  [1192 行] -> 🟢 完全保留并直接复用 (系统级能力)
-│   │   ├── keyring.rs    -> 操作系统安全凭据托管 (Windows Credential Manager / macOS Keychain)
-│   │   ├── runner.rs     -> 平台可执行文件与环境发现
-│   │   └── autostart.rs  -> 开机自启动与注册表管理
-│   ├── quotio-core/      [业务核心] -> 🟡 深度裁剪与模块提取
-│   │   ├── bridge.rs     -> ❌ 必须废弃！基于同步阻塞 tiny_http，不支持高并发异步与 SSE 流式背压
-│   │   ├── proxy_download.rs -> ❌ 必须废弃！硬编码 CPA 下载解压，违背插件化抽象
-│   │   ├── usage_store.rs    -> ❌ 必须废弃！绑定 SQLite 业务统计表，违背无 DB 纯 JSON 设计
-│   │   └── agent_config.rs   -> 🟢 提取复用！54KB 极高价值代码，实现 Cursor/Claude/Windsurf 自动配置注入
-│   └── quotio-models/    [静态模型] -> ❌ 废弃！硬编码模型列表，改由 Manifest 动态声明
-└── apps/desktop/         [前端 UI]  -> 🟢 保留 Tauri 外壳与托盘框架，重构业务视图
-```
-
+| 实际上游路径 | Phase 0 处理与边界 |
+|---|---|
+| `apps/desktop/src-tauri/`、`apps/desktop/` | 先验证原工程，再直接保留窗口、托盘、单实例及适用构建配置；逐步移除业务 IPC 与视图。 |
+| `crates/quotio-platform/src/lib.rs` | 单文件含系统路径、Keyring、命令执行、原子写入与业务资源定位；不是独立 keyring/runner/autostart 文件。按真实调用闭包裁剪，保留对应测试。Windows sensitive 权限分支是空操作，不能视为 ACL 隔离。 |
+| `crates/quotio-types/` | 根据保留代码调用关系渐进裁剪，内部 crate 名可保留。 |
+| `crates/quotio-core/src/lib.rs` (`AppCore`) | 优先裁剪现有实现；若桌面生命周期无必要核心依赖，仅保留明确胶水职责，不重新构建核心框架。 |
+| `crates/quotio-core/src/agent_config.rs` | 后续 Phase 3 IDE Handoff 候选；本轮除实际依赖外不引入。 |
+| `crates/quotio-core/src/proxy_download.rs` | 后续安装器候选，下载、校验、解压实现仍有复用价值；不因 CPA 常量整体否定。 |
+| `bridge.rs`、`usage_store.rs`、vendor 与专有业务 | 按依赖逐轮剥离并验证，不批量删除后重写替代实现；同步桥不作为目标网关。 |
 #### 3. 为什么坚决剥离其核心业务逻辑？
 1. **网络架构代差**：Quotio 采用同步阻塞的 `tiny_http` 搭建网关，每个连接独占线程，在流式 SSE 长连接下极易耗尽系统线程池；ProxyWeave 必须采用全异步的 `Axum 0.7 + Hyper 1.0` 架构。
 2. **硬编码耦合严重**：Quotio 将 CLIProxyAPI 视为唯一特化下游，业务代码与 CPA 配置深度绑定，不具备通用插件扩展能力。
@@ -138,10 +130,10 @@ quotio-desktop (21d75d08)
 
 ### 3.1 基础元数据与核验状态
 - **仓库地址**：`https://github.com/tiylabs/tiygate`
-- **锁定 Commit**：`6db40e54045f94982635bcdd612c62c3e1e2d42d`
+- **锁定 Commit**：`6db40e54663455fb99d675bd8985e4dc50f68a14`
 - **开源许可证**：Apache-2.0
 - **技术栈**：Rust 1.88+, Axum 0.7, Hyper 1.0, Tokio
-- **核验状态**：🟢 **源码已核验 (Source Code Verified)**
+- **核验状态**：Git 基线已核验；下列模块路径/版本为候选规划，Phase 2 开发前按真实源码、许可证和测试复核，当前未引入或验收
 
 ### 3.2 核心模块审计与复用规划
 
@@ -168,18 +160,18 @@ tiygate (6db40e54)
 
 ### 4.1 Tunnel Agent：多引擎管理与桌面交互参考
 - **仓库地址**：`https://github.com/beyondhumane/tunnel-agent`
-- **锁定 Commit**：`9bfb7779b009f7a77d7045b78cb47ff2e9c1fe04`
+- **锁定 Commit**：`9bfb7779b80de5e205a388e2e02d5840a3ed8b47`
 - **开源许可证**：MIT License
-- **核验状态**：🟢 **源码已核验 (Source Code Verified)**
+- **核验状态**：仅 Git 基线核验；未完成本轮 Feature 源码审计或行为验收
 - **复用决策与技术边界**：
   - **排除项**：其自身基于 C# .NET Avalonia 开发，技术栈与 Rust/Tauri 异构，**绝对不引入 .NET 运行时或 C# 源码**。
   - **借鉴项**：核心借鉴其“多反代引擎统一生命周期管控”状态机架构、多引擎并发调度逻辑、极简桌面系统托盘联动与多引擎状态面板排版布局。
 
 ### 4.2 DeepSeek Harness：微内核与插件插槽参考
 - **仓库地址**：`https://github.com/deepseek-ai/deepseek-harness`
-- **锁定 Commit**：`d74326732e4d41fa3fbfd147bbef60b1812903f6`
+- **锁定 Commit**：`d743267388641bc76f17c45ce8b4c231aed1d32c`
 - **开源许可证**：MIT License
-- **核验状态**：🟢 **源码已核验 (Source Code Verified)**
+- **核验状态**：仅 Git 基线核验；未完成本轮 Feature 源码审计或行为验收
 - **复用决策与技术边界**：
   - **排除项**：其自身基于 Node.js/TypeScript 与 Cordis 框架，偏向于 Agent 任务与浏览器自动化；**绝对不引入 Node.js 运行时作为宿主核心**。
   - **借鉴项**：深度借鉴其“微内核 + 插件插槽 (Plugin Slots)”设计哲学、“可逆副作用 (Reversible Effects)”声明周期管理模型（插件卸载时自动注销路由、清理临时沙盒文件、归还分配端口）。
@@ -281,7 +273,7 @@ tiygate (6db40e54)
 │  └──────────────────┬───────────────┘ └───────────┬─────────────────┘  │
 │                     │                             │                    │
 │  ┌──────────────────▼─────────────────────────────▼─────────────────┐  │
-│  │ Credential Broker (Keyring-rs + 0o600 File Projection)          │  │
+│  │ Credential Broker (Keyring + Unix mode / Windows ACL)          │  │
 │  └──────────────────┬───────────────────────────────────────────────┘  │
 │                     │                                                  │
 │  ┌──────────────────▼───────────────────────────────────────────────┐  │
@@ -305,16 +297,17 @@ tiygate (6db40e54)
 ### 6.2 建议目标 Rust Workspace 规划 (渐进式演进策略)
 
 采取三阶段渐进式 Workspace 演进策略，平滑迭代：
+以上为目标命名规划，不要求 Phase 0 重命名上游内部 crate；实际桌面闭包和来源以登记表及验证记录为准。
 
 ```text
 proxyweave/
 ├── apps/
 │   └── desktop/                  # Tauri v2 桌面外壳与 React 前端 UI
 ├── crates/
-│   ├── proxyweave-core/          # [Phase 0] 核心宿主、配置、生命周期与 Supervisor
+│   ├── proxyweave-core/          # [Phase 1] 目标宿主与生命周期；Phase 0 不重建核心框架
 │   ├── proxyweave-platform/      # [Phase 0 复用 Quotio] 跨平台系统抽象与 Keyring
 │   ├── proxyweave-gateway/       # [Phase 1 渐进演进] Axum 异步 HTTP 网关与 SSE 管道
-│   ├── proxyweave-protocol/      # [Phase 1 借鉴 TiyGate] 协议编解码与 IR 转换
+│   ├── proxyweave-protocol/      # [Phase 2 提取 TiyGate] 协议编解码与 IR 转换
 │   ├── proxyweave-plugin/        # [Phase 1 核心契约] Manifest Schema 解析与验证引擎
 │   └── proxyweave-registry/      # [Phase 3] 插件市场索引、GitHub Release 下载器
 ├── plugins/
@@ -566,7 +559,7 @@ security:
 
 ### 9.1 系统安全模型与凭据隔离
 - **凭据物理分离**：普通配置（端口、路由映射）保存在本地 JSON；API Token 与密钥通过 `keyring-rs` 托管至操作系统底层安全凭据库。
-- **沙盒目录 0o600 凭据投影**：向子进程传递凭据时，在沙盒临时目录生成单向配置文件，权限严格限定为 `0o600`（仅当前用户可读写），采用 `.tmp -> fsync -> rename` 原子覆盖写入，子进程退出或宿主关闭时自动粉碎清理。
+- **凭据临时投影（Phase 1 待实现）**：Unix 采用私有目录与 `0o600` 文件权限；Windows 必须单独设计与验证 ACL，不能以 `0o600` 宣称隔离完成。原子写入及退出清理不等于安全擦除；本轮不传递插件凭据。
 - **本地 API Key 鉴权**：统一对外入口默认生成高强度本地随机密钥（`pw-sk-...`），客户端访问必须携带 Bearer Token，防御同机恶意脚本未授权调用。
 
 ### 9.2 数据持久化单文件原子治理
@@ -584,7 +577,7 @@ security:
 | 门禁代号 | 门禁名称 | 状态 | 准入/准出条件与核验依据 |
 |---|---|---|---|
 | **Phase -1 Gate** | **项目命名与权威规范门禁** | 🟢 **已通过 (PASSED)** | 1. 确定正式产品名 `ProxyWeave`；<br>2. 建立独立权威仓库 `https://github.com/Cary222/ProxyWeave`；<br>3. 编写权威开发政策与参考源登记表；<br>4. 统一团队提交作者身份与签名规范。 |
-| **Phase 0 Gate** | **脚手架审计与工程初始化门禁** | ⚪ **待启动 (PENDING)** | 1. 克隆 Quotio 固定 Commit `21d75d08`；<br>2. 验证许可证与原项目独立构建；<br>3. 剥离无用业务（CPA 硬编码、SQLite 业务表）；<br>4. 保留平台与外壳模块，建立初始编译基线。 |
+| **Phase 0 Gate** | **脚手架审计与工程初始化门禁** | 🟢 **本轮 Windows 范围通过 (PASSED)** | Git 实读固定 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 / MIT；原副本 build/test 后原样引入并分轮裁剪；目标 fmt/check/test 与 embedded Tauri build 通过，窗口/托盘/关闭/单实例实测通过。证据与未验证边界见 `docs/verification/PHASE0.md`；非全平台或完整产品验收。 |
 | **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | ⚪ **待启动 (PENDING)** | 1. 固化 Manifest Schema 1.0 契约；<br>2. 跑通 Axum 0.7 异步网关；<br>3. 跑通端口初筛与冲突重试恢复；<br>4. 实现首个 Managed 插件 (wb2api) 端到端调用。 |
 | **Phase 2 Gate** | **协议编解码与高级流式管道门禁** | ⚪ **待启动 (PENDING)** | 1. 移植 TiyGate IR 协议转换模块；<br>2. 跑通流式终止符规范补发与异常防御；<br>3. 完成 Compatibility Flight 质检套件自测。 |
 | **Phase 3 Gate** | **桌面控制台与插件市场门禁** | ⚪ **待启动 (PENDING)** | 1. React + Tailwind CSS 极简暗色控制台；<br>2. Git-Native 插件发现与下载校验；<br>3. IDE Handoff 自动配置写入测试通过。 |
@@ -597,10 +590,10 @@ security:
 #### Phase -1: 项目命名与权威规范初始化 (Week 0) - 【已完成】
 - 建立独立仓库，建立规范体系，登记 15 个参考源与三级验证状态。
 
-#### Phase 0: 脚手架审计、代码提取与基座搭建 (Week 1) - 【下一个执行阶段】
+#### Phase 0: 脚手架审计、代码提取与基座搭建 (Week 1) - 【本轮 Windows 范围通过】
 - 检出并核验 Quotio Desktop `21d75d08` 源码；
 - 剥离不必要业务，保留 `quotio-platform` 与 Tauri 外壳；
-- 建立初始编译基线，实现 `cargo build` 零警告通过。
+- 原工程与最小基座分别构建/测试；目标 `cargo build` 零警告，并实测当前 Windows 窗口、托盘、关闭与单实例，证据见 `docs/verification/PHASE0.md`。
 
 #### Phase 1: 异步网关微内核、Manifest 契约与首个插件验证 (Week 2)
 - 实现 Manifest Schema 1.0 引擎与沙盒目录凭据投影；
@@ -610,12 +603,13 @@ security:
 #### Phase 2: 协议适配、SSE 管道与稳定性加固 (Week 3)
 - 提取 TiyGate 协议编解码模块；
 - 实现 OpenAI / Anthropic 协议双向映射与流式终止符规整；
-- 落地 Windows Job Object 与 Linux PDEATHSIG 进程树主动回收。
+- 加固 Phase 1 Managed 所有权与退出回收基线（Windows Job Object 需在首个 Managed 启动前验证）；运行 Compatibility Flight 功能质检。
 
 #### Phase 3: 桌面控制台、API Doctor 与生态发现 (Week 4)
 - 交付极简暗色工作区 UI 与系统托盘联动；
 - 接入 API Doctor 全链路脱敏追踪；
 - 实现 Git-Native 插件发现与 GitHub Release 资产下载器。
+- 提取并验证 IDE Handoff 配置写入与恢复；未实现前不宣称可用。
 
 #### Phase 4: Compatibility Flight 质检、打包与全平台发布 (Week 5)
 - 运行 Compatibility Flight 全量自动化质检用例；
@@ -628,10 +622,10 @@ security:
 
 | 威胁场景 | 风险等级 | 潜在危害 | ProxyWeave 防御与缓释措施 |
 |---|---|---|---|
-| **恶意插件代码注入** | 高危 | 插件可能包含恶意逻辑窃取宿主权限 | 1. 严格声明：Manifest 权限声明为告知契约，非内核沙箱；<br>2. 独立子进程运行并做最小权限凭据投影（0o600）；<br>3. 用户安装第三方插件时强制弹出风险与权限二次确认。 |
+| **恶意插件代码注入** | 高危 | 插件可能包含恶意逻辑窃取宿主权限 | 1. 严格声明：Manifest 权限声明为告知契约，非内核沙箱；<br>2. 独立子进程运行并做最小权限凭据投影（Unix 0o600；Windows ACL 待独立验证）；<br>3. 用户安装第三方插件时强制弹出风险与权限二次确认。 |
 | **同机恶意脚本扫描** | 中危 | 恶意本地脚本尝试探测并调用 ProxyWeave 端口盗用配额 | 1. 默认仅监听本地回环 `127.0.0.1`，绝对禁止对外监听；<br>2. 强制启用本地随机 Master Key 鉴权，未携带有效 Bearer 拒绝访问。 |
 | **子进程僵尸残留** | 中危 | 宿主异常退出或崩溃后，插件进程遗留占用 CPU 与端口 | 1. Windows 绑定 `CreateJobObjectW` 强制退出回收；<br>2. Linux 注入 `PDEATHSIG`，macOS 启用管道看门狗；<br>3. 宿主下次启动时执行孤儿进程清理与端口残留探针。 |
-| **API 凭据泄漏** | 高危 | 用户模型密钥或平台 Token 明文暴露在磁盘配置文件中 | 1. 静态主凭据必须托管至操作系统底层 Keyring；<br>2. 临时子进程配置写在沙盒私有目录，权限 `0o600`，使用后自动粉碎。 |
+| **API 凭据泄漏** | 高危 | 用户模型密钥或平台 Token 明文暴露在磁盘配置文件中 | 1. 静态主凭据必须托管至操作系统底层 Keyring；<br>2. 临时子进程配置写在沙盒私有目录，Unix 权限 `0o600`、Windows 私有 ACL 分别验证，使用后删除（不保证安全擦除）。 |
 | **流式截断代码损坏** | 高危 | 异常中断时下游编辑器误将残缺代码合入生产代码库 | 1. 严禁无条件补发 `[DONE]`；必须满足正常完成证据；<br>2. 异常时主动断开连接或推送结构化错误事件帧。 |
 
 ---
