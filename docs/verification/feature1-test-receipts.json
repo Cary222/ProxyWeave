@@ -1,0 +1,47 @@
+{
+  "scope": "Feature 1 local registration only; no Managed startup or runtime acceptance",
+  "logRoot": "D:/ProxyWeave/.pi/tasks/01a12b6d-d417-70e0-8e0d-31b80f724853-58156",
+  "applicationRegression": {
+    "taskId": "bae01159c",
+    "exitCode": 0,
+    "rustTests": {"plugin": 13, "platform": 6, "types": 7},
+    "frontendTests": 2,
+    "steps": ["cargo fmt --all -- --check", "cargo check --workspace --locked -j 1", "cargo test --workspace --locked -j 1 -- --test-threads=1", "npm ci", "npm test", "npm run build", "npm run tauri -- build --debug --no-bundle"],
+    "buildWarnings": 0
+  },
+  "originalPublishedDependencies": {
+    "taskId": "bcb35bdb4",
+    "exitCode": 0,
+    "command": "cargo test --manifest-path <published-source-copy>/Cargo.toml --lib --tests -j 1 -- --test-threads=1",
+    "testOnlyRustflags": "-A dangerous_implicit_autorefs",
+    "productionRustflagsException": false,
+    "docTests": "not verified; prior full run failed in Windows metadata/link environment",
+    "sources": [
+      {"crate": "serde_yaml_ng", "version": "0.10.0", "sourceCommit": "45bce7bd7efb754ffc9dc910f3d1bae7edd0adf4", "passed": 91, "sourceAndTestFiles": 28, "aggregateSha256": "09401128bdd0416d175ba19b678984309722cbfb3f2a6653b83ede755e5a6115"},
+      {"crate": "sha2", "version": "0.10.9", "sourceCommit": "82c36a428f8d6f05f3bfccdedb243e9d1f85359d", "passed": 8, "sourceAndTestFiles": 22, "aggregateSha256": "5648bacfe41798cf28eb54d6b47fddc559fd5c4add2f7770567eaaef36487c65"},
+      {"crate": "semver", "version": "1.0.28", "sourceCommit": "7625c7aa3f0e8ba21e099d1765bcebcb72aa8816", "passed": 34, "sourceAndTestFiles": 14, "aggregateSha256": "80004f6cbe144fd6599b5043e20043531bb95ca8fcc67f07bdccba5211200236"},
+      {"crate": "url", "version": "2.5.8", "sourceCommit": "d6ea13c5f8e7e6e627f6390161b3e185bda5e5ce", "passed": 67, "sourceAndTestFiles": 12, "aggregateSha256": "2e7a94a0d0d3db4e48dc132023a2c4d908438f8ae532c7b15b64e860d99a7bb6"},
+      {"crate": "tempfile", "version": "3.27.0", "sourceCommit": "5c8fa12eb584931b4f1bccfde87eb72fbfa7dc61", "passed": 60, "sourceAndTestFiles": 19, "aggregateSha256": "ebb4fff324f9cf8882a13c6ff46aef5e5793873846efb27d501e40efcf5b2f43"}
+    ],
+    "aggregateMethod": "SHA256 over sorted source/test relative paths: path UTF8, NUL, file bytes, NUL; bytes identical to cached published source"
+  },
+  "actualPackageRegistration": {
+    "taskId": "bade692ad",
+    "exitCode": 0,
+    "firstImportAlreadyRegistered": false,
+    "secondImportAlreadyRegistered": true,
+    "listReloadSucceeded": true,
+    "manifestFingerprint": "0d3c10f437d3fa3aa2e3c9250f9d50a87c3224af1322618fe9e2b4c9bd8eb13d"
+  },
+  "knownHistoricalLint": {
+    "taskId": "bd555c7a8",
+    "exitCode": 101,
+    "scope": "dependency quotio-types; unchanged upstream code",
+    "findings": {"derivable_impls": 4, "too_many_arguments": 1},
+    "ownedCodeLint": {
+      "taskId": "b9393ef7b",
+      "exitCode": 0,
+      "command": "cargo clippy -p proxyweave-plugin --all-targets --no-deps --locked -j 1 -- -D warnings",
+      "findings": 0
+    }
+}

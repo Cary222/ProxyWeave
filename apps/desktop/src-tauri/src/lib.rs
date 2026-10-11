@@ -7,6 +7,41 @@ use tauri::{
     AppHandle, Manager,
 };
 
+struct PluginRegistry(proxyweave_plugin::Registry);
+
+#[tauri::command]
+async fn import_local_plugin(
+    registry: tauri::State<'_, PluginRegistry>,
+    manifest_path: String,
+) -> Result<proxyweave_plugin::ImportResult, String> {
+    let registry = registry.0.clone();
+    tauri::async_runtime::spawn_blocking(move || registry.import(manifest_path))
+        .await
+        .map_err(|_| "plugin import task failed".to_string())?
+}
+
+#[tauri::command]
+async fn list_local_plugins(
+    registry: tauri::State<'_, PluginRegistry>,
+) -> Result<Vec<proxyweave_plugin::PluginRecord>, String> {
+    let registry = registry.0.clone();
+    tauri::async_runtime::spawn_blocking(move || registry.list())
+        .await
+        .map_err(|_| "plugin list task failed".to_string())?
+}
+
+#[tauri::command]
+async fn save_plugin_settings(
+    registry: tauri::State<'_, PluginRegistry>,
+    id: String,
+    settings: std::collections::BTreeMap<String, serde_json::Value>,
+) -> Result<proxyweave_plugin::PluginRecord, String> {
+    let registry = registry.0.clone();
+    tauri::async_runtime::spawn_blocking(move || registry.save_settings(&id, settings))
+        .await
+        .map_err(|_| "plugin settings task failed".to_string())?
+}
+
 #[tauri::command]
 fn get_platform_info() -> quotio_types::PlatformInfo {
     quotio_platform::platform_info()
@@ -106,6 +141,15 @@ pub fn run() {
     }
     builder
         .setup(|app| {
+            let profile = std::env::var_os("PROXYWEAVE_PROFILE")
+                .map(std::path::PathBuf::from)
+                .map(Ok)
+                .unwrap_or_else(|| app.path().app_data_dir())?;
+            let registry = proxyweave_plugin::Registry::open(profile.join("plugins"))
+                .map_err(std::io::Error::other)?;
+            // Fail closed on corrupt registration without touching external processes.
+            registry.list().map_err(std::io::Error::other)?;
+            app.manage(PluginRegistry(registry));
             let show = MenuItem::with_id(app, "show", "Open ProxyWeave", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -155,7 +199,10 @@ pub fn run() {
             show_main_window,
             quit_app,
             show_menubar,
-            get_platform_info
+            get_platform_info,
+            import_local_plugin,
+            list_local_plugins,
+            save_plugin_settings
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

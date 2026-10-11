@@ -1,0 +1,15 @@
+[package]
+name = "proxyweave-plugin"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+quotio-platform = { path = "../quotio-platform" }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng = "=0.10.0"
+sha2 = "=0.10.9"
+semver = "=1.0.28"
+url = "=2.5.8"
+tempfile = "=3.27.0"

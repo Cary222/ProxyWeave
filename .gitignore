@@ -47,5 +47,10 @@ lerna-debug.log*
 
 # Pi agent metadata
 /.pi/tasks/
+/.pi/goals/
+/.pi/pi-goal-x-settings.json
+/.pi/.goals-pool-snapshot.json
+/.pi/inspection/
+/.pi/development/
 .pi-glla/
 .narrafork/

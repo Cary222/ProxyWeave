@@ -3,6 +3,7 @@ members = [
     "apps/desktop/src-tauri",
     "crates/quotio-platform",
     "crates/quotio-types",
+    "crates/proxyweave-plugin",
 ]
 resolver = "2"
 

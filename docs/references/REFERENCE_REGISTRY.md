@@ -1,6 +1,6 @@
 # ProxyWeave Reference Source Registry（参考源档案）
 
-版本：v2.1 — Phase 0 本轮 Windows 最小桌面基座通过；Phase 1 待启动。
+版本：v2.1 — Phase 0 本轮 Windows 最小桌面基座通过；Phase 1 Feature 1 实施中，待独立 Verified。
 
 ## 状态纪律
 
@@ -33,7 +33,7 @@
 | M07 | Credential Broker | Quotio `crates/quotio-platform/src/lib.rs`；keyring 3.6.3（原配置） | 已读平台文件。含业务命名空间，Windows sensitive 权限为空操作；Keyring/ACL 功能本阶段不宣称已验证 |
 | M08 | Installer | Quotio `crates/quotio-core/src/proxy_download.rs` | 下载/校验/解压候选，未引入；后续按范围核验与泛化，不能整体否定 |
 | M09 | Config Store | Quotio platform `atomic_write`/`replace_file` 与原测试 | 已读平台文件及对应 Windows/Unix 分支；原子写入不等于双副本容灾或 Windows 凭据隔离 |
-| M10 | Manifest Engine | Rust YAML 解析库待选择 | Phase 1 首个 Feature：Schema 与所有权/凭据契约；当前仅样例 PyYAML 6.0.3 语法与正则检查通过，非插件运行验收 |
+| M10 | Manifest Engine | 直接依赖 serde_yaml_ng 0.10.0 / Serde；Quotio atomic_write | Feature 1 严格契约/本地包登记实施中；来源/测试见 ADR-002 与 FEATURE1.md，待 Inspector 独立复验；非运行支持声明 |
 | M11 | Lifecycle | DSH 可逆副作用设计候选 | 未审计，后续按实际 Rust 依赖选型 |
 | M12 | IDE Handoff | Quotio `crates/quotio-core/src/agent_config.rs` | 登记为 Phase 3 候选；不是 Phase 0 必须引入资产 |
 | M13 | Desktop Shell | Quotio `apps/desktop/src-tauri/`、React bootstrap | 已直接复用；本轮 Windows 构建/测试与窗口/托盘/关闭/单实例行为验证通过；其他平台未验证 |
@@ -52,6 +52,19 @@
 | `crates/quotio-types` → 同路径 | 暂保留原类型及 7 测试，不凭类型名盲删 | 7/7 原测试通过；后续按依赖渐进裁剪 |
 | Cargo/npm/Tauri/Vite/TS 配置与图标 → 同路径 | 内部 crate 名保留；展示名/独立 ID 调整；移除资源包/更新器/业务依赖并提交锁文件；图标暂保留上游资产 | 各步骤构建及最终冻结证据见报告 |
 详细过程与日志证据见 `../verification/PHASE0.md`；准备成功或 metadata 成功不能登记为构建通过。
+
+## Feature 1 直接依赖与登记胶水（实施中）
+
+| 成熟来源/版本 | 发布源码 Commit | 原路径 → 目标使用 | 许可证/必要适配 |
+|---|---|---|---|
+| serde_yaml_ng 0.10.0 | 45bce7bd7efb754ffc9dc910f3d1bae7edd0adf4 | 发布 `src/de.rs`/`src/mapping.rs`、`tests/test_error.rs` → 直接 crate 依赖 | MIT；不改源码，严格类型/映射预检胶水；原测试Rust1.99兼容lint仅独立审计使用 |
+| sha2 0.10.9 | 82c36a428f8d6f05f3bfccdedb243e9d1f85359d | RustCrypto `sha2` → 直接依赖 SHA256 | MIT OR Apache-2.0；无散列算法重写 |
+| semver 1.0.28 | 7625c7aa3f0e8ba21e099d1765bcebcb72aa8816 | Version::parse → 直接依赖 | MIT OR Apache-2.0 |
+| url 2.5.8 | d6ea13c5f8e7e6e627f6390161b3e185bda5e5ce | URL origin/parser → 直接依赖 | MIT OR Apache-2.0 |
+| tempfile 3.27.0 | 5c8fa12eb584931b4f1bccfde87eb72fbfa7dc61 | 原 TempDir/Builder及原测试 → staging目录 | MIT OR Apache-2.0 |
+| 已采用 Quotio platform | 21d75d08b38a23f97fbd534a1768a829cb147f2c | `atomic_write`/`replace_file` → 当前同路径直接调用 | MIT；登记非敏感，原6测试保持，非Windows ACL验收 |
+
+以上 Commit 来自各发布包 `.cargo_vcs_info.json`，非补写短Hash。原发布代码/测试在独立副本实跑，结果及失败归因见 `../verification/FEATURE1.md`；测试执行中不作提前通过声明。产品契约/边界胶水位于 `crates/proxyweave-plugin/`；对照 Hermes固定源因BSL许可证及IDE业务契约不匹配未提取，见 ADR-002。wb2api候选exe/buildinfo/dirty差异见同ADR；无真实凭据/Ready/推理验收。
 
 ## 本地插件与隐私边界
 

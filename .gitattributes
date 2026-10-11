@@ -1,0 +1,3 @@
+# Package Manifest bytes are part of the audit receipt; keep stable across Windows clones.
+/manifests/wb2api.manifest.yaml text eol=lf
+/docs/verification/feature1-*.txt -text

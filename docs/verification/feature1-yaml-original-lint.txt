@@ -1,0 +1,271 @@
+    Updating `rsproxy-sparse` index
+     Locking 16 packages to highest compatible versions
+ Downloading crates ...
+  Downloaded indoc v2.0.8 (registry `rsproxy-sparse`)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling unicode-ident v1.0.26
+   Compiling serde v1.0.229
+   Compiling anyhow v1.0.104
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling indexmap v2.14.2
+   Compiling syn v3.0.8
+   Compiling unsafe-libyaml v0.2.11
+   Compiling itoa v1.0.18
+   Compiling ryu v1.0.23
+   Compiling serde_derive v1.0.229
+   Compiling indoc v2.0.8
+   Compiling serde_yaml_ng v0.10.0 (D:\temp-audit\proxyweave-feature1-upstream-tests\serde_yaml_ng-0.10.0)
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:21:28
+   |
+21 |             kind: unsafe { (*parser).error },
+   |                            ^^------^^^^^^^
+   |                              |
+   |                              this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+   = note: `#[deny(dangerous_implicit_autorefs)]` on by default
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+21 |             kind: unsafe { (&(*parser)).error },
+   |                            ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:22:50
+   |
+22 |             problem: match NonNull::new(unsafe { (*parser).problem as *mut _ }) {
+   |                                                  ^^------^^^^^^^^^
+   |                                                    |
+   |                                                    this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+22 |             problem: match NonNull::new(unsafe { (&(*parser)).problem as *mut _ }) {
+   |                                                  ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:26:38
+   |
+26 |             problem_offset: unsafe { (*parser).problem_offset },
+   |                                      ^^------^^^^^^^^^^^^^^^^
+   |                                        |
+   |                                        this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+26 |             problem_offset: unsafe { (&(*parser)).problem_offset },
+   |                                      ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:28:31
+   |
+28 |                 sys: unsafe { (*parser).problem_mark },
+   |                               ^^------^^^^^^^^^^^^^^
+   |                                 |
+   |                                 this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+28 |                 sys: unsafe { (&(*parser)).problem_mark },
+   |                               ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:30:50
+   |
+30 |             context: match NonNull::new(unsafe { (*parser).context as *mut _ }) {
+   |                                                  ^^------^^^^^^^^^
+   |                                                    |
+   |                                                    this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+30 |             context: match NonNull::new(unsafe { (&(*parser)).context as *mut _ }) {
+   |                                                  ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:35:31
+   |
+35 |                 sys: unsafe { (*parser).context_mark },
+   |                               ^^------^^^^^^^^^^^^^^
+   |                                 |
+   |                                 this raw pointer has type `*const yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+35 |                 sys: unsafe { (&(*parser)).context_mark },
+   |                               ++         +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:42:28
+   |
+42 |             kind: unsafe { (*emitter).error },
+   |                            ^^-------^^^^^^^
+   |                              |
+   |                              this raw pointer has type `*const yaml_emitter_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+42 |             kind: unsafe { (&(*emitter)).error },
+   |                            ++          +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\error.rs:43:50
+   |
+43 |             problem: match NonNull::new(unsafe { (*emitter).problem as *mut _ }) {
+   |                                                  ^^-------^^^^^^^^^
+   |                                                    |
+   |                                                    this raw pointer has type `*const yaml_emitter_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+43 |             problem: match NonNull::new(unsafe { (&(*emitter)).problem as *mut _ }) {
+   |                                                  ++          +
+
+error: implicit autoref creates a reference to the dereference of a raw pointer
+  --> src\libyaml\parser.rs:87:16
+   |
+87 |             if (*parser).error != sys::YAML_NO_ERROR {
+   |                ^^------^^^^^^^
+   |                  |
+   |                  this raw pointer has type `*mut yaml_parser_t`
+   |
+   = note: creating a reference requires the pointer target to be valid and imposes aliasing requirements
+   = note: references are created through calls to explicit `Deref(Mut)::deref(_mut)` implementations
+help: try using a raw pointer method instead; or if this reference is intentional, make it explicit
+   |
+87 |             if (&(*parser)).error != sys::YAML_NO_ERROR {
+   |                ++         +
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src\mapping.rs:81:18
+   |
+81 |     pub fn entry(&mut self, k: Value) -> Entry {
+   |                  ^^^^^^^^^               ^^^^^ the same lifetime is hidden here
+   |                  |
+   |                  the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+81 |     pub fn entry(&mut self, k: Value) -> Entry<'_> {
+   |                                               ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\mapping.rs:188:17
+    |
+188 |     pub fn iter(&self) -> Iter {
+    |                 ^^^^^     ^^^^ the same lifetime is hidden here
+    |                 |
+    |                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+188 |     pub fn iter(&self) -> Iter<'_> {
+    |                               ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\mapping.rs:197:21
+    |
+197 |     pub fn iter_mut(&mut self) -> IterMut {
+    |                     ^^^^^^^^^     ^^^^^^^ the same lifetime is hidden here
+    |                     |
+    |                     the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+197 |     pub fn iter_mut(&mut self) -> IterMut<'_> {
+    |                                          ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\mapping.rs:204:17
+    |
+204 |     pub fn keys(&self) -> Keys {
+    |                 ^^^^^     ^^^^ the same lifetime is hidden here
+    |                 |
+    |                 the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+204 |     pub fn keys(&self) -> Keys<'_> {
+    |                               ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\mapping.rs:218:19
+    |
+218 |     pub fn values(&self) -> Values {
+    |                   ^^^^^     ^^^^^^ the same lifetime is hidden here
+    |                   |
+    |                   the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+218 |     pub fn values(&self) -> Values<'_> {
+    |                                   ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\mapping.rs:225:23
+    |
+225 |     pub fn values_mut(&mut self) -> ValuesMut {
+    |                       ^^^^^^^^^     ^^^^^^^^^ the same lifetime is hidden here
+    |                       |
+    |                       the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+225 |     pub fn values_mut(&mut self) -> ValuesMut<'_> {
+    |                                              ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src\number.rs:555:34
+    |
+555 | pub(crate) fn unexpected(number: &Number) -> Unexpected {
+    |                                  ^^^^^^^     ^^^^^^^^^^ the same lifetime is hidden here
+    |                                  |
+    |                                  the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+555 | pub(crate) fn unexpected(number: &Number) -> Unexpected<'_> {
+    |                                                        ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+    --> src\value\de.rs:1231:30
+     |
+1231 |     pub(crate) fn unexpected(&self) -> Unexpected {
+     |                              ^^^^^     ^^^^^^^^^^ the same lifetime is hidden here
+     |                              |
+     |                              the lifetime is elided here
+     |
+     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+     |
+1231 |     pub(crate) fn unexpected(&self) -> Unexpected<'_> {
+     |                                                  ++++
+
+warning: `serde_yaml_ng` (lib) generated 8 warnings
+error: could not compile `serde_yaml_ng` (lib) due to 9 previous errors; 8 warnings emitted

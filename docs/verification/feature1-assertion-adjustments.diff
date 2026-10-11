@@ -1,0 +1,21 @@
+# Historical assertion-only corrections from the first 10-test run (bb25b4eb4).
+# Product path containment / reject_existing_links code was NOT weakened by these changes.
+# First exact failure stdout and values: feature1-first-assertion-failures.txt.
+--- initial crates/proxyweave-plugin/tests/local_registry.rs
++++ corrected crates/proxyweave-plugin/tests/local_registry.rs
+@@ import_duplicate_settings_and_restart_reload
+-    assert_eq!(registry.data_dir("test-plugin").unwrap(), tmp.path().join("profile/data/test-plugin").canonicalize().unwrap_or(tmp.path().join("profile/data/test-plugin")));
++    assert_eq!(
++        registry.data_dir("test-plugin").unwrap(),
++        tmp.path().join("profile/data").canonicalize().unwrap().join("test-plugin")
++    );
+# Expected leaf data/test-plugin does not exist in F1. Canonicalize its existing parent
+# to retain the same Windows extended prefix as Registry::open, then append the same leaf.
+# No string stripping or starts_with containment bypass is used.
+@@ junction_source_is_rejected
+-    assert!(registry.import(link.join("manifest.yaml")).unwrap_err().contains("reparse"));
++    let error = registry.import(link.join("manifest.yaml")).unwrap_err();
++    assert!(error.contains("reparse") || error.contains("links are not allowed"), "{error}");
+     assert!(registry.list().unwrap().is_empty());
+# Rust can expose a junction as FileType::is_symlink before the reparse-attribute branch.
+# unwrap_err still requires rejection; list empty still requires zero registration effects.

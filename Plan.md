@@ -7,7 +7,7 @@
 > **技术定位**：Local-first AI API Plugin Host（本地优先的 AI API 插件宿主与统一工作台）  
 > **核心哲学**：上游易逝，平台长存 · Everything is a Plugin（万物皆插件） · **成熟实现直接复用优先 (Direct Reuse First)**  
 > **主开发规划路径**：`Plan.md`（根目录权威文档）与 `docs/PLAN-ProxyWeave.md`（架构设计归档）  
-> **当前阶段**：**Phase 0 已通过（本轮 Windows 最小桌面基座范围），Phase 1 待启动**。已先验证固定上游，再分步引入/适配/裁剪并完成构建、测试及桌面实测；未实现网关、市场、协议或 IDE 功能，其他平台未验证。
+> **当前阶段**：**Phase 0 已通过（限定 Windows 基座）；Phase 1 Feature 1 实施中，未独立 Verified**。首个本地 Managed 初版按 Feature 1→4 独立冻结送审；网关/Managed 尚未运行，最终真实 Windows 客户端由 Inspector 桌面 MCP 全项复验后才完成目标。见 `docs/verification/MANAGED_ACCEPTANCE.md`；不将必要 Phase 2/3 局部能力标为整阶段完成。
 
 ---
 
@@ -333,7 +333,7 @@ proxyweave/
   - **客观认知**：试探成功后关闭临时 Socket 到子进程正式启动绑定之间，必然存在微秒级的 **TOCTOU (Time-of-Check to Time-of-Use) 竞态窗口**，外部其它进程可能在此瞬间抢占该端口。
 - **B. 端口冲突重试与恢复循环 (Conflict Retry & Recovery Loop)**：
   - 真正的系统健壮性建立在启动异常捕获与恢复之上；
-  - 当拉起 Managed 子进程后，Supervisor 挂起并执行就绪探针；若捕获到子进程标准错误输出包含 `EADDRINUSE` / `bind: address already in use` 或就绪探针在超时时间内无法连接，**立即认定发生端口冲突**；
+  - 启动 Managed 子进程后，以进程归属、声明身份和业务探针区分存活/HTTP 可达/Ready；只有明确绑定冲突证据（如 `EADDRINUSE` / `bind: address already in use` 或经核验的 Windows 对应错误）才执行换端口重试。健康探针超时、无可用凭据的 503 或 Busy 饱和 503 不能直接归因端口冲突、崩溃或触发重启；
   - 自动触发重试循环：将原端口加入黑名单，重新初筛新端口，更新子进程环境变量与命令行参数后重新拉起，最多重试 3 次；若重试 3 次仍失败，将插件标记为 `Failed` 并向 API Doctor 抛出结构化诊断报告。
 
 ---
@@ -431,7 +431,7 @@ ProxyWeave 将协议适配能力严格划分为 5 级标准，明确能力边界
 | **Anthropic Messages** | **OpenAI Chat** | **支持转换 (Supported)** | `tools` 结构转换为 OpenAI Functions/Tools 规范，流式 `content_block` 映射为 `delta`。 |
 | **多模态图像 (Image)** | **多模态图像 (Image)** | **降级适配 (Degraded)** | 统一将 Base64 / URL 图像数据块转换为目标协议支持的对象格式；超出分辨率限制时按比例降采样。 |
 | **音频流 / 实时 WebRTC** | **文本 API 插件** | **明确拒绝 (Rejected)** | 存在不可逾越的协议与介质鸿沟，网关直接返回 `400 Bad Request` 伴随明确错误码，拒绝伪造转换。 |
-| **厂商自定义专属扩展** | **任意目标协议** | **未验证 (Unverified)** | 包含未知自定义私有字段的请求，在未通过 Compatibility Flight 验证前默认剥离非标字段或报错。 |
+| **厂商自定义专属扩展** | **任意目标协议** | **未验证 (Unverified)** | 同协议透传保持请求原始内容及字段，不静默剥离或改写。需要转换而能力未验证时返回明确错误/降级说明，不伪造支持。 |
 
 ---
 
@@ -578,7 +578,7 @@ security:
 |---|---|---|---|
 | **Phase -1 Gate** | **项目命名与权威规范门禁** | 🟢 **已通过 (PASSED)** | 1. 确定正式产品名 `ProxyWeave`；<br>2. 建立独立权威仓库 `https://github.com/Cary222/ProxyWeave`；<br>3. 编写权威开发政策与参考源登记表；<br>4. 统一团队提交作者身份与签名规范。 |
 | **Phase 0 Gate** | **脚手架审计与工程初始化门禁** | 🟢 **本轮 Windows 范围通过 (PASSED)** | Git 实读固定 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 / MIT；原副本 build/test 后原样引入并分轮裁剪；目标 fmt/check/test 与 embedded Tauri build 通过，窗口/托盘/关闭/单实例实测通过。证据与未验证边界见 `docs/verification/PHASE0.md`；非全平台或完整产品验收。 |
-| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | ⚪ **待启动 (PENDING)** | 1. 固化 Manifest Schema 1.0 契约；<br>2. 跑通 Axum 0.7 异步网关；<br>3. 跑通端口初筛与冲突重试恢复；<br>4. 实现首个 Managed 插件 (wb2api) 端到端调用。 |
+| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | 🟡 **Feature 1 实施中，未 Verified** | 1. 固化 Manifest Schema 1.0 契约；<br>2. 跑通 Axum 0.7 异步网关；<br>3. 跑通端口初筛与冲突重试恢复；<br>4. 实现首个 Managed 插件 (wb2api) 端到端调用。 |
 | **Phase 2 Gate** | **协议编解码与高级流式管道门禁** | ⚪ **待启动 (PENDING)** | 1. 移植 TiyGate IR 协议转换模块；<br>2. 跑通流式终止符规范补发与异常防御；<br>3. 完成 Compatibility Flight 质检套件自测。 |
 | **Phase 3 Gate** | **桌面控制台与插件市场门禁** | ⚪ **待启动 (PENDING)** | 1. React + Tailwind CSS 极简暗色控制台；<br>2. Git-Native 插件发现与下载校验；<br>3. IDE Handoff 自动配置写入测试通过。 |
 | **Phase 4 Gate** | **发布与全平台流水线门禁** | ⚪ **待启动 (PENDING)** | 1. GitHub Actions 多平台自动化构建；<br>2. 跨平台可执行资产打包与安装包发布；<br>3. 完整性校验与安全通告审计。 |

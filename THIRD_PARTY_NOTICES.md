@@ -45,6 +45,11 @@ ProxyWeave (编织网关) 严格遵守开源软件知识产权与合规伦理。
 - **版权所有**: Copyright (c) 2020 Johan Brandhorst-Satzkorn
 - **计划复用范围**: 计划在 M04 流式规整模块中引入，提供高效异步流式 Server-Sent Events (SSE) 事件帧解码。
 
+
+### 6. Feature 1 直接依赖（已声明，独立审查待完成）
+- serde_yaml_ng **0.10.0**：MIT，Copyright 2024 Antoine Catton / 2016-2024 David Tolnay；直接调用发布解析器，原源码不改。
+- sha2 **0.10.9**（RustCrypto）、semver **1.0.28**、url **2.5.8**、tempfile **3.27.0**：MIT OR Apache-2.0，许可证完整文本随 Cargo 发布包/依赖保留，固定版本及源码发布 Commit 见 `docs/references/REFERENCE_REGISTRY.md`。
+- 仅本地契约/登记所需依赖；源码比较、原测试运行结果及适配边界见 ADR-002 / `docs/verification/FEATURE1.md`。不声明运行/凭据功能通过。
 ---
 
 ## 第二部分：架构设计与算法参考源（仅作设计参考，不整体引入代码仓库） (Design & Architectural References Only)

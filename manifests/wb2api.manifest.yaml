@@ -1,72 +1,67 @@
-# ==============================================================================
-# ProxyWeave Plugin Manifest (Schema 1.0 Draft)
-# 模块目标: WorkBuddy 2API Engine (Managed 模式)
-# 验证状态: 待验证 (Pending Live Verification)
-# 说明: 本文件为 Schema 1.0 语法样例，尚未在 ProxyWeave 运行态完成端到端加载与联调测试。
-# 权限声明说明: permissions 字段为声明式契约与用户告知机制，并非操作系统级强隔离安全沙箱。
-# ==============================================================================
-schema_version: "1.0"
+# Local Windows package contract verified against source/buildinfo, not runtime acceptance.
+# Source appVersion 1.13.0-panel, Git v1.13.0-3-g8461419; candidate binary vcs.modified=true.
+# Copy this file beside bin/wb2api.exe and LICENSE; do NOT copy auths/data/config from source.
+# Managed ownership is host process ownership. Feature 2/Job/credentials not yet Verified.
+schema_version: '1.0'
 metadata:
-  id: "wb2api"
-  name: "WorkBuddy 2API Engine"
-  version: "1.13.0"
-  description: "WorkBuddy 账号转接代理网关，内嵌多模型 Web 面板"
-  author: "linguo2625469"
-  homepage: "https://github.com/linguo2625469/workbuddy2api-panel"
-  license: "MIT"
-
-compatibility:
-  min_host_version: "0.1.0"
-  supported_os: ["windows", "darwin", "linux"]
-  supported_arch: ["x86_64", "aarch64"]
-
+  id: wb2api
+  name: WorkBuddy 2API Panel
+  version: 1.13.0-panel
+  license: MIT
+  source_commit: 84614197edb08068cd9dabf471b0ebef2a27af0b
 runtime:
-  type: "binary"
-  entrypoint:
-    windows: "bin/wb2api.exe"
-    darwin: "bin/wb2api"
-    linux: "bin/wb2api"
-  args: ["-config", "{CONFIG_PATH}", "-port", "{PORT}"]
+  ownership: managed
+  executable: bin/wb2api.exe
+  sha256: 38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485
+  args: ['-config', '{CONFIG_PATH}']
   env:
-    GIN_MODE: "release"
-  working_dir: "{DATA_DIR}"
-
-distribution:
-  repository: "https://github.com/linguo2625469/workbuddy2api-panel"
-  release_asset_pattern:
-    windows_x86_64: '.*windows.*amd64.*\.zip'
-    darwin_aarch64: '.*darwin.*arm64.*\.tar\.gz'
-    linux_x86_64: '.*linux.*amd64.*\.tar\.gz'
-
-lifecycle:
-  policy: "idle_timeout" # persistent | idle_timeout | on_demand | external
-  idle_timeout_seconds: 300
-  startup_timeout_seconds: 15
-  stop_signal: "SIGTERM"
-  graceful_timeout_seconds: 5
-
+    WB2A_LISTEN: '127.0.0.1:{PORT}'
+    WB2A_AUTH_DIR: '{AUTH_DIR}'
+    WB2A_STATE_FILE: '{DATA_DIR}/state.json'
+  resources:
+    LICENSE: 49b9e27ddfc7cceab55e19eb7d405bda30a8229de3cc094e6b4d0397ab76a34b
 network:
-  listen_host: "127.0.0.1"
-  port_allocation: "dynamic" # dynamic | fixed | external
   health_check:
-    type: "http"
-    path: "/healthz"
-    interval_seconds: 30
-    timeout_seconds: 2
+    path: /healthz
     expected_status: 200
-
+    identity_header: X-Service
+    identity_value: workbuddy2api
+    timeout_ms: 2000
+lifecycle:
+  startup_timeout_ms: 15000
+  idle_timeout_ms: null
+  max_port_retries: 3
 capabilities:
-  protocols: ["openai_chat", "streaming", "tool_calling"]
-  exported_models:
-    - id: "claude-3-7-sonnet"
-      upstream_model: "claude-3-7-sonnet-20250219"
-    - id: "gpt-4o"
-      upstream_model: "gpt-4o"
-
-security:
-  requires_secrets: ["accounts_token"]
-  # 声明式权限需求（供用户知情同意与宿主环境限制，不代表底层操作系统级沙箱防护）
-  permissions:
-    allow_internet_access: true
-    allow_local_storage: true
-    disallow_arbitrary_fs: true
+  protocol: openai_chat
+  models_path: /v1/models
+  inference_path: /v1/chat/completions
+  streaming: true
+configuration:
+  settings:
+    label: local-test
+  required_secrets: [access_token, refresh_token, uid]
+  config_template:
+    listen: '127.0.0.1:{PORT}'
+    api_key: '{PLUGIN_API_KEY}'
+    auth_dir: '{AUTH_DIR}'
+    state_file: '{DATA_DIR}/state.json'
+    prompt: {mode: passthrough}
+    features: {sanitize_blacklist_fingerprints: false}
+    logging: {request_archive_enabled: false, request_client_info: false}
+    schedule:
+      checkin_enabled: false
+      travel_enabled: false
+      activity_enabled: false
+      keepalive_enabled: false
+      blackcat_enabled: false
+      growth_enabled: false
+      balance_refresh_enabled: false
+  credential_files:
+    auths/workbuddy-test.json:
+      auth:
+        accessToken: '{SECRET:access_token}'
+        refreshToken: '{SECRET:refresh_token}'
+        expiresAt: 0
+        realm: cn
+      account:
+        uid: '{SECRET:uid}'
