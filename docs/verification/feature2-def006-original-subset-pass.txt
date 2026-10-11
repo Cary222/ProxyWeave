@@ -1,0 +1,49 @@
+     Locking 5 packages to highest compatible versions
+   Compiling memchr v2.8.3
+   Compiling aho-corasick v1.1.5
+   Compiling regex-syntax v0.8.11
+   Compiling regex-automata v0.4.18
+   Compiling regex v1.12.3 (D:\temp-audit\proxyweave-def006-regex-original)
+   Compiling proxyweave-def006-original-replace-tests v0.0.0 (D:\temp-audit\proxyweave-def006-replace-harness)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.27s
+     Running ..\proxyweave-def006-regex-original\tests\replace.rs (D:\temp-audit\proxyweave-def006-regex-target\debug\deps\original_replace-544975a5025dee90.exe)
+
+running 26 tests
+test match_at_start_replace_with_empty ... ok
+test single_empty_match ... ok
+test trim ... ok
+test replacen_with_captures ... ok
+test literal_dollar2 ... ok
+test literal_dollar1 ... ok
+test simple_expand ... ok
+test replacen_no_captures ... ok
+test impl_cow_str_owned ... ok
+test impl_cow_str_borrowed_ref ... ok
+test capture_longest_possible_name ... ok
+test impl_string_ref ... ok
+test no_expand1 ... ok
+test impl_cow_str_borrowed ... ok
+test groups ... ok
+test plus ... ok
+test closure_returning_value ... ok
+test impl_cow_str_owned_ref ... ok
+test closure_returning_reference ... ok
+test double_dollar ... ok
+test first ... ok
+test all ... ok
+test number_hyphen ... ok
+test impl_string ... ok
+test no_expand2 ... ok
+test named ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.72s
+   Doc-tests regex
+
+running 2 tests
+test src\regex\string.rs - regex::string::Regex::replace_all (line 821) ... ok
+test src\regex\string.rs - regex::string::Regex::replace_all (line 779) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 240 filtered out; finished in 0.76s
+

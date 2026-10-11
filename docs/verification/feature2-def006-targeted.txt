@@ -1,0 +1,40 @@
+   Compiling aho-corasick v1.1.4
+   Compiling regex-automata v0.4.14
+   Compiling regex v1.12.3
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.40s
+     Running unittests src\lib.rs (target\debug\deps\proxyweave_plugin-01593d8cfd334058.exe)
+
+running 3 tests
+test projection::tests::def006_replacements_are_opaque_for_both_secret_key_orders ... ok
+test projection::tests::def006_errors_and_debug_never_contain_supplied_data ... ok
+test projection::tests::def006_json_values_preserve_exact_decoded_data_and_types ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests\local_registry.rs (target\debug\deps\local_registry-f9b04a2b9fee4d64.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests\runtime_defects.rs (target\debug\deps\runtime_defects-81dda22e2d97cef6.exe)
+
+running 1 test
+
+running 1 test
+test def006_actual_managed_args_env_and_keyring_projection_preserve_data ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.93s
+
+     Running tests\runtime_lifecycle.rs (target\debug\deps\runtime_lifecycle-fb033ae13c6c9d92.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+    Checking aho-corasick v1.1.4
+    Checking regex-automata v0.4.14
+    Checking regex v1.12.3
+    Checking proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.52s

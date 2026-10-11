@@ -28,6 +28,19 @@ fn managed_fixture_child() {
     let identity = std::env::var("FIXTURE_IDENTITY").unwrap();
     let code = std::env::var("FIXTURE_STATUS").unwrap();
     let mode = std::env::var("FIXTURE_MODE").unwrap_or_default();
+    if mode == "capture-projection" {
+        let capture = serde_json::json!({
+            "args": std::env::args().collect::<Vec<_>>(),
+            "secret": std::env::var("FIXTURE_SECRET").unwrap(),
+            "key": std::env::var("FIXTURE_KEY").unwrap(),
+            "path": std::env::var("FIXTURE_PATH").unwrap(),
+        });
+        std::fs::write(
+            std::env::var("FIXTURE_CAPTURE").unwrap(),
+            serde_json::to_vec(&capture).unwrap(),
+        )
+        .unwrap();
+    }
     let mut requests = 0;
     let private_marker = "private-peer-marker-never-publish";
     for connection in listener.incoming() {
@@ -520,4 +533,120 @@ async fn def005_malformed_http_preserves_safe_error_without_url_or_body() {
     let pid = wait_for_spawn(temp.path()).await;
     manager.stop_plugin("review-fixture").await.unwrap();
     wait_for_exit(pid).await;
+}
+
+#[tokio::test]
+async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
+    use proxyweave_plugin::manifest::Runtime;
+    let temp = sandbox();
+    let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+    let plugin_id = format!("def006-{}-{port}", std::process::id());
+    struct Credentials(String);
+    impl Drop for Credentials {
+        fn drop(&mut self) {
+            for key in ["a", "z"] {
+                let _ = quotio_platform::delete_plugin_credential(&self.0, key);
+            }
+        }
+    }
+    let _credentials = Credentials(plugin_id.clone());
+    let opaque = "dummy-雪-\"quoted\"-\\-$1-{SECRET:z}-{SECRET:missing}-{PORT}-{AUTH_DIR}-{";
+    let api_key = "dummy-key-{SECRET:a}-{PLUGIN_API_KEY}-{PORT}";
+    quotio_platform::set_plugin_credential(&plugin_id, "a", opaque).unwrap();
+    quotio_platform::set_plugin_credential(&plugin_id, "z", "must-not-replace").unwrap();
+    let mut record = record(0, "review-fixture", 200, 0);
+    record.manifest.metadata.id = plugin_id.clone();
+    record.manifest.configuration.required_secrets = vec!["a".into(), "z".into()];
+    record.manifest.configuration.config_template =
+        serde_json::json!({"secret": "{SECRET:a}", "key": "{PLUGIN_API_KEY}"});
+    record.manifest.configuration.credential_files.insert(
+        "auths/dummy.json".into(),
+        serde_json::json!({"value": "{SECRET:a}", "nested": ["{PLUGIN_API_KEY}", 17, true]}),
+    );
+    let Runtime::Managed { args, env, .. } = &mut record.manifest.runtime else {
+        unreachable!()
+    };
+    args.extend(["--skip".into(), "{DATA_DIR}".into()]);
+    env.insert("FIXTURE_MODE".into(), "capture-projection".into());
+    env.insert("FIXTURE_SECRET".into(), "{SECRET:a}".into());
+    env.insert("FIXTURE_KEY".into(), "{PLUGIN_API_KEY}".into());
+    env.insert("FIXTURE_PATH".into(), "{DATA_DIR}".into());
+    env.insert("FIXTURE_CAPTURE".into(), "{DATA_DIR}/capture.json".into());
+    record.manifest.validate().unwrap();
+    let data_root = temp.path().join("opaque-{AUTH_DIR}");
+    let manager = RuntimeManager::new();
+    let (_, pid) = ready(
+        manager
+            .start_plugin(&record, temp.path(), Some(port), &data_root, Some(api_key))
+            .await
+            .unwrap(),
+    );
+    let plugin_data = data_root.join("plugins").join(&plugin_id);
+    let read_json = |name: &str| -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(plugin_data.join(name)).unwrap()).unwrap()
+    };
+    let capture = read_json("capture.json");
+    assert_eq!(
+        capture["secret"].as_str().unwrap().as_bytes(),
+        opaque.as_bytes()
+    );
+    assert_eq!(capture["key"], api_key);
+    assert_eq!(capture["path"], plugin_data.to_string_lossy().as_ref());
+    assert!(capture["args"]
+        .as_array()
+        .unwrap()
+        .windows(2)
+        .any(|pair| pair[0] == "--skip" && pair[1] == plugin_data.to_string_lossy().as_ref()));
+    let config = read_json("config.json");
+    assert_eq!(
+        config["secret"].as_str().unwrap().as_bytes(),
+        opaque.as_bytes()
+    );
+    assert_eq!(config["key"], api_key);
+    let credential = read_json("auths/dummy.json");
+    assert_eq!(
+        credential["value"].as_str().unwrap().as_bytes(),
+        opaque.as_bytes()
+    );
+    assert_eq!(credential["nested"], serde_json::json!([api_key, 17, true]));
+    manager.stop_plugin(&plugin_id).await.unwrap();
+    wait_for_exit(pid).await;
+    assert_eq!(manager.get_status(&plugin_id).await, RuntimeStatus::Stopped);
+    record
+        .manifest
+        .configuration
+        .required_secrets
+        .push("absent".into());
+    record.manifest.configuration.config_template =
+        serde_json::json!({"value": "{SECRET:a}:{SECRET:absent}"});
+    record.manifest.validate().unwrap();
+    let error = manager
+        .start_plugin(&record, temp.path(), Some(port), &data_root, Some(api_key))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, RuntimeError::ConfigProjectionFailed(_)));
+    let public_error = format!("{error:?} {error}");
+    let status = manager.get_status(&plugin_id).await;
+    assert!(matches!(status, RuntimeStatus::Failed { .. }));
+    let public_status = format!("{status:?}");
+    for public in [&public_error, &public_status] {
+        assert!(!public.contains(opaque));
+        assert!(!public.contains(api_key));
+        assert!(!public.contains("dummy-"));
+        assert!(!public.contains("absent"));
+    }
+    assert_eq!(
+        std::fs::read_to_string(plugin_data.join("spawn.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    for key in ["a", "z"] {
+        quotio_platform::delete_plugin_credential(&plugin_id, key).unwrap();
+        assert_eq!(
+            quotio_platform::get_plugin_credential(&plugin_id, key).unwrap(),
+            None
+        );
+    }
 }

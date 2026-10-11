@@ -2,9 +2,10 @@ use crate::manifest::Manifest;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 /// Context containing variables for rendering plugin templates.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProjectionContext {
     pub port: u16,
     pub plugin_id: String,
@@ -13,6 +14,15 @@ pub struct ProjectionContext {
     pub config_path: PathBuf,
     pub plugin_api_key: String,
     pub secrets: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for ProjectionContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Paths and plugin identifiers are supplied data too; omit them with all credentials.
+        f.debug_struct("ProjectionContext")
+            .field("port", &self.port)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ProjectionContext {
@@ -40,30 +50,46 @@ impl ProjectionContext {
         }
     }
 
-    /// Renders placeholders within a template string.
+    /// Match only the original template; replacement values are opaque data.
     pub fn render_str(&self, template: &str) -> Result<String, String> {
-        let mut rendered = template.to_string();
-        rendered = rendered.replace("{PORT}", &self.port.to_string());
-        rendered = rendered.replace("{CONFIG_PATH}", &self.config_path.to_string_lossy());
-        rendered = rendered.replace("{DATA_DIR}", &self.plugin_data_dir.to_string_lossy());
-        rendered = rendered.replace("{AUTH_DIR}", &self.auth_dir.to_string_lossy());
-        rendered = rendered.replace("{PLUGIN_API_KEY}", &self.plugin_api_key);
-
-        for (k, v) in &self.secrets {
-            rendered = rendered.replace(&format!("{{SECRET:{}}}", k), v);
+        static PLACEHOLDERS: LazyLock<regex::Regex> =
+            LazyLock::new(|| regex::Regex::new(r"\{[^{}]*\}").expect("constant placeholder regex"));
+        // Adapt regex 1.12.3 Regex::replace_all's official fallible-replacement example
+        // (src/regex/string.rs, Fallibility). Iterate the input, never the output;
+        // push_str also avoids regex replacement-string $ expansion.
+        let mut rendered = String::with_capacity(template.len());
+        let mut last_match = 0;
+        for placeholder in PLACEHOLDERS.find_iter(template) {
+            let literal = &template[last_match..placeholder.start()];
+            if literal.contains(['{', '}']) {
+                return Err("Malformed template placeholder".into());
+            }
+            rendered.push_str(literal);
+            let token = &template[placeholder.start() + 1..placeholder.end() - 1];
+            match token {
+                "PORT" => rendered.push_str(&self.port.to_string()),
+                "CONFIG_PATH" => rendered.push_str(&self.config_path.to_string_lossy()),
+                "DATA_DIR" => rendered.push_str(&self.plugin_data_dir.to_string_lossy()),
+                "AUTH_DIR" => rendered.push_str(&self.auth_dir.to_string_lossy()),
+                "PLUGIN_API_KEY" => rendered.push_str(&self.plugin_api_key),
+                _ => {
+                    let name = token
+                        .strip_prefix("SECRET:")
+                        .ok_or("Unknown template placeholder")?;
+                    let value = self
+                        .secrets
+                        .get(name)
+                        .ok_or("Unresolved secret placeholder in template")?;
+                    rendered.push_str(value);
+                }
+            }
+            last_match = placeholder.end();
         }
-
-        if let Some(pos) = rendered.find("{SECRET:") {
-            let end = rendered[pos..]
-                .find('}')
-                .map(|e| pos + e)
-                .unwrap_or(rendered.len());
-            return Err(format!(
-                "Unresolved secret placeholder in template: {}",
-                &rendered[pos..=end.min(rendered.len() - 1)]
-            ));
+        let literal = &template[last_match..];
+        if literal.contains(['{', '}']) {
+            return Err("Malformed template placeholder".into());
         }
-
+        rendered.push_str(literal);
         Ok(rendered)
     }
 
@@ -204,6 +230,111 @@ mod tests {
         let res = ctx.render_str(tpl);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("Unresolved secret"));
+    }
+
+    #[test]
+    fn def006_replacements_are_opaque_for_both_secret_key_orders() {
+        let opaque = "雪-$1-${name}-{PORT}-{DATA_DIR}-{CONFIG_PATH}-{AUTH_DIR}-{PLUGIN_API_KEY}-{SECRET:missing}-{";
+        let mut secrets = BTreeMap::new();
+        secrets.insert("a".into(), format!("a-{opaque}-{{SECRET:z}}"));
+        secrets.insert("z".into(), format!("z-{opaque}-{{SECRET:a}}"));
+        let ctx =
+            ProjectionContext::new("dummy", 9090, PathBuf::from(opaque), Some(opaque), secrets);
+        for key in ["a", "z"] {
+            assert_eq!(
+                ctx.render_str(&format!("{{SECRET:{key}}}")).unwrap(),
+                ctx.secrets[key]
+            );
+        }
+        assert_eq!(
+            ctx.render_str("{SECRET:a}|{SECRET:z}|{SECRET:a}").unwrap(),
+            format!(
+                "{}|{}|{}",
+                ctx.secrets["a"], ctx.secrets["z"], ctx.secrets["a"]
+            )
+        );
+        for (token, expected) in [
+            ("PLUGIN_API_KEY", opaque.to_owned()),
+            (
+                "DATA_DIR",
+                ctx.plugin_data_dir.to_string_lossy().into_owned(),
+            ),
+            ("AUTH_DIR", ctx.auth_dir.to_string_lossy().into_owned()),
+            (
+                "CONFIG_PATH",
+                ctx.config_path.to_string_lossy().into_owned(),
+            ),
+        ] {
+            assert_eq!(ctx.render_str(&format!("{{{token}}}")).unwrap(), expected);
+        }
+        assert_eq!(ctx.render_str("literal 雪 $1").unwrap(), "literal 雪 $1");
+    }
+
+    #[test]
+    fn def006_errors_and_debug_never_contain_supplied_data() {
+        let private = "dummy-private-debug-marker";
+        let ctx = ProjectionContext::new(
+            private,
+            9090,
+            PathBuf::from(private),
+            Some(private),
+            BTreeMap::from([("a".into(), private.into())]),
+        );
+        for template in [
+            "{SECRET:a}:{SECRET:missing}",
+            "{SECRET:a}:{UNKNOWN}",
+            "{SECRET:a}:{SECRET:",
+            "{SECRET:a}:}",
+            "{SECRET:a}:{{PORT}}",
+        ] {
+            let error = ctx.render_str(template).unwrap_err();
+            assert!(!error.contains(private));
+            assert!(!error.contains("missing"));
+            assert!(!error.contains("UNKNOWN"));
+        }
+        for debug in [format!("{ctx:?}"), format!("{ctx:#?}")] {
+            assert!(!debug.contains(private));
+            assert!(!debug.contains("plugin_api_key"));
+            assert!(!debug.contains("secrets"));
+            assert!(debug.contains("9090"));
+        }
+    }
+
+    #[test]
+    fn def006_json_values_preserve_exact_decoded_data_and_types() {
+        let opaque = "雪\n\"quoted\"\\$1-{SECRET:z}-{SECRET:missing}-{PORT}-{AUTH_DIR}-{";
+        let ctx = ProjectionContext::new(
+            "dummy",
+            9090,
+            PathBuf::from("data-{AUTH_DIR}"),
+            Some(opaque),
+            BTreeMap::from([
+                ("a".into(), opaque.into()),
+                ("z".into(), "must-not-replace".into()),
+            ]),
+        );
+        let template = serde_json::json!({
+            "key": "{PLUGIN_API_KEY}",
+            "nested": ["{SECRET:a}", {"path": "{DATA_DIR}"}, 42, true, null],
+            "{PORT}": "unchanged-object-key",
+        });
+        let rendered = ctx.render_json_value(&template).unwrap();
+        let bytes = serde_json::to_vec(&rendered).unwrap();
+        let decoded: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            decoded["key"].as_str().unwrap().as_bytes(),
+            opaque.as_bytes()
+        );
+        assert_eq!(
+            decoded["nested"][0].as_str().unwrap().as_bytes(),
+            opaque.as_bytes()
+        );
+        assert_eq!(decoded["nested"][1]["path"], "data-{AUTH_DIR}");
+        assert_eq!(decoded["nested"][2], 42);
+        assert_eq!(decoded["nested"][3], true);
+        assert_eq!(decoded["nested"][4], Value::Null);
+        assert_eq!(decoded["{PORT}"], "unchanged-object-key");
+        assert_eq!(rendered, decoded);
     }
 
     #[test]

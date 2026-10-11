@@ -50,6 +50,12 @@ ProxyWeave (编织网关) 严格遵守开源软件知识产权与合规伦理。
 - serde_yaml_ng **0.10.0**：MIT，Copyright 2024 Antoine Catton / 2016-2024 David Tolnay；直接调用发布解析器，原源码不改。
 - sha2 **0.10.9**（RustCrypto）、semver **1.0.28**、url **2.5.8**、tempfile **3.27.0**：MIT OR Apache-2.0，许可证完整文本随 Cargo 发布包/依赖保留，固定版本及源码发布 Commit 见 `docs/references/REFERENCE_REGISTRY.md`。
 - 仅本地契约/登记所需依赖；源码比较、原测试运行结果及适配边界见 ADR-002 / `docs/verification/FEATURE1.md`。不声明运行/凭据功能通过。
+
+### 7. DEF-006 直接依赖与官方示例薄适配
+- **regex 1.12.3**：https://github.com/rust-lang/regex；发布源码 Commit `b028e4f40eac8959d05e82abf8404906b1c565c0`，MIT OR Apache-2.0，本次按 MIT 使用。
+- Copyright (c) 2014 The Rust Project Developers。完整 MIT 许可证见 [Regex-MIT.txt](docs/references/licenses/Regex-MIT.txt)。
+- 直接调用原 regex 搜索器，并薄适配官方 `Regex::replace_all` Fallibility 示例的原输入单次匹配/复制算法，不重新实现正则引擎、不解释替换数据。溯源、原测试及受限验证范围见 [FEATURE2-DEF006.md](docs/verification/FEATURE2-DEF006.md)。
+
 ---
 
 ## 第二部分：架构设计与算法参考源（仅作设计参考，不整体引入代码仓库） (Design & Architectural References Only)

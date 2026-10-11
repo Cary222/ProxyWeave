@@ -1,0 +1,136 @@
+    Updating `rsproxy-sparse` index
+ Downloading crates ...
+  Downloaded cfg-if v1.0.3 (registry `rsproxy-sparse`)
+  Downloaded atty v0.2.14 (registry `rsproxy-sparse`)
+  Downloaded aho-corasick v1.1.3 (registry `rsproxy-sparse`)
+  Downloaded doc-comment v0.3.3 (registry `rsproxy-sparse`)
+  Downloaded env_logger v0.9.3 (registry `rsproxy-sparse`)
+  Downloaded rand v0.8.5 (registry `rsproxy-sparse`)
+  Downloaded getrandom v0.2.16 (registry `rsproxy-sparse`)
+  Downloaded proc-macro2 v1.0.101 (registry `rsproxy-sparse`)
+  Downloaded toml v0.8.23 (registry `rsproxy-sparse`)
+  Downloaded termcolor v1.4.1 (registry `rsproxy-sparse`)
+  Downloaded anyhow v1.0.100 (registry `rsproxy-sparse`)
+  Downloaded indexmap v2.11.4 (registry `rsproxy-sparse`)
+  Downloaded toml_datetime v0.6.11 (registry `rsproxy-sparse`)
+  Downloaded log v0.4.28 (registry `rsproxy-sparse`)
+  Downloaded syn v2.0.106 (registry `rsproxy-sparse`)
+  Downloaded unicode-ident v1.0.19 (registry `rsproxy-sparse`)
+  Downloaded regex-test v0.1.1 (registry `rsproxy-sparse`)
+  Downloaded bstr v1.12.0 (registry `rsproxy-sparse`)
+  Downloaded quickcheck v1.0.3 (registry `rsproxy-sparse`)
+  Downloaded humantime v2.3.0 (registry `rsproxy-sparse`)
+  Downloaded serde_spanned v0.6.9 (registry `rsproxy-sparse`)
+  Downloaded regex-syntax v0.8.9 (registry `rsproxy-sparse`)
+  Downloaded toml_edit v0.22.27 (registry `rsproxy-sparse`)
+  Downloaded hashbrown v0.16.0 (registry `rsproxy-sparse`)
+  Downloaded winnow v0.7.13 (registry `rsproxy-sparse`)
+   Compiling proc-macro2 v1.0.101
+   Compiling unicode-ident v1.0.19
+   Compiling quote v1.0.41
+   Compiling serde_core v1.0.228
+   Compiling syn v2.0.106
+   Compiling serde v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling memchr v2.7.6
+   Compiling cfg-if v1.0.3
+   Compiling winapi v0.3.9
+   Compiling equivalent v1.0.2
+   Compiling windows-link v0.2.1
+   Compiling hashbrown v0.16.0
+   Compiling indexmap v2.11.4
+   Compiling windows-sys v0.61.2
+   Compiling getrandom v0.2.16
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling anyhow v1.0.100
+   Compiling winnow v0.7.13
+   Compiling toml_edit v0.22.27
+   Compiling rand_core v0.6.4
+   Compiling winapi-util v0.1.11
+   Compiling aho-corasick v1.1.3
+   Compiling doc-comment v0.3.3
+   Compiling regex-syntax v0.8.9
+   Compiling regex-automata v0.4.14
+   Compiling termcolor v1.4.1
+   Compiling atty v0.2.14
+   Compiling rand v0.8.5
+   Compiling toml v0.8.23
+   Compiling bstr v1.12.0
+   Compiling log v0.4.28
+   Compiling humantime v2.3.0
+   Compiling env_logger v0.9.3
+   Compiling regex-test v0.1.1
+   Compiling quickcheck v1.0.3
+   Compiling regex v1.12.3 (D:\temp-audit\proxyweave-def006-regex-original)
+error[E0583]: file not found for module `fuzz`
+ --> tests\lib.rs:3:1
+  |
+3 | mod fuzz;
+  | ^^^^^^^^^
+  |
+  = help: to create the module `fuzz`, create file "tests\fuzz.rs" or "tests\fuzz\mod.rs"
+  = note: if there is a `mod fuzz` elsewhere in the crate already, import it with `use crate::...` instead
+
+error: couldn't read `tests\../testdata/fowler/basic.toml`: 系统找不到指定的路径。 (os error 3)
+  --> tests\lib.rs:26:17
+   |
+26 |                 include_bytes!(concat!("../testdata/", $name, ".toml"));
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+53 |     load!("fowler/basic");
+   |     --------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `load` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `tests\../testdata/fowler/nullsubexpr.toml`: 系统找不到指定的路径。 (os error 3)
+  --> tests\lib.rs:26:17
+   |
+26 |                 include_bytes!(concat!("../testdata/", $name, ".toml"));
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+54 |     load!("fowler/nullsubexpr");
+   |     --------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `load` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `tests\../testdata/fowler/repetition.toml`: 系统找不到指定的路径。 (os error 3)
+  --> tests\lib.rs:26:17
+   |
+26 |                 include_bytes!(concat!("../testdata/", $name, ".toml"));
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+55 |     load!("fowler/repetition");
+   |     -------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `load` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of deprecated constant `std::usize::MAX`: replaced by the `MAX` associated constant on this type
+  --> tests\suite_bytes.rs:26:64
+   |
+26 |                 .take(test.match_limit().unwrap_or(std::usize::MAX))
+   |                                                                ^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated constant `std::usize::MAX`: replaced by the `MAX` associated constant on this type
+  --> tests\suite_bytes.rs:35:64
+   |
+35 |                 .take(test.match_limit().unwrap_or(std::usize::MAX))
+   |                                                                ^^^
+
+warning: use of deprecated constant `std::usize::MAX`: replaced by the `MAX` associated constant on this type
+  --> tests\suite_string.rs:34:64
+   |
+34 |                 .take(test.match_limit().unwrap_or(std::usize::MAX))
+   |                                                                ^^^
+
+warning: use of deprecated constant `std::usize::MAX`: replaced by the `MAX` associated constant on this type
+  --> tests\suite_string.rs:43:64
+   |
+43 |                 .take(test.match_limit().unwrap_or(std::usize::MAX))
+   |                                                                ^^^
+
+For more information about this error, try `rustc --explain E0583`.
+warning: `regex` (test "integration") generated 4 warnings
+error: could not compile `regex` (test "integration") due to 4 previous errors; 4 warnings emitted

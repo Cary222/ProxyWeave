@@ -2784,6 +2784,7 @@ name = "proxyweave-plugin"
 version = "0.1.0"
 dependencies = [
  "quotio-platform",
+ "regex",
  "reqwest",
  "semver",
  "serde",
