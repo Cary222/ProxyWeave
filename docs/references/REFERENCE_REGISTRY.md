@@ -1,6 +1,6 @@
 # ProxyWeave Reference Source Registry（参考源档案）
 
-版本：v2.1 — Phase 0 本轮 Windows 最小桌面基座通过；Phase 1 Feature 1 实施中，待独立 Verified。
+版本：v2.2 — Phase 0 Windows 基座通过；F1 已独立 Verified；F2 六具体 DEF 已 Verified、整体 IN_REVIEW；F3 实施中，真实插件/最终桌面仍开放。
 
 ## 状态纪律
 
@@ -26,14 +26,14 @@
 |---|---|---|---|
 | M01 | Process Supervisor | Win32 Job Object 官方 API (`windows-sys` 0.61.2) | Feature 2 实施中：基于 Win32 Job Object 实现 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 进程生命周期绑定；External 严禁 Kill。详见 ADR-003 |
 | M02 | Port Allocator | 标准库 `std::net::TcpListener` 端口检测 | Feature 2 实施中：回环端口分配与占用预检；收集明确冲突证据（`AddrInUse`），就绪超时绝不单独推定为端口冲突。详见 ADR-003 |
-| M03 | Async Gateway | Axum/Hyper、TiyGate server | 待 Feature 审计；不采用 Quotio 阻塞 bridge，不引入 SQLx |
-| M04 | SSE | TiyGate protocols、eventsource-stream 候选 | 待 Feature 审计；协议正常完成证据优先，异常不补 DONE |
+| M03 | Async Gateway | axum 0.8.9 / axum-reverse-proxy 2.2.0 / Hyper 1 / Tower HTTP | F3 实施中：直接依赖原代理，原包 `D:/temp-audit/proxyweave-feature3-proxy-audit/axum-reverse-proxy-2.2.0`，MIT commit7350d118a69b6d98ae19a767b9d71630b2a3bc80；连接所有权/凭据为薄适配，无 SQLx。来源及验证边界见 ADR-004 |
+| M04 | SSE | 原代理 `src/forward.rs` 的 `Body::new(Incoming)` | 同协议原字节/原 Content-Type 透传，不引入 TiyGate 业务状态机，不合成 DONE；原包测试及原生 TCP 断连回归进行中，未 Verified。见 ADR-004 |
 | M05 | Protocol IR | TiyGate `crates/protocols/` 等实际路径待核验 | Phase 2 候选，保留原测试，禁止整体业务合并 |
 | M06 | Model Router | TiyGate/LiteLLM 设计候选 | 未审计，不预先授权重新实现同质算法 |
 | M07 | Credential Broker | Quotio `crates/quotio-platform`；`keyring` 3.6.3；`windows-sys` 0.61.2 | Feature 2 实施中：Keyring 命名空间隔离与持久化；实现真实 Windows 文件 DACL 限制（阻断继承、独占当前用户），废除空操作。详见 ADR-003 |
 | M08 | Installer | Quotio `crates/quotio-core/src/proxy_download.rs` | 下载/校验/解压候选，未引入；后续按范围核验与泛化，不能整体否定 |
 | M09 | Config Store | Quotio platform `atomic_write`/`replace_file` 与原测试 | 已读平台文件及对应 Windows/Unix 分支；原子写入不等于双副本容灾或 Windows 凭据隔离 |
-| M10 | Manifest Engine | 直接依赖 serde_yaml_ng 0.10.0 / Serde；Quotio atomic_write | Feature 1 严格契约/本地包登记实施中；来源/测试见 ADR-002 与 FEATURE1.md，待 Inspector 独立复验；非运行支持声明 |
+| M10 | Manifest Engine | 直接依赖 serde_yaml_ng 0.10.0 / Serde；Quotio atomic_write | Feature 1 严格契约/本地包登记已 Inspector Verified；来源/测试见 ADR-002 与 FEATURE1.md；非运行支持声明 |
 | M11 | Lifecycle | DSH 可逆副作用设计候选 | 未审计，后续按实际 Rust 依赖选型 |
 | M12 | IDE Handoff | Quotio `crates/quotio-core/src/agent_config.rs` | 登记为 Phase 3 候选；不是 Phase 0 必须引入资产 |
 | M13 | Desktop Shell | Quotio `apps/desktop/src-tauri/`、React bootstrap | 已直接复用；本轮 Windows 构建/测试与窗口/托盘/关闭/单实例行为验证通过；其他平台未验证 |
@@ -53,7 +53,7 @@
 | Cargo/npm/Tauri/Vite/TS 配置与图标 → 同路径 | 内部 crate 名保留；展示名/独立 ID 调整；移除资源包/更新器/业务依赖并提交锁文件；图标暂保留上游资产 | 各步骤构建及最终冻结证据见报告 |
 详细过程与日志证据见 `../verification/PHASE0.md`；准备成功或 metadata 成功不能登记为构建通过。
 
-## Feature 1 直接依赖与登记胶水（实施中）
+## Feature 1 直接依赖与登记胶水（已独立 Verified）
 
 | 成熟来源/版本 | 发布源码 Commit | 原路径 → 目标使用 | 许可证/必要适配 |
 |---|---|---|---|

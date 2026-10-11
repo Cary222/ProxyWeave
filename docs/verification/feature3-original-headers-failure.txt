@@ -1,0 +1,64 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.27s
+     Running tests\headers.rs (D:\temp-audit\proxyweave-feature3-proxy-audit\original-target\debug\deps\headers-7b37a127787945f0.exe)
+
+running 6 tests
+test host_header_with_default_policy_replaces_host_with_upstream_authority ... FAILED
+test host_header_with_preserve_policy_forwards_client_host ... FAILED
+test test_hop_by_hop_headers_stripped_by_default ... FAILED
+test test_proxy_header_handling ... FAILED
+test test_proxy_special_headers ... FAILED
+test test_x_forwarded_for_appended_with_connect_info ... FAILED
+
+failures:
+
+---- host_header_with_default_policy_replaces_host_with_upstream_authority stdout ----
+
+thread 'host_header_with_default_policy_replaces_host_with_upstream_authority' (36500) panicked at tests\headers.rs:250:10:
+response was not json: reqwest::Error { kind: Decode, source: Error("EOF while parsing a value", line: 1, column: 0) }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- host_header_with_preserve_policy_forwards_client_host stdout ----
+
+thread 'host_header_with_preserve_policy_forwards_client_host' (67952) panicked at tests\headers.rs:250:10:
+response was not json: reqwest::Error { kind: Decode, source: Error("EOF while parsing a value", line: 1, column: 0) }
+
+---- test_hop_by_hop_headers_stripped_by_default stdout ----
+
+thread 'test_hop_by_hop_headers_stripped_by_default' (73484) panicked at tests\headers.rs:315:10:
+called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Decode, source: Error("EOF while parsing a value", line: 1, column: 0) }
+
+---- test_proxy_header_handling stdout ----
+Sending request to proxy...
+Got response with status: 502 Bad Gateway
+
+thread 'test_proxy_header_handling' (55264) panicked at tests\headers.rs:82:9:
+assertion `left == right` failed
+  left: 502
+ right: 200
+
+---- test_proxy_special_headers stdout ----
+Testing special headers...
+Special headers response status: 502 Bad Gateway
+
+thread 'test_proxy_special_headers' (72648) panicked at tests\headers.rs:181:9:
+assertion `left == right` failed
+  left: 502
+ right: 200
+
+---- test_x_forwarded_for_appended_with_connect_info stdout ----
+
+thread 'test_x_forwarded_for_appended_with_connect_info' (41436) panicked at tests\headers.rs:360:10:
+called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Decode, source: Error("EOF while parsing a value", line: 1, column: 0) }
+
+
+failures:
+    host_header_with_default_policy_replaces_host_with_upstream_authority
+    host_header_with_preserve_policy_forwards_client_host
+    test_hop_by_hop_headers_stripped_by_default
+    test_proxy_header_handling
+    test_proxy_special_headers
+    test_x_forwarded_for_appended_with_connect_info
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.41s
+
+error: test failed, to rerun pass `--test headers`

@@ -1,6 +1,6 @@
 # ProxyWeave Architectural Decision Records (ADR)
 
-权威规划：[Plan.md](../../../Plan.md)。当前阶段：Phase 0 本轮 Windows 最小桌面基座已通过，Phase 1 Feature 1 实施中，未独立 Verified。验收证据见 [PHASE0.md](../../verification/PHASE0.md)。
+权威规划：[Plan.md](../../../Plan.md)。当前阶段：Phase 0 本轮 Windows 最小桌面基座已通过，F1 已独立 Verified；F2 六具体 DEF 已 Verified、整体 IN_REVIEW；F3 实施中，真实插件/最终桌面仍开放。验收证据见 [PHASE0.md](../../verification/PHASE0.md)。
 历史 ADR-01–ADR-07 是决策摘要，不是完成了全部模块审计或跨平台验证的证据。
 
 ## 决策索引
@@ -8,6 +8,7 @@
 - [ADR-001：主脚手架采用与直接复用政策](../ADR-001-scaffold-and-reuse-policy.md)：先验证真实上游，再按闭包引入和分轮裁剪；直接依赖/提取优先，禁止等价重写冒充复用。替代历史 ADR-01/ADR-07 的失效链接。
 - [ADR-002：Windows 本地插件契约与登记](../ADR-002-local-plugin-contract.md)：Feature 1 的直接依赖/来源比较、真实插件核验与最终 Inspector 原生桌面 MCP 完成门禁。
 - [ADR-003：插件 ACL、Keyring 持久化与 Owned Runtime](../ADR-003-runtime-job-acl-and-lifecycle.md)：Feature 2 的 Windows Job Object 进程生命周期、真实 Windows 文件 DACL 隔离、Keyring 持久化、端口冲突确凿判定、wb2api 503 探针语义与 External 零 Kill 规则。
+- [ADR-004：统一异步网关、本地 API Key 鉴权与 SSE 同协议流式透传](../ADR-004-unified-gateway-and-sse-passthrough.md)：Feature 3 的 Axum 0.8.9 / axum-reverse-proxy 2.2.0 直接依赖异步网关、本地 API Key 鉴权、真实模型发现与同协议透传、SSE 异常截断防伪造及取消传播。
 - [协议复用边界（历史 ADR-02）](../../../Plan.md#3-协议与网关核心参考源tiygate-深度分析-tiygate-protocol-reference)：TiyGate 是候选，Phase 2 开发前核验实际模块、测试与依赖；不引入 SQLx。
 - [黑盒进程与所有权（历史 ADR-03）](../../../Plan.md#65-插件双模运行架构managed-vs-external-provider)：Managed/External 由进程所有权决定，External 禁启停禁 Kill；独立进程不是安全沙箱。
 - [生命周期（历史 ADR-04）](../../../Plan.md#66-插件生命周期状态机与四象限策略-lifecycle-state-machine)：活跃请求与冷启动互斥，仍为待实现设计。

@@ -25,4 +25,6 @@ pub use port::{check_port_available, PortConflictError};
 pub use probe::{probe_http, ProbeReport, ProbeStatus};
 pub use projection::{project_managed_configuration, ProjectedFiles, ProjectionContext};
 pub use registry::{ImportResult, PluginRecord, Registry};
-pub use runtime::{ActivePlugin, ManagedInstance, RuntimeError, RuntimeManager, RuntimeStatus};
+pub use runtime::{
+    ActivePlugin, ManagedInstance, RequestLease, RuntimeError, RuntimeManager, RuntimeStatus,
+};

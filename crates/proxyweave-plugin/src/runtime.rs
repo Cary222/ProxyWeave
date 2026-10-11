@@ -11,7 +11,10 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 
@@ -27,6 +30,7 @@ use std::collections::BTreeMap;
 pub enum RuntimeError {
     ExternalServiceProtected(String),
     PortConflict(String),
+    ActiveRequests,
     PluginNotFound(String),
     AlreadyRunning(String),
     ExecutableNotFound(String),
@@ -42,6 +46,7 @@ impl std::fmt::Display for RuntimeError {
         match self {
             Self::ExternalServiceProtected(msg) => write!(f, "External service protected: {}", msg),
             Self::PortConflict(msg) => write!(f, "Port conflict: {}", msg),
+            Self::ActiveRequests => write!(f, "Plugin has active requests; stop refused"),
             Self::PluginNotFound(msg) => write!(f, "Plugin not found: {}", msg),
             Self::AlreadyRunning(msg) => write!(f, "Plugin already running: {}", msg),
             Self::ExecutableNotFound(msg) => write!(f, "Executable not found: {}", msg),
@@ -103,6 +108,26 @@ pub enum ActivePlugin {
 pub struct RuntimeEntry {
     pub status: RuntimeStatus,
     pub active: Option<ActivePlugin>,
+    pub active_requests: Arc<AtomicUsize>,
+}
+
+/// An admitted request owns this guard through response EOF or cancellation.
+/// Admission and explicit stop share the existing FIFO lifecycle lock.
+pub struct RequestLease {
+    active_requests: Arc<AtomicUsize>,
+    endpoint: String,
+}
+
+impl RequestLease {
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+}
+
+impl Drop for RequestLease {
+    fn drop(&mut self) {
+        self.active_requests.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 #[derive(Clone, Default)]
@@ -163,6 +188,51 @@ impl RuntimeManager {
         }
         entry.status.clone()
     }
+    /// Admit without racing stop. The RAII lease extends beyond response headers.
+    pub async fn acquire_request(&self, plugin_id: &str) -> Result<RequestLease, RuntimeError> {
+        let lifecycle_lock = self.get_start_lock(plugin_id).await;
+        let _guard = lifecycle_lock.lock().await;
+        let status = self.get_status(plugin_id).await;
+        if !matches!(
+            status,
+            RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
+        ) {
+            return Err(RuntimeError::HealthCheckFailed(
+                "Plugin is not available".into(),
+            ));
+        }
+        let entry_lock = self
+            .runtimes
+            .read()
+            .await
+            .get(plugin_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::PluginNotFound("Plugin is not registered".into()))?;
+        let entry = entry_lock.lock().await;
+        let endpoint = match entry.active.as_ref() {
+            Some(ActivePlugin::Managed(managed)) => format!("http://127.0.0.1:{}", managed.port),
+            Some(ActivePlugin::External { base_url, .. }) => base_url.clone(),
+            None => {
+                return Err(RuntimeError::HealthCheckFailed(
+                    "Plugin is not available".into(),
+                ))
+            }
+        };
+        entry.active_requests.fetch_add(1, Ordering::AcqRel);
+        Ok(RequestLease {
+            active_requests: entry.active_requests.clone(),
+            endpoint,
+        })
+    }
+
+    pub async fn active_request_count(&self, plugin_id: &str) -> usize {
+        let entry = self.runtimes.read().await.get(plugin_id).cloned();
+        match entry {
+            Some(entry) => entry.lock().await.active_requests.load(Ordering::Acquire),
+            None => 0,
+        }
+    }
+
     /// Starts a plugin instance (Managed or External).
     /// Enforces Singleflight mutex: concurrent calls for the same plugin_id are serialized.
     pub async fn start_plugin(
@@ -193,6 +263,7 @@ impl RuntimeManager {
                 .or_insert_with(|| {
                     Arc::new(Mutex::new(RuntimeEntry {
                         status: RuntimeStatus::Stopped,
+                        active_requests: Arc::new(AtomicUsize::new(0)),
                         active: None,
                     }))
                 })
@@ -278,6 +349,7 @@ impl RuntimeManager {
             .or_insert_with(|| {
                 Arc::new(Mutex::new(RuntimeEntry {
                     status: RuntimeStatus::Stopped,
+                    active_requests: Arc::new(AtomicUsize::new(0)),
                     active: None,
                 }))
             })
@@ -478,6 +550,7 @@ impl RuntimeManager {
             .or_insert_with(|| {
                 Arc::new(Mutex::new(RuntimeEntry {
                     status: RuntimeStatus::Stopped,
+                    active_requests: Arc::new(AtomicUsize::new(0)),
                     active: None,
                 }))
             })
@@ -505,6 +578,12 @@ impl RuntimeManager {
         drop(runtimes);
 
         let mut entry = entry_lock.lock().await;
+        // External ownership rejection takes precedence and never touches its process.
+        if matches!(entry.active, Some(ActivePlugin::Managed(_)))
+            && entry.active_requests.load(Ordering::Acquire) != 0
+        {
+            return Err(RuntimeError::ActiveRequests);
+        }
         if let Some(active) = entry.active.take() {
             match active {
                 ActivePlugin::External { ref plugin_id, .. } => {
@@ -548,6 +627,7 @@ mod tests {
             runtimes.insert(
                 "ext_provider".to_string(),
                 Arc::new(Mutex::new(RuntimeEntry {
+                    active_requests: Arc::new(AtomicUsize::new(0)),
                     status: RuntimeStatus::Ready {
                         port: 9999,
                         pid: None,

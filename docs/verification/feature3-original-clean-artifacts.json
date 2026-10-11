@@ -1,0 +1,63 @@
+{
+  "task": "bb8028193",
+  "exitCode": 101,
+  "sourceDirectory": "D:/temp-audit/proxyweave-feature3-proxy-audit/axum-reverse-proxy-2.2.0",
+  "sourceFileCount": 63,
+  "registryByteDifferences": 0,
+  "cleanBeforeCompile": true,
+  "artifactRoot": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target",
+  "diagnosticArtifactsMustUseSeparateRoot": true,
+  "features": [
+    "no-default-features",
+    "native-tls"
+  ],
+  "locked": true,
+  "processOnlyNoProxy": "127.0.0.1,::1,localhost",
+  "cargoIncremental": "0",
+  "manifestResolution": "cwd contains sole Cargo.toml; explicit compiled package path is in raw receipt",
+  "tests": {
+    "passed": 108,
+    "failed": 1,
+    "failedName": "test_proxy_error_handling",
+    "failure": "tests/errors.rs:75:10: reqwest::Error { kind: Request, source: TimedOut }",
+    "originalTimeoutMilliseconds": 100
+  },
+  "raw": {
+    "path": "docs/verification/feature3-original-clean-replay.txt",
+    "sha256": "f8fe25e6c71c39684e56c410f3b0b76d091bc9938ad507bb3e5486407f730f07"
+  },
+  "executables": [
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/axum_reverse_proxy-99071982f26b8416.exe",
+      "sha256": "b78716dcbae9607526262973c7bdd1350a00d76ddf10d0f9933bdb9569e8fd07"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/errors-309d391976ad3476.exe",
+      "sha256": "91738fbcfa814901e93eaddef39e316c070de9e1d16e9f1df3641ef9a5ede455"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/headers-712b3ac2afa42a12.exe",
+      "sha256": "70f98ee69adfc59c2f83c382a1ddd3f14d79241a4773852a9a940793857fe72d"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/policy-d259074f1f2b4b6e.exe",
+      "sha256": "9d1c2184eba18e69bec29e9a1b03189a5eee3a7f8f72c98a2ade622ecb773d31"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/rfc9110-af4344f8bfb962a9.exe",
+      "sha256": "1197690c66b88fca3172e7319ce0d4350a9866d3bfb20a863153dc1617d4797c"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/routing-f7b6f74d10d43834.exe",
+      "sha256": "112c58c8478425e6680b6026feefe9ee16360e2acbc721fc89097a8bf9aa87a1"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/service-4fd7c9452ab8cfe0.exe",
+      "sha256": "503db69c28b9eccc16dd1b4c0c77f51b67bbae88ed234b88c855a2eb8db34b47"
+    },
+    {
+      "path": "D:/temp-audit/proxyweave-feature3-proxy-audit/original-target/debug/deps/streaming-16cc0aced9900e8e.exe",
+      "sha256": "576dc872e867137be5c13be5fc9e7ec4618e95c860dcd833b1a1ce6e43515300"
+    }
+  ]
+}

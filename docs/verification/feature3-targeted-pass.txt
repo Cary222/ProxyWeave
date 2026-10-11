@@ -1,0 +1,41 @@
+   Compiling proxyweave-gateway v0.1.0 (D:\ProxyWeave\crates\proxyweave-gateway)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.73s
+     Running tests\passthrough.rs (target\debug\deps\passthrough-72be8184bc279ae0.exe)
+
+running 8 tests
+test gateway_fixture_child ... ignored, invoked by RuntimeManager as a real Managed child
+test external_gateway_cancel_never_controls_provider_lifecycle ... ok
+
+running 1 test
+test streaming_bytes_truncation_and_plain_eof_never_synthesize_done ... ok
+
+running 1 test
+test native_disconnect_during_stream_cancels_upstream_and_releases_lease ... ok
+
+running 1 test
+
+running 1 test
+test header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown ... ok
+test native_disconnect_during_header_wait_cancels_upstream_and_releases_lease ... ok
+
+running 1 test
+test auth_models_nonstream_headers_error_passthrough ... ok
+
+running 1 test
+
+running 1 test
+test concurrent_leases_block_stop_and_release_only_after_last_drop ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.11s
+
+    Checking native-tls v0.2.18
+    Checking tokio-native-tls v0.3.1
+    Checking hyper-tls v0.6.0
+    Checking quotio-types v0.1.0 (D:\ProxyWeave\crates\quotio-types)
+    Checking rustls-pki-types v1.15.1
+    Checking reqwest v0.13.4
+    Checking quotio-platform v0.1.0 (D:\ProxyWeave\crates\quotio-platform)
+    Checking proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Checking axum-reverse-proxy v2.2.0
+    Checking proxyweave-gateway v0.1.0 (D:\ProxyWeave\crates\proxyweave-gateway)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.34s

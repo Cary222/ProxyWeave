@@ -1,0 +1,99 @@
+ Downloading crates ...
+  Downloaded rustls-native-certs v0.8.3 (registry `rsproxy-sparse`)
+  Downloaded webpki-roots v1.0.6 (registry `rsproxy-sparse`)
+   Compiling rustls v0.23.36
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-native-certs v0.8.3
+   Compiling webpki-roots v1.0.6
+   Compiling hyper-rustls v0.27.7
+   Compiling axum-reverse-proxy v2.2.0 (D:\temp-audit\proxyweave-feature3-proxy-audit\axum-reverse-proxy-2.2.0)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 23s
+     Running unittests src\lib.rs (D:\temp-audit\proxyweave-feature3-proxy-audit\original-target\debug\deps\axum_reverse_proxy-1a513f69fcf82c12.exe)
+
+running 53 tests
+test balanced_proxy::tests::ewma_first_measurement_sets_latency_directly ... ok
+test balanced_proxy::tests::ewma_load_decays_over_time ... ok
+test balanced_proxy::tests::p2c_peak_ewma_prefers_lower_latency_endpoint ... ok
+test balanced_proxy::tests::p2c_pending_requests_prefers_less_loaded_endpoint ... ok
+test balanced_proxy::tests::p2c_single_endpoint_is_always_selected ... ok
+test balanced_proxy::tests::pending_request_guard_decrements_on_drop ... ok
+test forward::tests::appends_client_ip_to_x_forwarded_for ... ok
+test forward::tests::appends_rfc7239_forwarded_element ... ok
+test forward::tests::forwarded_quotes_ipv6_addresses ... ok
+test forward::tests::host_dropped_unless_preserved ... ok
+test forward::tests::preserve_mode_materializes_h2_authority_as_host ... ok
+test forward::tests::preserves_te_trailers_for_grpc ... ok
+test forward::tests::sets_x_forwarded_proto_from_public_scheme ... ok
+test forward::tests::strips_standard_and_nominated_hop_by_hop_headers ... ok
+test forward::tests::x_forwarded_for_preserve_mode_leaves_headers_untouched ... ok
+test proxy::tests::invalid_target_panics_at_construction - should panic ... ok
+test proxy::tests::properties::transform_uri_never_strips_similar_prefixes ... ok
+test proxy::tests::properties::transform_uri_preserves_scheme_authority_and_query ... ok
+test proxy::tests::properties::transform_uri_strips_base_at_boundary ... ok
+test proxy::tests::transform_uri_root ... ok
+test proxy::tests::transform_uri_with_and_without_trailing_slash ... ok
+test proxy::tests::transform_uri_with_query ... ok
+test proxy::tests::upstream_host_with_preserve_policy_and_no_client_host_falls_back_to_authority ... ok
+test proxy::tests::upstream_host_with_preserve_policy_uses_client_host ... ok
+test proxy::tests::upstream_host_with_replace_policy_uses_upstream_authority ... ok
+test router_ext::tests::properties::build_upstream_uri_joins_cleanly ... ok
+test router_ext::tests::properties::strip_route_prefix_respects_boundaries ... ok
+test router_ext::tests::test_build_upstream_uri_appends_remaining_path ... ok
+test router_ext::tests::test_build_upstream_uri_no_query ... ok
+test router_ext::tests::test_build_upstream_uri_rejects_missing_authority ... ok
+test router_ext::tests::test_build_upstream_uri_with_original_query ... ok
+test router_ext::tests::test_build_upstream_uri_with_target_query ... ok
+test router_ext::tests::test_route_literal_prefix ... ok
+test router_ext::tests::test_static_str_resolver ... ok
+test router_ext::tests::test_static_string_resolver ... ok
+test router_ext::tests::test_strip_route_prefix ... ok
+test router_ext::tests::test_template_encodes_at_sign_prevents_ssrf ... ok
+test router_ext::tests::test_template_encodes_fragment_injection ... ok
+test router_ext::tests::test_template_encodes_query_injection ... ok
+test router_ext::tests::test_template_preserves_slashes_for_catch_all ... ok
+test router_ext::tests::test_template_resolver_missing_param ... ok
+test router_ext::tests::test_template_resolver_multiple_params ... ok
+test router_ext::tests::test_template_resolver_no_params ... ok
+test router_ext::tests::test_template_resolver_single_param ... ok
+test router_ext::tests::test_template_safe_values_unchanged ... ok
+test websocket::tests::host_header_ipv6_with_port ... ok
+test websocket::tests::host_header_ws_default_port ... ok
+test websocket::tests::host_header_wss_custom_port ... ok
+test websocket::tests::host_header_wss_default_port ... ok
+test websocket::tests::websocket_upgrade_invalid_connection_header ... ok
+test websocket::tests::websocket_upgrade_missing_key_or_version ... ok
+test websocket::tests::websocket_upgrade_missing_upgrade_header ... ok
+test websocket::tests::websocket_upgrade_valid_headers ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\errors.rs (D:\temp-audit\proxyweave-feature3-proxy-audit\original-target\debug\deps\errors-5b4a9ff6351bd1fa.exe)
+
+running 3 tests
+test test_proxy_error_handling ... FAILED
+test test_proxy_timeout ... ok
+test test_proxy_upstream_errors ... FAILED
+
+failures:
+
+---- test_proxy_error_handling stdout ----
+
+thread 'test_proxy_error_handling' (74708) panicked at tests\errors.rs:75:10:
+called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Request, url: "http://127.0.0.1:49223/test", source: TimedOut }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_proxy_upstream_errors stdout ----
+
+thread 'test_proxy_upstream_errors' (51192) panicked at tests\errors.rs:146:9:
+assertion `left == right` failed: Expected status code 400 but got 502 Bad Gateway
+  left: 502
+ right: 400
+
+
+failures:
+    test_proxy_error_handling
+    test_proxy_upstream_errors
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s
+
+error: test failed, to rerun pass `--test errors`

@@ -1,0 +1,178 @@
+Original published files compared before run: 63, differences=0
+cargo clean -p axum-reverse-proxy
+     Removed 4851 files, 4.4GiB total
+cargo test --locked --no-default-features --features native-tls -j 1 --no-fail-fast --lib --test headers --test rfc9110 --test streaming --test policy --test routing --test service --test errors -- --test-threads=1
+   Compiling axum-reverse-proxy v2.2.0 (D:\temp-audit\proxyweave-feature3-proxy-audit\axum-reverse-proxy-2.2.0)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 01s
+     Running unittests src\lib.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\axum_reverse_proxy-99071982f26b8416.exe)
+
+running 53 tests
+test balanced_proxy::tests::ewma_first_measurement_sets_latency_directly ... ok
+test balanced_proxy::tests::ewma_load_decays_over_time ... ok
+test balanced_proxy::tests::p2c_peak_ewma_prefers_lower_latency_endpoint ... ok
+test balanced_proxy::tests::p2c_pending_requests_prefers_less_loaded_endpoint ... ok
+test balanced_proxy::tests::p2c_single_endpoint_is_always_selected ... ok
+test balanced_proxy::tests::pending_request_guard_decrements_on_drop ... ok
+test forward::tests::appends_client_ip_to_x_forwarded_for ... ok
+test forward::tests::appends_rfc7239_forwarded_element ... ok
+test forward::tests::forwarded_quotes_ipv6_addresses ... ok
+test forward::tests::host_dropped_unless_preserved ... ok
+test forward::tests::preserve_mode_materializes_h2_authority_as_host ... ok
+test forward::tests::preserves_te_trailers_for_grpc ... ok
+test forward::tests::sets_x_forwarded_proto_from_public_scheme ... ok
+test forward::tests::strips_standard_and_nominated_hop_by_hop_headers ... ok
+test forward::tests::x_forwarded_for_preserve_mode_leaves_headers_untouched ... ok
+test proxy::tests::invalid_target_panics_at_construction - should panic ... ok
+test proxy::tests::properties::transform_uri_never_strips_similar_prefixes ... ok
+test proxy::tests::properties::transform_uri_preserves_scheme_authority_and_query ... ok
+test proxy::tests::properties::transform_uri_strips_base_at_boundary ... ok
+test proxy::tests::transform_uri_root ... ok
+test proxy::tests::transform_uri_with_and_without_trailing_slash ... ok
+test proxy::tests::transform_uri_with_query ... ok
+test proxy::tests::upstream_host_with_preserve_policy_and_no_client_host_falls_back_to_authority ... ok
+test proxy::tests::upstream_host_with_preserve_policy_uses_client_host ... ok
+test proxy::tests::upstream_host_with_replace_policy_uses_upstream_authority ... ok
+test router_ext::tests::properties::build_upstream_uri_joins_cleanly ... ok
+test router_ext::tests::properties::strip_route_prefix_respects_boundaries ... ok
+test router_ext::tests::test_build_upstream_uri_appends_remaining_path ... ok
+test router_ext::tests::test_build_upstream_uri_no_query ... ok
+test router_ext::tests::test_build_upstream_uri_rejects_missing_authority ... ok
+test router_ext::tests::test_build_upstream_uri_with_original_query ... ok
+test router_ext::tests::test_build_upstream_uri_with_target_query ... ok
+test router_ext::tests::test_route_literal_prefix ... ok
+test router_ext::tests::test_static_str_resolver ... ok
+test router_ext::tests::test_static_string_resolver ... ok
+test router_ext::tests::test_strip_route_prefix ... ok
+test router_ext::tests::test_template_encodes_at_sign_prevents_ssrf ... ok
+test router_ext::tests::test_template_encodes_fragment_injection ... ok
+test router_ext::tests::test_template_encodes_query_injection ... ok
+test router_ext::tests::test_template_preserves_slashes_for_catch_all ... ok
+test router_ext::tests::test_template_resolver_missing_param ... ok
+test router_ext::tests::test_template_resolver_multiple_params ... ok
+test router_ext::tests::test_template_resolver_no_params ... ok
+test router_ext::tests::test_template_resolver_single_param ... ok
+test router_ext::tests::test_template_safe_values_unchanged ... ok
+test websocket::tests::host_header_ipv6_with_port ... ok
+test websocket::tests::host_header_ws_default_port ... ok
+test websocket::tests::host_header_wss_custom_port ... ok
+test websocket::tests::host_header_wss_default_port ... ok
+test websocket::tests::websocket_upgrade_invalid_connection_header ... ok
+test websocket::tests::websocket_upgrade_missing_key_or_version ... ok
+test websocket::tests::websocket_upgrade_missing_upgrade_header ... ok
+test websocket::tests::websocket_upgrade_valid_headers ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\errors.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\errors-309d391976ad3476.exe)
+
+running 3 tests
+test test_proxy_error_handling ... FAILED
+test test_proxy_timeout ... ok
+test test_proxy_upstream_errors ... ok
+
+failures:
+
+---- test_proxy_error_handling stdout ----
+
+thread 'test_proxy_error_handling' (8556) panicked at tests\errors.rs:75:10:
+called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Request, url: "http://127.0.0.1:55164/test", source: TimedOut }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_proxy_error_handling
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+
+error: test failed, to rerun pass `--test errors`
+     Running tests\headers.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\headers-712b3ac2afa42a12.exe)
+
+running 6 tests
+test host_header_with_default_policy_replaces_host_with_upstream_authority ... ok
+test host_header_with_preserve_policy_forwards_client_host ... ok
+test test_hop_by_hop_headers_stripped_by_default ... ok
+test test_proxy_header_handling ... ok
+test test_proxy_special_headers ... ok
+test test_x_forwarded_for_appended_with_connect_info ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\policy.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\policy-d259074f1f2b4b6e.exe)
+
+running 7 tests
+test connect_method_is_rejected_with_501 ... ok
+test declared_oversize_body_rejected_with_413 ... ok
+test expect_100_continue_passthrough ... ok
+test streaming_oversize_body_does_not_reach_upstream_complete ... ok
+test upstream_timeout_does_not_fire_for_fast_upstream ... ok
+test upstream_timeout_returns_504 ... ok
+test x_forwarded_proto_and_forwarded_set_with_public_scheme ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests\rfc9110.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\rfc9110-af4344f8bfb962a9.exe)
+
+running 25 tests
+test test_connection_header_case_insensitive ... ok
+test test_connection_header_removal ... ok
+test test_connection_header_with_end_to_end_field ... ok
+test test_connection_specific_field_without_connection_header ... ok
+test test_end_to_end_headers_preserved ... ok
+test test_hop_by_hop_header_removal ... ok
+test test_loop_detection ... ok
+test test_loop_detection_with_aliases ... ok
+test test_loop_detection_with_ip ... ok
+test test_max_forwards_ignored_for_other_methods ... ok
+test test_max_forwards_options ... ok
+test test_max_forwards_trace ... ok
+test test_max_forwards_zero_options_response ... ok
+test test_max_forwards_zero_trace_response ... ok
+test test_unknown_headers_forwarded ... ok
+test test_unknown_protocol_elements ... ok
+test test_via_header_basic ... ok
+test test_via_header_combining ... ok
+test test_via_header_combining_same_protocol ... ok
+test test_via_header_custom_pseudonym ... ok
+test test_via_header_firewall_mode ... ok
+test test_via_header_multiple_protocols ... ok
+test test_via_header_protocol_version_detection ... ok
+test test_via_header_with_comments ... ok
+test test_via_header_with_ports ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.47s
+
+     Running tests\routing.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\routing-f7b6f74d10d43834.exe)
+
+running 12 tests
+test test_encoded_boundary_stripping ... ok
+test test_methods_preserve_join ... ok
+test test_no_extra_slash_for_empty_path_with_query ... ok
+test test_only_prefixed_paths_are_proxied ... ok
+test test_proxy_exact_path_handling ... ok
+test test_proxy_multiple_states ... ok
+test test_proxy_nested_routing ... ok
+test test_proxy_path_handling ... ok
+test test_proxy_query_parameters ... ok
+test test_root_base_matrix ... ok
+test test_root_base_query_only_no_slash ... ok
+test test_similar_prefix_is_not_stripped ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\service.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\service-4fd7c9452ab8cfe0.exe)
+
+running 2 tests
+test test_proxy_service_get ... ok
+test test_proxy_service_post ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\streaming.rs (D:/temp-audit/proxyweave-feature3-proxy-audit/original-target\debug\deps\streaming-16cc0aced9900e8e.exe)
+
+running 1 test
+test test_streaming_behavior ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+error: 1 target failed:
+    `--test errors`

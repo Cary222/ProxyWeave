@@ -7,7 +7,7 @@
 > **技术定位**：Local-first AI API Plugin Host（本地优先的 AI API 插件宿主与统一工作台）  
 > **核心哲学**：上游易逝，平台长存 · Everything is a Plugin（万物皆插件） · **成熟实现直接复用优先 (Direct Reuse First)**  
 > **主开发规划路径**：`Plan.md`（根目录权威文档）与 `docs/PLAN-ProxyWeave.md`（架构设计归档）  
-> **当前阶段**：**Phase 0 已通过（限定 Windows 基座）；Phase 1 Feature 1 实施中，未独立 Verified**。首个本地 Managed 初版按 Feature 1→4 独立冻结送审；网关/Managed 尚未运行，最终真实 Windows 客户端由 Inspector 桌面 MCP 全项复验后才完成目标。见 `docs/verification/MANAGED_ACCEPTANCE.md`；不将必要 Phase 2/3 局部能力标为整阶段完成。
+> **当前阶段**：**Phase 0 已通过（限定 Windows 基座）；Feature 1 已独立 Verified；Feature 2 六个具体 DEF 已 Verified、整体仍 IN_REVIEW；Feature 3 实施中**。首个本地 Managed 初版按 Feature 1→4 独立冻结送审；Owned fixture 运行已有证据，但真实插件凭据/推理、活跃流整合与最终桌面仍未验收，最终真实 Windows 客户端由 Inspector 桌面 MCP 全项复验后才完成目标。见 `docs/verification/MANAGED_ACCEPTANCE.md`；不将必要 Phase 2/3 局部能力标为整阶段完成。
 
 ---
 

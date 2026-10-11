@@ -1,0 +1,444 @@
+    Updating `rsproxy-sparse` index
+ Downloading crates ...
+  Downloaded async-stream-impl v0.3.6 (registry `rsproxy-sparse`)
+  Downloaded anstyle v1.0.13 (registry `rsproxy-sparse`)
+  Downloaded bitflags v2.11.0 (registry `rsproxy-sparse`)
+  Downloaded axum v0.8.8 (registry `rsproxy-sparse`)
+  Downloaded async-stream v0.3.6 (registry `rsproxy-sparse`)
+  Downloaded brotli-decompressor v5.0.0 (registry `rsproxy-sparse`)
+  Downloaded cc v1.2.56 (registry `rsproxy-sparse`)
+  Downloaded clap_lex v1.0.0 (registry `rsproxy-sparse`)
+  Downloaded futures v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded futures-sink v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded criterion v0.5.1 (registry `rsproxy-sparse`)
+  Downloaded displaydoc v0.2.5 (registry `rsproxy-sparse`)
+  Downloaded futures-task v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded aws-lc-rs v1.16.2 (registry `rsproxy-sparse`)
+  Downloaded crossbeam-deque v0.8.6 (registry `rsproxy-sparse`)
+  Downloaded data-encoding v2.10.0 (registry `rsproxy-sparse`)
+  Downloaded icu_locale_core v2.1.1 (registry `rsproxy-sparse`)
+  Downloaded clap v4.5.58 (registry `rsproxy-sparse`)
+  Downloaded criterion-plot v0.5.0 (registry `rsproxy-sparse`)
+  Downloaded crossbeam-epoch v0.9.18 (registry `rsproxy-sparse`)
+  Downloaded futures-core v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded icu_normalizer_data v2.1.1 (registry `rsproxy-sparse`)
+  Downloaded compression-core v0.4.31 (registry `rsproxy-sparse`)
+  Downloaded futures-channel v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded ipnet v2.11.0 (registry `rsproxy-sparse`)
+  Downloaded icu_normalizer v2.1.1 (registry `rsproxy-sparse`)
+  Downloaded icu_collections v2.1.1 (registry `rsproxy-sparse`)
+  Downloaded itoa v1.0.17 (registry `rsproxy-sparse`)
+  Downloaded lazy_static v1.5.0 (registry `rsproxy-sparse`)
+  Downloaded icu_provider v2.1.1 (registry `rsproxy-sparse`)
+  Downloaded matchers v0.2.0 (registry `rsproxy-sparse`)
+  Downloaded nu-ansi-term v0.50.3 (registry `rsproxy-sparse`)
+  Downloaded async-compression v0.4.39 (registry `rsproxy-sparse`)
+  Downloaded futures-io v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded idna_adapter v1.2.1 (registry `rsproxy-sparse`)
+  Downloaded mio v1.1.1 (registry `rsproxy-sparse`)
+  Downloaded http v1.4.0 (registry `rsproxy-sparse`)
+  Downloaded rayon-core v1.13.0 (registry `rsproxy-sparse`)
+  Downloaded hyper-rustls v0.27.7 (registry `rsproxy-sparse`)
+  Downloaded icu_properties v2.1.2 (registry `rsproxy-sparse`)
+  Downloaded jobserver v0.1.34 (registry `rsproxy-sparse`)
+  Downloaded rand_xorshift v0.4.0 (registry `rsproxy-sparse`)
+  Downloaded hyper v1.8.1 (registry `rsproxy-sparse`)
+  Downloaded icu_properties_data v2.1.2 (registry `rsproxy-sparse`)
+  Downloaded h2 v0.4.13 (registry `rsproxy-sparse`)
+  Downloaded rusty-fork v0.3.1 (registry `rsproxy-sparse`)
+  Downloaded hashbrown v0.16.1 (registry `rsproxy-sparse`)
+  Downloaded itertools v0.10.5 (registry `rsproxy-sparse`)
+  Downloaded quick-error v1.2.3 (registry `rsproxy-sparse`)
+  Downloaded simd-adler32 v0.3.8 (registry `rsproxy-sparse`)
+  Downloaded schannel v0.1.28 (registry `rsproxy-sparse`)
+  Downloaded socket2 v0.6.2 (registry `rsproxy-sparse`)
+  Downloaded native-tls v0.2.16 (registry `rsproxy-sparse`)
+  Downloaded thread_local v1.1.9 (registry `rsproxy-sparse`)
+  Downloaded encoding_rs v0.8.35 (registry `rsproxy-sparse`)
+  Downloaded tracing-log v0.2.0 (registry `rsproxy-sparse`)
+  Downloaded compression-codecs v0.4.36 (registry `rsproxy-sparse`)
+  Downloaded rustls-pki-types v1.14.0 (registry `rsproxy-sparse`)
+  Downloaded tempfile v3.25.0 (registry `rsproxy-sparse`)
+  Downloaded wait-timeout v0.2.1 (registry `rsproxy-sparse`)
+  Downloaded zerofrom v0.1.6 (registry `rsproxy-sparse`)
+  Downloaded cmake v0.1.57 (registry `rsproxy-sparse`)
+  Downloaded http-range-header v0.4.2 (registry `rsproxy-sparse`)
+  Downloaded deranged v0.5.6 (registry `rsproxy-sparse`)
+  Downloaded tokio-macros v2.6.0 (registry `rsproxy-sparse`)
+  Downloaded zerotrie v0.2.3 (registry `rsproxy-sparse`)
+  Downloaded rustls-webpki v0.103.10 (registry `rsproxy-sparse`)
+  Downloaded zerofrom-derive v0.1.6 (registry `rsproxy-sparse`)
+  Downloaded zerovec-derive v0.11.2 (registry `rsproxy-sparse`)
+  Downloaded unicode-ident v1.0.23 (registry `rsproxy-sparse`)
+  Downloaded zstd-safe v7.2.4 (registry `rsproxy-sparse`)
+  Downloaded typenum v1.19.0 (registry `rsproxy-sparse`)
+  Downloaded plotters v0.3.7 (registry `rsproxy-sparse`)
+  Downloaded proptest v1.11.0 (registry `rsproxy-sparse`)
+  Downloaded yasna v0.5.2 (registry `rsproxy-sparse`)
+  Downloaded rayon v1.11.0 (registry `rsproxy-sparse`)
+  Downloaded zerovec v0.11.5 (registry `rsproxy-sparse`)
+  Downloaded tracing-subscriber v0.3.22 (registry `rsproxy-sparse`)
+  Downloaded rustls v0.23.36 (registry `rsproxy-sparse`)
+  Downloaded clap_builder v4.5.58 (registry `rsproxy-sparse`)
+  Downloaded fs_extra v1.3.0 (registry `rsproxy-sparse`)
+  Downloaded litemap v0.8.1 (registry `rsproxy-sparse`)
+  Downloaded futures-macro v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded brotli v8.0.2 (registry `rsproxy-sparse`)
+  Downloaded syn v2.0.115 (registry `rsproxy-sparse`)
+  Downloaded zstd-sys v2.0.16+zstd.1.5.7 (registry `rsproxy-sparse`)
+  Downloaded hdrhistogram v7.5.4 (registry `rsproxy-sparse`)
+  Downloaded futures-util v0.3.31 (registry `rsproxy-sparse`)
+  Downloaded indexmap v2.13.0 (registry `rsproxy-sparse`)
+  Downloaded iri-string v0.7.10 (registry `rsproxy-sparse`)
+  Downloaded is-terminal v0.4.17 (registry `rsproxy-sparse`)
+  Downloaded potential_utf v0.1.4 (registry `rsproxy-sparse`)
+  Downloaded pin-project-lite v0.2.16 (registry `rsproxy-sparse`)
+  Downloaded pin-utils v0.1.0 (registry `rsproxy-sparse`)
+  Downloaded plotters-svg v0.3.7 (registry `rsproxy-sparse`)
+  Downloaded pem v3.0.6 (registry `rsproxy-sparse`)
+  Downloaded pkg-config v0.3.32 (registry `rsproxy-sparse`)
+  Downloaded rcgen v0.13.2 (registry `rsproxy-sparse`)
+  Downloaded log v0.4.29 (registry `rsproxy-sparse`)
+  Downloaded plotters-backend v0.3.7 (registry `rsproxy-sparse`)
+  Downloaded rand v0.9.2 (registry `rsproxy-sparse`)
+  Downloaded quote v1.0.44 (registry `rsproxy-sparse`)
+  Downloaded num-conv v0.2.0 (registry `rsproxy-sparse`)
+  Downloaded sharded-slab v0.1.7 (registry `rsproxy-sparse`)
+  Downloaded libc v0.2.182 (registry `rsproxy-sparse`)
+  Downloaded tower-http v0.6.8 (registry `rsproxy-sparse`)
+  Downloaded tinystr v0.8.2 (registry `rsproxy-sparse`)
+  Downloaded aws-lc-sys v0.39.1 (registry `rsproxy-sparse`)
+  Downloaded tokio v1.49.0 (registry `rsproxy-sparse`)
+  Downloaded uuid v1.21.0 (registry `rsproxy-sparse`)
+  Downloaded yoke-derive v0.8.1 (registry `rsproxy-sparse`)
+  Downloaded unarray v0.1.4 (registry `rsproxy-sparse`)
+  Downloaded writeable v0.6.2 (registry `rsproxy-sparse`)
+  Downloaded yoke v0.8.1 (registry `rsproxy-sparse`)
+  Downloaded zstd v0.13.3 (registry `rsproxy-sparse`)
+  Downloaded zerocopy-derive v0.8.39 (registry `rsproxy-sparse`)
+  Downloaded zerocopy v0.8.39 (registry `rsproxy-sparse`)
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.44
+   Compiling unicode-ident v1.0.23
+   Compiling syn v2.0.115
+   Compiling cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling windows-link v0.2.1
+   Compiling windows-sys v0.61.2
+   Compiling jobserver v0.1.34
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling cc v1.2.56
+   Compiling pin-project-lite v0.2.16
+   Compiling smallvec v1.15.1
+   Compiling windows_x86_64_msvc v0.53.1
+   Compiling bytes v1.11.1
+   Compiling once_cell v1.21.3
+   Compiling futures-core v0.3.31
+   Compiling itoa v1.0.17
+   Compiling synstructure v0.13.2
+   Compiling parking_lot_core v0.9.12
+   Compiling windows-targets v0.53.5
+   Compiling scopeguard v1.2.0
+   Compiling log v0.4.29
+   Compiling lock_api v0.4.14
+   Compiling windows-sys v0.60.2
+   Compiling zerofrom-derive v0.1.6
+   Compiling zerofrom v0.1.6
+   Compiling parking_lot v0.12.5
+   Compiling socket2 v0.6.2
+   Compiling yoke-derive v0.8.1
+   Compiling mio v1.1.1
+   Compiling tokio-macros v2.6.0
+   Compiling futures-sink v0.3.31
+   Compiling stable_deref_trait v1.2.1
+   Compiling yoke v0.8.1
+   Compiling tokio v1.49.0
+   Compiling zerocopy v0.8.39
+   Compiling http v1.4.0
+   Compiling tracing-core v0.1.36
+   Compiling zerovec-derive v0.11.2
+   Compiling zerocopy-derive v0.8.39
+   Compiling slab v0.4.12
+   Compiling zerovec v0.11.5
+   Compiling tracing-attributes v0.1.31
+   Compiling displaydoc v0.2.5
+   Compiling pin-utils v0.1.0
+   Compiling serde_core v1.0.228
+   Compiling autocfg v1.5.0
+   Compiling num-traits v0.2.19
+   Compiling tracing v0.1.44
+   Compiling futures-macro v0.3.31
+   Compiling version_check v0.9.5
+   Compiling futures-task v0.3.31
+   Compiling typenum v1.19.0
+   Compiling futures-util v0.3.31
+   Compiling generic-array v0.14.7
+   Compiling httparse v1.10.1
+   Compiling pkg-config v0.3.32
+   Compiling hashbrown v0.16.1
+   Compiling equivalent v1.0.2
+   Compiling indexmap v2.13.0
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling tinystr v0.8.2
+   Compiling http-body v1.0.1
+   Compiling tokio-util v0.7.18
+   Compiling cmake v0.1.57
+   Compiling memchr v2.8.0
+   Compiling serde v1.0.228
+   Compiling fs_extra v1.3.0
+   Compiling percent-encoding v2.3.2
+   Compiling litemap v0.8.1
+   Compiling writeable v0.6.2
+   Compiling dunce v1.0.5
+   Compiling fnv v1.0.7
+   Compiling aws-lc-sys v0.39.1
+   Compiling icu_locale_core v2.1.1
+   Compiling zerotrie v0.2.3
+   Compiling potential_utf v0.1.4
+   Compiling futures-channel v0.3.31
+   Compiling rand_core v0.9.5
+   Compiling serde_derive v1.0.228
+   Compiling icu_normalizer_data v2.1.1
+   Compiling getrandom v0.4.1
+   Compiling zmij v1.0.21
+   Compiling tower-service v0.3.3
+   Compiling base64 v0.22.1
+   Compiling icu_properties_data v2.1.2
+   Compiling icu_collections v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling atomic-waker v1.1.2
+   Compiling try-lock v0.2.5
+   Compiling crc32fast v1.5.0
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling zstd-safe v7.2.4
+   Compiling crossbeam-utils v0.8.21
+   Compiling libc v0.2.182
+   Compiling httpdate v1.0.3
+   Compiling serde_json v1.0.149
+   Compiling zeroize v1.8.2
+   Compiling alloc-stdlib v0.2.2
+   Compiling want v0.3.1
+   Compiling h2 v0.4.13
+   Compiling rand_chacha v0.9.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling http-body-util v0.1.3
+   Compiling sync_wrapper v1.0.2
+   Compiling windows-result v0.4.1
+   Compiling windows-strings v0.5.1
+   Compiling mime v0.3.17
+   Compiling regex-syntax v0.8.9
+   Compiling adler2 v2.0.1
+   Compiling tower-layer v0.3.3
+   Compiling byteorder v1.5.0
+   Compiling simd-adler32 v0.3.8
+   Compiling thiserror v2.0.18
+   Compiling aws-lc-rs v1.16.2
+   Compiling native-tls v0.2.16
+   Compiling miniz_oxide v0.8.9
+   Compiling hdrhistogram v7.5.4
+   Compiling windows-registry v0.6.1
+   Compiling digest v0.10.7
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling rand v0.9.2
+   Compiling hyper v1.8.1
+   Compiling brotli-decompressor v5.0.0
+   Compiling rustls-pki-types v1.14.0
+   Compiling form_urlencoded v1.2.2
+   Compiling schannel v0.1.28
+   Compiling thiserror-impl v2.0.18
+   Compiling unicase v2.9.0
+   Compiling ipnet v2.11.0
+   Compiling untrusted v0.9.0
+   Compiling cpufeatures v0.2.17
+   Compiling sha1 v0.10.6
+   Compiling hyper-util v0.1.20
+   Compiling mime_guess v2.0.5
+   Compiling crossbeam-epoch v0.9.18
+   Compiling brotli v8.0.2
+   Compiling flate2 v1.1.9
+   Compiling idna_adapter v1.2.1
+   Compiling zstd v0.13.3
+   Compiling tower v0.5.3
+   Compiling regex-automata v0.4.14
+   Compiling utf-8 v0.7.6
+   Compiling utf8_iter v1.0.4
+   Compiling rayon-core v1.13.0
+   Compiling compression-core v0.4.31
+   Compiling powerfmt v0.2.0
+   Compiling ryu v1.0.23
+   Compiling data-encoding v2.10.0
+   Compiling either v1.15.0
+   Compiling tungstenite v0.28.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling deranged v0.5.6
+   Compiling compression-codecs v0.4.36
+   Compiling idna v1.1.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling tokio-native-tls v0.3.1
+   Compiling half v2.7.1
+   Compiling ring v0.17.14
+   Compiling winapi-util v0.1.11
+   Compiling plotters-backend v0.3.7
+   Compiling rustls v0.23.36
+   Compiling bitflags v2.11.0
+   Compiling time-core v0.1.8
+   Compiling clap_lex v1.0.0
+   Compiling num-conv v0.2.0
+   Compiling fastrand v2.3.0
+   Compiling ciborium-io v0.2.2
+   Compiling anstyle v1.0.13
+   Compiling clap_builder v4.5.58
+   Compiling ciborium-ll v0.2.2
+   Compiling tempfile v3.25.0
+   Compiling time v0.3.47
+   Compiling plotters-svg v0.3.7
+   Compiling same-file v1.0.6
+   Compiling hyper-tls v0.6.0
+   Compiling rustls-webpki v0.103.10
+   Compiling url v2.5.8
+   Compiling async-compression v0.4.39
+   Compiling tokio-tungstenite v0.28.0
+   Compiling itertools v0.10.5
+   Compiling axum-core v0.5.6
+   Compiling uuid v1.21.0
+   Compiling serde_path_to_error v0.1.20
+   Compiling getrandom v0.2.17
+   Compiling lazy_static v1.5.0
+   Compiling quick-error v1.2.3
+   Compiling subtle v2.6.1
+   Compiling cast v0.3.0
+   Compiling futures-io v0.3.31
+   Compiling iri-string v0.7.10
+   Compiling matchit v0.8.4
+   Compiling bit-vec v0.8.0
+   Compiling http-range-header v0.4.2
+   Compiling wait-timeout v0.2.1
+   Compiling rusty-fork v0.3.1
+   Compiling tower-http v0.6.8
+   Compiling bit-set v0.8.0
+   Compiling axum v0.8.8
+   Compiling futures v0.3.31
+   Compiling criterion-plot v0.5.0
+   Compiling sharded-slab v0.1.7
+   Compiling rayon v1.11.0
+   Compiling walkdir v2.5.0
+   Compiling plotters v0.3.7
+   Compiling yasna v0.5.2
+   Compiling ciborium v0.2.2
+   Compiling clap v4.5.58
+   Compiling matchers v0.2.0
+   Compiling regex v1.12.3
+   Compiling tinytemplate v1.2.1
+   Compiling pem v3.0.6
+   Compiling rand_xorshift v0.4.0
+   Compiling tracing-log v0.2.0
+   Compiling is-terminal v0.4.17
+   Compiling nu-ansi-term v0.50.3
+   Compiling encoding_rs v0.8.35
+   Compiling thread_local v1.1.9
+   Compiling async-stream-impl v0.3.6
+   Compiling anes v0.1.6
+   Compiling unarray v0.1.4
+   Compiling oorandom v11.1.5
+   Compiling criterion v0.5.1
+   Compiling proptest v1.11.0
+   Compiling async-stream v0.3.6
+   Compiling tracing-subscriber v0.3.22
+   Compiling reqwest v0.12.28
+   Compiling rcgen v0.13.2
+   Compiling tokio-rustls v0.26.4
+   Compiling axum-reverse-proxy v2.2.0 (D:\temp-audit\proxyweave-feature3-proxy-audit\axum-reverse-proxy-2.2.0)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6m 17s
+     Running unittests src\lib.rs (D:\temp-audit\proxyweave-feature3-proxy-audit\original-target\debug\deps\axum_reverse_proxy-019a2b29e0db7f98.exe)
+
+running 53 tests
+test balanced_proxy::tests::ewma_first_measurement_sets_latency_directly ... ok
+test forward::tests::preserve_mode_materializes_h2_authority_as_host ... ok
+test balanced_proxy::tests::p2c_single_endpoint_is_always_selected ... ok
+test forward::tests::host_dropped_unless_preserved ... ok
+test proxy::tests::transform_uri_root ... ok
+test forward::tests::forwarded_quotes_ipv6_addresses ... ok
+test forward::tests::preserves_te_trailers_for_grpc ... ok
+test forward::tests::appends_client_ip_to_x_forwarded_for ... ok
+test forward::tests::appends_rfc7239_forwarded_element ... ok
+test forward::tests::x_forwarded_for_preserve_mode_leaves_headers_untouched ... ok
+test forward::tests::sets_x_forwarded_proto_from_public_scheme ... ok
+test balanced_proxy::tests::pending_request_guard_decrements_on_drop ... ok
+test balanced_proxy::tests::ewma_load_decays_over_time ... ok
+test balanced_proxy::tests::p2c_pending_requests_prefers_less_loaded_endpoint ... ok
+test balanced_proxy::tests::p2c_peak_ewma_prefers_lower_latency_endpoint ... ok
+test proxy::tests::transform_uri_with_and_without_trailing_slash ... ok
+test proxy::tests::upstream_host_with_preserve_policy_and_no_client_host_falls_back_to_authority ... ok
+test proxy::tests::transform_uri_with_query ... ok
+test proxy::tests::upstream_host_with_replace_policy_uses_upstream_authority ... ok
+test router_ext::tests::test_build_upstream_uri_appends_remaining_path ... ok
+test router_ext::tests::test_build_upstream_uri_no_query ... ok
+test router_ext::tests::test_build_upstream_uri_rejects_missing_authority ... ok
+test router_ext::tests::test_build_upstream_uri_with_target_query ... ok
+test router_ext::tests::test_static_str_resolver ... ok
+test forward::tests::strips_standard_and_nominated_hop_by_hop_headers ... ok
+test proxy::tests::upstream_host_with_preserve_policy_uses_client_host ... ok
+test router_ext::tests::test_route_literal_prefix ... ok
+test router_ext::tests::test_build_upstream_uri_with_original_query ... ok
+test router_ext::tests::test_static_string_resolver ... ok
+test router_ext::tests::test_strip_route_prefix ... ok
+test proxy::tests::invalid_target_panics_at_construction - should panic ... ok
+test router_ext::tests::test_template_encodes_at_sign_prevents_ssrf ... ok
+test router_ext::tests::test_template_encodes_fragment_injection ... ok
+test router_ext::tests::test_template_encodes_query_injection ... ok
+test router_ext::tests::test_template_preserves_slashes_for_catch_all ... ok
+test router_ext::tests::test_template_resolver_missing_param ... ok
+test router_ext::tests::test_template_resolver_multiple_params ... ok
+test router_ext::tests::test_template_resolver_no_params ... ok
+test router_ext::tests::test_template_resolver_single_param ... ok
+test router_ext::tests::test_template_safe_values_unchanged ... ok
+test websocket::tests::host_header_ipv6_with_port ... ok
+test websocket::tests::host_header_ws_default_port ... ok
+test websocket::tests::host_header_wss_custom_port ... ok
+test websocket::tests::host_header_wss_default_port ... ok
+test websocket::tests::websocket_upgrade_invalid_connection_header ... ok
+test websocket::tests::websocket_upgrade_missing_key_or_version ... ok
+test websocket::tests::websocket_upgrade_missing_upgrade_header ... ok
+test websocket::tests::websocket_upgrade_valid_headers ... ok
+test router_ext::tests::properties::strip_route_prefix_respects_boundaries ... ok
+test proxy::tests::properties::transform_uri_never_strips_similar_prefixes ... ok
+test router_ext::tests::properties::build_upstream_uri_joins_cleanly ... ok
+test proxy::tests::properties::transform_uri_strips_base_at_boundary ... ok
+test proxy::tests::properties::transform_uri_preserves_scheme_authority_and_query ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\errors.rs (D:\temp-audit\proxyweave-feature3-proxy-audit\original-target\debug\deps\errors-fa20db290b6f8b2f.exe)
+
+running 3 tests
+test test_proxy_error_handling ... FAILED
+test test_proxy_timeout ... ok
+test test_proxy_upstream_errors ... FAILED
+
+failures:
+
+---- test_proxy_error_handling stdout ----
+
+thread 'test_proxy_error_handling' (74976) panicked at tests\errors.rs:75:10:
+called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Request, url: "http://127.0.0.1:58390/test", source: TimedOut }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_proxy_upstream_errors stdout ----
+
+thread 'test_proxy_upstream_errors' (70680) panicked at tests\errors.rs:146:9:
+assertion `left == right` failed: Expected status code 400 but got 502 Bad Gateway
+  left: 502
+ right: 400
+
+
+failures:
+    test_proxy_error_handling
+    test_proxy_upstream_errors
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+error: test failed, to rerun pass `--test errors`

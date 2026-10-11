@@ -1,0 +1,7 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.23
+   Compiling quote v1.0.44
+   Compiling syn v2.0.115
+error: failed to build archive at `D:\temp-audit\proxyweave-feature3-proxy-audit\diagnostic-target\debug\deps\libsyn-6d24bb3099927cc8.rlib`: 磁盘空间不足。 (os error 112)
+
+error: could not compile `syn` (lib) due to 1 previous error

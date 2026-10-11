@@ -2,3 +2,5 @@
 /manifests/wb2api.manifest.yaml text eol=lf
 /docs/verification/feature1-*.txt -text
 /docs/verification/feature2-*.txt -text
+/docs/verification/feature3-*.txt -text
+/docs/references/licenses/Axum-Reverse-Proxy-MIT.txt -text

@@ -46,7 +46,7 @@ ProxyWeave (编织网关) 严格遵守开源软件知识产权与合规伦理。
 - **计划复用范围**: 计划在 M04 流式规整模块中引入，提供高效异步流式 Server-Sent Events (SSE) 事件帧解码。
 
 
-### 6. Feature 1 直接依赖（已声明，独立审查待完成）
+### 6. Feature 1 直接依赖（已独立 Verified）
 - serde_yaml_ng **0.10.0**：MIT，Copyright 2024 Antoine Catton / 2016-2024 David Tolnay；直接调用发布解析器，原源码不改。
 - sha2 **0.10.9**（RustCrypto）、semver **1.0.28**、url **2.5.8**、tempfile **3.27.0**：MIT OR Apache-2.0，许可证完整文本随 Cargo 发布包/依赖保留，固定版本及源码发布 Commit 见 `docs/references/REFERENCE_REGISTRY.md`。
 - 仅本地契约/登记所需依赖；源码比较、原测试运行结果及适配边界见 ADR-002 / `docs/verification/FEATURE1.md`。不声明运行/凭据功能通过。
@@ -55,6 +55,11 @@ ProxyWeave (编织网关) 严格遵守开源软件知识产权与合规伦理。
 - **regex 1.12.3**：https://github.com/rust-lang/regex；发布源码 Commit `b028e4f40eac8959d05e82abf8404906b1c565c0`，MIT OR Apache-2.0，本次按 MIT 使用。
 - Copyright (c) 2014 The Rust Project Developers。完整 MIT 许可证见 [Regex-MIT.txt](docs/references/licenses/Regex-MIT.txt)。
 - 直接调用原 regex 搜索器，并薄适配官方 `Regex::replace_all` Fallibility 示例的原输入单次匹配/复制算法，不重新实现正则引擎、不解释替换数据。溯源、原测试及受限验证范围见 [FEATURE2-DEF006.md](docs/verification/FEATURE2-DEF006.md)。
+
+### 8. Feature 3 直接代理依赖与官方薄适配
+- **axum-reverse-proxy 2.2.0**：https://github.com/tom-lubenow/axum-reverse-proxy；发布源码 Commit `7350d118a69b6d98ae19a767b9d71630b2a3bc80`；MIT，Copyright (c) 2024 Tom Lubenow。
+- 完整 MIT 原文本见 [Axum-Reverse-Proxy-MIT.txt](docs/references/licenses/Axum-Reverse-Proxy-MIT.txt)。直接依赖，未改原包；采用 `ReverseProxy` / `ProxyPolicy` 与原 HTTP body/header 代理，不提取 SQLx 或 TiyGate 业务管道。
+- Axum 0.8.9 官方连接循环与 Tower HTTP 0.6.11 官方验证层仅薄适配；具体来源/必要差异/测试边界见 [ADR-004](docs/architecture/ADR-004-unified-gateway-and-sse-passthrough.md)。实施中，不能将原包/fixture 通过等同真实凭据及桌面验收。
 
 ---
 

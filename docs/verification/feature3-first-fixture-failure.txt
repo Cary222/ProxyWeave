@@ -1,0 +1,126 @@
+   Compiling windows-sys v0.61.2
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.2
+   Compiling mio v1.2.1
+   Compiling socket2 v0.6.4
+   Compiling zerovec v0.11.6
+   Compiling tokio v1.52.3
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-sink v0.3.32
+   Compiling futures-util v0.3.32
+   Compiling tracing v0.1.44
+   Compiling serde_core v1.0.228
+   Compiling tinystr v0.8.3
+   Compiling icu_locale_core v2.2.0
+   Compiling tokio-util v0.7.18
+   Compiling zerotrie v0.2.4
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_provider v2.2.0
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.50
+   Compiling serde v1.0.228
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.9.5
+   Compiling h2 v0.4.20
+   Compiling icu_normalizer v2.2.0
+   Compiling num-traits v0.2.19
+   Compiling icu_properties v2.2.0
+   Compiling rand_chacha v0.9.0
+   Compiling form_urlencoded v1.2.2
+   Compiling httpdate v1.0.3
+   Compiling native-tls v0.2.18
+   Compiling hyper v1.10.1
+   Compiling thiserror v2.0.18
+   Compiling rand v0.9.5
+   Compiling idna_adapter v1.2.2
+   Compiling hdrhistogram v7.6.0
+   Compiling sha1 v0.10.6
+   Compiling schannel v0.1.29
+   Compiling data-encoding v2.11.1
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling idna v1.1.0
+   Compiling serde_json v1.0.150
+   Compiling url v2.5.8
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper-tls v0.6.0
+   Compiling tungstenite v0.29.0
+   Compiling utf-8 v0.7.6
+   Compiling tower-http v0.6.11
+   Compiling tungstenite v0.28.0
+   Compiling tokio-tungstenite v0.29.0
+   Compiling rustls-pki-types v1.15.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling axum-core v0.5.6
+   Compiling quotio-types v0.1.0 (D:\ProxyWeave\crates\quotio-types)
+   Compiling serde_path_to_error v0.1.20
+   Compiling matchit v0.8.4
+   Compiling serde_yaml_ng v0.10.0
+   Compiling tempfile v3.27.0
+   Compiling axum v0.8.9
+   Compiling quotio-platform v0.1.0 (D:\ProxyWeave\crates\quotio-platform)
+   Compiling reqwest v0.13.4
+   Compiling tokio-tungstenite v0.28.0
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+   Compiling axum-reverse-proxy v2.2.0
+   Compiling proxyweave-gateway v0.1.0 (D:\ProxyWeave\crates\proxyweave-gateway)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 32s
+     Running tests\passthrough.rs (target\debug\deps\passthrough-72be8184bc279ae0.exe)
+
+running 8 tests
+test gateway_fixture_child ... ignored, invoked by RuntimeManager as a real Managed child
+test external_gateway_cancel_never_controls_provider_lifecycle ... ok
+test streaming_bytes_truncation_and_plain_eof_never_synthesize_done ... FAILED
+test header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown ... FAILED
+test concurrent_leases_block_stop_and_release_only_after_last_drop ... FAILED
+test auth_models_nonstream_headers_error_passthrough ... FAILED
+test native_disconnect_during_stream_cancels_upstream_and_releases_lease ... FAILED
+test native_disconnect_during_header_wait_cancels_upstream_and_releases_lease ... FAILED
+
+failures:
+
+---- streaming_bytes_truncation_and_plain_eof_never_synthesize_done stdout ----
+
+thread 'streaming_bytes_truncation_and_plain_eof_never_synthesize_done' (49148) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+
+---- header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown stdout ----
+
+thread 'header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown' (668) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- concurrent_leases_block_stop_and_release_only_after_last_drop stdout ----
+
+thread 'concurrent_leases_block_stop_and_release_only_after_last_drop' (32964) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+
+---- auth_models_nonstream_headers_error_passthrough stdout ----
+
+thread 'auth_models_nonstream_headers_error_passthrough' (74668) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+
+---- native_disconnect_during_stream_cancels_upstream_and_releases_lease stdout ----
+
+thread 'native_disconnect_during_stream_cancels_upstream_and_releases_lease' (60936) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+
+---- native_disconnect_during_header_wait_cancels_upstream_and_releases_lease stdout ----
+
+thread 'native_disconnect_during_header_wait_cancels_upstream_and_releases_lease' (61872) panicked at crates\proxyweave-gateway\tests\passthrough.rs:189:56:
+called `Result::unwrap()` on an `Err` value: "managed configuration must be a JSON object with bounded projections"
+
+
+failures:
+    auth_models_nonstream_headers_error_passthrough
+    concurrent_leases_block_stop_and_release_only_after_last_drop
+    header_timeout_port_conflict_backend_unavailable_and_gateway_shutdown
+    native_disconnect_during_header_wait_cancels_upstream_and_releases_lease
+    native_disconnect_during_stream_cancels_upstream_and_releases_lease
+    streaming_bytes_truncation_and_plain_eof_never_synthesize_done
+
+test result: FAILED. 1 passed; 6 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+error: test failed, to rerun pass `-p proxyweave-gateway --test passthrough`
