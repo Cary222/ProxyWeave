@@ -11,7 +11,7 @@ const manifest = path.resolve(__dirname, '../../manifests/wb2api.manifest.yaml')
 const inputs = [
   [path.join(sourceDirectory, 'wb2api.exe'), 'bin/wb2api.exe', '38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485'],
   [path.join(sourceDirectory, 'LICENSE'), 'LICENSE', '49b9e27ddfc7cceab55e19eb7d405bda30a8229de3cc094e6b4d0397ab76a34b'],
-  [manifest, 'manifest.yaml', 'c2857bdf9bf27643cce96a356f7c38aaa03f858ca29289a02fdd3011b2f8e72b'],
+  [manifest, 'manifest.yaml', '2d237912d2a396cd39143251d3985250308444bd50551a7073f4955fd9cf5a76'],
 ];
 const bytes = inputs.map(([file, relative, expected]) => {
   const data = fs.readFileSync(file);

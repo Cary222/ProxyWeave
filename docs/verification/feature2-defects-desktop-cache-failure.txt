@@ -1,0 +1,21 @@
+   Compiling schemars v0.8.22
+error[E0107]: struct takes 3 generic arguments but 2 generic arguments were supplied
+  --> D:\build-tools\cargo\registry\src\rsproxy.cn-e3de039b2554c837\schemars-0.8.22\src\lib.rs:12:32
+   |
+12 | pub type Map<K, V> = indexmap::IndexMap<K, V>;
+   |                                ^^^^^^^^ -  - supplied 2 generic arguments
+   |                                |
+   |                                expected 3 generic arguments
+   |
+note: struct defined here, with 3 generic parameters: `K`, `V`, `S`
+  --> D:\build-tools\cargo\registry\src\rsproxy.cn-e3de039b2554c837\indexmap-1.9.3\src\map.rs:76:12
+   |
+76 | pub struct IndexMap<K, V, S> {
+   |            ^^^^^^^^ -  -  -
+help: add missing generic argument
+   |
+12 | pub type Map<K, V> = indexmap::IndexMap<K, V, S>;
+   |                                             +++
+
+For more information about this error, try `rustc --explain E0107`.
+error: could not compile `schemars` (lib) due to 1 previous error

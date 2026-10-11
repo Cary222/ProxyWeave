@@ -1,6 +1,6 @@
 # Feature 2 验证与收工记录：Win32 Job Object、Protected DACL、Keyring 凭据持久化与通用模板投影
 
-- **目标与状态**：Feature 2 交付冻结；通过全部单元与集成测试。
+- **目标与状态**：历史冻结 `506980f370b23214192d7e912002fde61051fbdd` 曾通过所列测试；独立审查随后复现 DEF-001～004，F2 当前 FAILED / 修复中，不能据历史测试关闭目标。修复证据见 `FEATURE2-DEFECTS.md`。
 - **关联 ADR**：[ADR-003](../architecture/ADR-003-runtime-job-acl-and-lifecycle.md)
 - **前置依赖 Commit**：`889aa9bee594dc11c9d31d3eed86325a4314d13f` (Feature 1 冻结并经独立沙箱复验通过)
 
@@ -9,7 +9,7 @@
 ## 1. 核心设计与三大红线合规核对
 
 1. **【上游易逝，胶水永存】（通用投影，零插件硬编码）**：
-   - 彻底消除了宿主对特定插件（如 `wb2api`）的任何专用代码分支或特判。
+   - 历史冻结消除了 runtime 投影中的插件专用分支；审查后发现 probe 仍含固定插件判定且忽略身份契约，属于 DEF-002，本次改为 Manifest 驱动（见修复报告）。
    - 实现通用模板投影引擎 `crates/proxyweave-plugin/src/projection.rs`：
      - 支持 `{PORT}`、`{CONFIG_PATH}`、`{DATA_DIR}`、`{AUTH_DIR}`、`{PLUGIN_API_KEY}` 等基础占位符替换。
      - 支持 `{SECRET:xxx}` 占位符从 OS Keyring 的 `plugin:{plugin_id}:{secret_name}` 命名空间读取并注入。

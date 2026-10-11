@@ -27,6 +27,7 @@ network:
     identity_header: X-Service
     identity_value: workbuddy2api
     timeout_ms: 2000
+    busy_statuses: [503]
 lifecycle:
   startup_timeout_ms: 15000
   idle_timeout_ms: null

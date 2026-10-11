@@ -70,6 +70,9 @@ pub struct HealthCheck {
     pub identity_header: String,
     pub identity_value: String,
     pub timeout_ms: u64,
+    /// Responsive but unavailable statuses; identity must still match exactly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub busy_statuses: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -154,6 +157,17 @@ impl Manifest {
             || hc.identity_value.is_empty()
             || !header_token(&hc.identity_header)
             || hc.identity_value.bytes().any(|c| c < 32 || c == 127)
+            || hc.busy_statuses.len() > 8
+            || hc
+                .busy_statuses
+                .iter()
+                .any(|code| !(100..=599).contains(code) || *code == hc.expected_status)
+            || hc
+                .busy_statuses
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != hc.busy_statuses.len()
         {
             return Err(
                 "health check requires HTTP 200, bounded timeout and a valid identity header"

@@ -17,7 +17,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::job::JobObject;
 use crate::manifest::{Ownership, Runtime};
-use crate::port::{check_port_available, PortConflictError};
+use crate::port::{check_port_available, pick_unused_port, PortConflictError};
 use crate::probe::{probe_http, ProbeStatus};
 use crate::registry::PluginRecord;
 
@@ -128,17 +128,41 @@ impl RuntimeManager {
             .clone()
     }
 
-    /// Gets the current status of a plugin runtime.
+    /// Reconcile Managed state with the OS; never treat a cached Ready PID as liveness.
     pub async fn get_status(&self, plugin_id: &str) -> RuntimeStatus {
-        let runtimes = self.runtimes.read().await;
-        if let Some(entry_lock) = runtimes.get(plugin_id) {
-            let entry = entry_lock.lock().await;
-            entry.status.clone()
-        } else {
-            RuntimeStatus::Stopped
+        let entry_lock = self.runtimes.read().await.get(plugin_id).cloned();
+        let Some(entry_lock) = entry_lock else {
+            return RuntimeStatus::Stopped;
+        };
+        let mut entry = entry_lock.lock().await;
+        if let Some(ActivePlugin::Managed(managed)) = entry.active.as_mut() {
+            match managed.child.try_wait() {
+                Ok(None) => {}
+                Ok(Some(exit)) => {
+                    entry.status = RuntimeStatus::Failed {
+                        error: format!("Managed process exited: {exit}"),
+                    };
+                    // Closing the owned Job also retires any surviving descendants.
+                    entry.active = None;
+                }
+                Err(error) => {
+                    entry.status = RuntimeStatus::Failed {
+                        error: format!("Cannot inspect Managed process: {error}"),
+                    };
+                    entry.active = None;
+                }
+            }
+        } else if entry.status == RuntimeStatus::Starting {
+            let lifecycle_lock = self.get_start_lock(plugin_id).await;
+            if lifecycle_lock.try_lock().is_ok() {
+                // An aborted start dropped its local child/Job and released this lock.
+                entry.status = RuntimeStatus::Failed {
+                    error: "Startup cancelled before publication".into(),
+                };
+            }
         }
+        entry.status.clone()
     }
-
     /// Starts a plugin instance (Managed or External).
     /// Enforces Singleflight mutex: concurrent calls for the same plugin_id are serialized.
     pub async fn start_plugin(
@@ -162,14 +186,40 @@ impl RuntimeManager {
             return Ok(current_status);
         }
 
-        match record.manifest.ownership() {
+        let entry_lock = {
+            let mut runtimes = self.runtimes.write().await;
+            runtimes
+                .entry(plugin_id.clone())
+                .or_insert_with(|| {
+                    Arc::new(Mutex::new(RuntimeEntry {
+                        status: RuntimeStatus::Stopped,
+                        active: None,
+                    }))
+                })
+                .clone()
+        };
+        {
+            let mut entry = entry_lock.lock().await;
+            // A failed Managed attempt must not survive a replacement spawn.
+            if matches!(entry.active, Some(ActivePlugin::Managed(_))) {
+                entry.active = None;
+            }
+            entry.status = RuntimeStatus::Starting;
+        }
+        let result = match record.manifest.ownership() {
             Ownership::External => self.start_external(record, allocated_port).await,
             Ownership::Managed => {
                 let port = allocated_port.unwrap_or(8080);
                 self.start_managed(record, package_dir, port, data_dir, api_key)
                     .await
             }
+        };
+        if let Err(error) = &result {
+            entry_lock.lock().await.status = RuntimeStatus::Failed {
+                error: error.to_string(),
+            };
         }
+        result
     }
 
     /// Starts an External plugin: validates URL and health probe, NO process spawned.
@@ -198,7 +248,12 @@ impl RuntimeManager {
         );
 
         // Probe external service
-        let report = probe_http(&probe_url, Some(plugin_id), Duration::from_secs(3)).await;
+        let report = probe_http(
+            &probe_url,
+            &record.manifest.network.health_check,
+            Duration::from_secs(3),
+        )
+        .await;
 
         let status = match report.status {
             ProbeStatus::Ready => RuntimeStatus::Ready { port, pid: None },
@@ -251,9 +306,19 @@ impl RuntimeManager {
     ) -> Result<RuntimeStatus, RuntimeError> {
         let plugin_id = &record.manifest.metadata.id;
 
-        // Pre-check port availability
-        check_port_available(port)?;
-
+        // Retry only proven bind conflicts, never infer conflict from a probe timeout.
+        let mut port = port;
+        let mut retries_left = record.manifest.lifecycle.max_port_retries;
+        loop {
+            match check_port_available(port) {
+                Ok(()) => break,
+                Err(PortConflictError::AddressInUse { .. }) if retries_left > 0 => {
+                    retries_left -= 1;
+                    port = pick_unused_port().map_err(|e| RuntimeError::Io(e.to_string()))?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
         // Locate executable from Managed runtime
         let (exe_rel, args, env_vars) = match &record.manifest.runtime {
             Runtime::Managed {
@@ -299,6 +364,8 @@ impl RuntimeManager {
 
         let mut cmd = tokio::process::Command::new(&exe_path);
         cmd.current_dir(&plugin_data_dir);
+        // Tokio owns abort/assignment-error cleanup before Job ownership is established.
+        cmd.kill_on_drop(true);
 
         // Generic template rendering for process arguments
         for arg in &args {
@@ -321,7 +388,7 @@ impl RuntimeManager {
             .map_err(|e| RuntimeError::SpawnFailed(format!("Failed to create JobObject: {}", e)))?;
 
         // Spawn child
-        let child = cmd
+        let mut child = cmd
             .spawn()
             .map_err(|e| RuntimeError::SpawnFailed(format!("Failed to spawn child: {}", e)))?;
         let pid = child.id().unwrap_or(0);
@@ -340,7 +407,22 @@ impl RuntimeManager {
 
         let mut final_status = RuntimeStatus::Starting;
         while probe_start.elapsed() < timeout {
-            let report = probe_http(&probe_url, Some(plugin_id), Duration::from_millis(500)).await;
+            if let Some(exit) = child
+                .try_wait()
+                .map_err(|e| RuntimeError::Io(e.to_string()))?
+            {
+                final_status = RuntimeStatus::Failed {
+                    error: format!("Managed process exited during startup: {exit}"),
+                };
+                break;
+            }
+            let remaining = timeout.saturating_sub(probe_start.elapsed());
+            let report = probe_http(
+                &probe_url,
+                &record.manifest.network.health_check,
+                remaining.min(Duration::from_millis(500)),
+            )
+            .await;
             match report.status {
                 ProbeStatus::Ready => {
                     final_status = RuntimeStatus::Ready {
@@ -407,6 +489,9 @@ impl RuntimeManager {
     /// CRITICAL IRON LAW: If the plugin is External, this explicitly rejects with
     /// `RuntimeError::ExternalServiceProtected` and sends ZERO kill signals!
     pub async fn stop_plugin(&self, plugin_id: &str) -> Result<(), RuntimeError> {
+        // FIFO with start: stop settles after the in-flight attempt and cleans its owned child.
+        let lifecycle_lock = self.get_start_lock(plugin_id).await;
+        let _guard = lifecycle_lock.lock().await;
         let runtimes = self.runtimes.read().await;
         let entry_lock = runtimes
             .get(plugin_id)

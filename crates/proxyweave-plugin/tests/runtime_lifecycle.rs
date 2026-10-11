@@ -1,6 +1,5 @@
 use proxyweave_plugin::{
-    check_port_available, JobObject, PluginRecord, PortConflictError, ProbeStatus, RuntimeError,
-    RuntimeManager,
+    check_port_available, JobObject, PluginRecord, PortConflictError, RuntimeError, RuntimeManager,
 };
 use std::net::TcpListener;
 use std::path::Path;
@@ -203,99 +202,7 @@ fn test_port_conflict_explicit_distinction() {
     );
 }
 
-#[tokio::test]
-async fn test_wb2api_probe_semantic_distinction() {
-    use proxyweave_plugin::probe::evaluate_wb2api_status;
-
-    // 1. 200 OK -> Ready
-    let ready_status = evaluate_wb2api_status(200, Some("workbuddy2api"));
-    assert_eq!(ready_status, ProbeStatus::Ready);
-
-    // 2. 503 + X-Service: workbuddy2api -> Busy (NOT Failed/Crash)
-    let busy_status = evaluate_wb2api_status(503, Some("workbuddy2api"));
-    match busy_status {
-        ProbeStatus::Busy { reason } => {
-            assert!(reason.contains("workbuddy2api"));
-            println!("Verified: 503 with X-Service evaluated as Busy: {}", reason);
-        }
-        other => panic!("Expected Busy probe status, got: {:?}", other),
-    }
-
-    // 3. 503 without X-Service -> Failed (not wb2api service)
-    let failed_503 = evaluate_wb2api_status(503, None);
-    assert!(matches!(failed_503, ProbeStatus::Failed { .. }));
-
-    // 4. 500 Internal Server Error -> Failed
-    let failed_500 = evaluate_wb2api_status(500, Some("workbuddy2api"));
-    assert!(matches!(failed_500, ProbeStatus::Failed { .. }));
-}
-
-#[tokio::test]
-async fn test_singleflight_startup_prevents_duplicate_spawns() {
-    let manager = RuntimeManager::new();
-
-    // Prepare an external record (so no process actually spawned, but singleflight lock tested)
-    let ext_record = PluginRecord {
-        manifest: proxyweave_plugin::Manifest::parse(
-            r#"schema_version: '1.0'
-metadata:
-  id: sf-plugin
-  name: Singleflight Plugin
-  version: 1.0.0
-  license: MIT
-runtime:
-  ownership: external
-  endpoint: http://127.0.0.1:18888
-network:
-  health_check:
-    path: /healthz
-    expected_status: 200
-    identity_header: X-Service
-    identity_value: sf-plugin
-    timeout_ms: 200
-lifecycle:
-  startup_timeout_ms: 1000
-  idle_timeout_ms: null
-  max_port_retries: 0
-capabilities:
-  protocol: openai_chat
-  models_path: /v1/models
-  inference_path: /v1/chat/completions
-  streaming: true
-configuration: {}
-"#
-            .as_bytes(),
-        )
-        .unwrap(),
-        fingerprint: "sf_fingerprint".to_string(),
-        settings: Default::default(),
-    };
-
-    let rec1 = ext_record.clone();
-    let rec2 = ext_record.clone();
-    let m1 = manager.clone();
-    let m2 = manager.clone();
-
-    // Launch two concurrent start attempts
-    let (h1, h2) = tokio::join!(
-        tokio::spawn(async move {
-            m1.start_plugin(&rec1, Path::new("."), Some(18888), Path::new("."), None)
-                .await
-        }),
-        tokio::spawn(async move {
-            m2.start_plugin(&rec2, Path::new("."), Some(18888), Path::new("."), None)
-                .await
-        }),
-    );
-
-    let res1 = h1.unwrap();
-    let res2 = h2.unwrap();
-
-    assert!(res1.is_ok());
-    assert!(res2.is_ok());
-    println!("Verified: concurrent start completed cleanly with singleflight lock");
-}
-
+// Managed singleflight, HTTP contract and restart regressions live in runtime_defects.rs.
 #[tokio::test]
 async fn test_generic_managed_projection_and_spawn_without_hardcoding() {
     let temp = tempfile::tempdir().expect("failed to create temp dir");

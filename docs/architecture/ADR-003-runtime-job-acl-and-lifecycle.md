@@ -4,14 +4,14 @@
 
 ## 范围与核心决策
 
-承接已完成的 Feature 1 插件包与 Manifest 严格契约（commit `904e0e5`），本阶段实现 Feature 2 核心能力：
+承接已完成的 Feature 1 插件包与 Manifest 严格契约（commit `889aa9bee594dc11c9d31d3eed86325a4314d13f`），本阶段实现 Feature 2 核心能力：
 1. **静态凭据持久化与命名空间隔离**：托管至 OS 底层 Keyring（Windows Credential Manager / macOS Keychain / Secret Service），服务名统一为 `proxyweave`，通过 `plugin:{plugin_id}` 命名空间隔离。
 2. **私有配置投影与真实 Windows ACL**：
    - 彻底废除 `crates/quotio-platform/src/lib.rs` 中 Windows sensitive 权限分支的空操作（`let _ = path; Ok(())`）；
    - 基于 Windows 官方安全 API（`windows-sys` 0.61），通过进程 Token 获取当前用户 SID，构造受保护的 DACL（Protected DACL，阻断父目录继承），仅授予当前用户 `FILE_ALL_ACCESS`，实现与 Unix `0o600` 等价的 OS 级私有文件 ACL 隔离。
 3. **Managed 插件 Owned Runtime 与 Win32 Job Object**：
    - 为 Managed 插件创建 Windows Win32 Job Object 并配置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`；
-   - 子进程启动后立即挂载入 Job Object，使子进程生命周期受 Windows 内核级强制保护——宿主进程无论是正常退出还是异常崩溃，内核确保子进程树自动回收，杜绝后台僵尸进程。
+   - 子进程启动后挂载入 Job Object，已成功分配 Job 的进程树在 Job 最后句柄关闭时由内核回收；spawn→assign 窗口不是原子事务，不声称此窗口的全树保证。
 4. **External Provider 主动保护与零 Kill 铁律**：
    - 类型系统与运行时严格隔离 `ManagedRuntime` 与 `ExternalRuntime`；
    - `ExternalRuntime` 绝不加入 Job Object，绝不持有可发出终止信号的句柄，绝不执行任何 Kill / Terminate 操作；对 External 插件仅做反向代理挂载与健康探针，stop/restart 操作显式拒绝。
@@ -47,3 +47,12 @@
 2. **Job Object 隔离测试**：编写独立测试拉起长期存活的子进程（如 ping 或测试 fixture），验证主进程退出/Job 关闭时子进程被操作系统内核可靠终止；
 3. **External 零 Kill 验证**：测试 External 运行时拒绝 stop/restart 信号；
 4. **wb2api 探针语义验证**：模拟/真实测试 200 -> Ready、503+X-Service -> Busy/Starting（不触发 Kill）、超时 -> Timeout（不误报 PortConflict）。
+
+## DEF-001～004 根因修复补充（等待独立复验）
+
+- 直接复用 Tokio 1.52.3 `Child::try_wait()`（`src/process/mod.rs` 非阻塞退出/回收实现）、`Command::kill_on_drop(true)` 与 Tokio FIFO `Mutex`。没有新依赖、进程轮询服务或第二套守护器。
+- `get_status` 对 Managed 子进程进行 OS 退出核对，失活转 Failed 并关闭其 Owned Job；再次 start 能创建新的 PID。Ready/Busy 不再仅依赖缓存。
+- start 在投影/spawn/probe 之前发布 Starting；stop 使用同一每插件 Mutex 排队，等待有界启动结束后清理该轮 Owned 实例，成功返回后为 Stopped。中途 task abort 会 drop 本地 Job/Child，锁释放后 get_status 将未发布 Starting 转 Failed。
+- `probe_http` 读取 Manifest `HealthCheck` 的路径、身份头/精确身份值、预期状态与超时；`busy_statuses` 为默认空的可选扩展（最多 8 个唯一合法 HTTP 状态，不含 expected_status）。wb2api 在 Manifest 声明 `[503]`，宿主不再按插件名称特判。禁用探针重定向与环境代理，身份头不回显至错误信息。
+- 端口预检只有 `AddrInUse` 能消耗 `max_port_retries` 重选，使用既有 std `pick_unused_port()` 并把最终端口传入全部模板。0 次重试冲突无 spawn/投影。探针超时不重选，不推断冲突。
+- 诚实边界：bind/drop 预检不能消除子进程 bind 之前的 TOCTOU；spawn→AssignProcessToJobObject 尚非 suspended 创建原子事务，`kill_on_drop` 不构成此窗口的全树保证。只对已分配 Job 的树声明内核回收；DACL 测试不等于另一用户令牌的负向访问测试。External 不进入 Job、stop 保持拒绝，未扩大生命周期权限。

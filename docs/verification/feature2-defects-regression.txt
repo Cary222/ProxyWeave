@@ -1,0 +1,125 @@
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.24s
+     Running unittests src\lib.rs (target\debug\deps\proxyweave_plugin-ecf87b89b74df239.exe)
+
+running 8 tests
+test probe::tests::identity_precedes_ready_and_busy_status_contract ... ok
+test projection::tests::test_projection_fails_on_unresolved_secret ... ok
+test projection::tests::test_projection_replaces_all_standard_placeholders ... ok
+test runtime::tests::test_external_provider_refuses_stop_and_kill ... ok
+test port::tests::test_pick_unused_port_returns_valid_port ... ok
+test port::tests::test_port_conflict_detection_when_bound ... ok
+test job::tests::test_job_object_kills_child_on_drop ... ok
+test projection::tests::test_generic_json_rendering_and_atomic_write ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\local_registry.rs (target\debug\deps\local_registry-3b9d9104e2efb327.exe)
+
+running 13 tests
+test manifest_size_and_mapping_duplicates_are_rejected ... ok
+test strict_parser_rejects_unknown_duplicate_and_multiple_documents ... ok
+test secret_command_lines_and_projection_aliases_are_rejected ... ok
+test portable_package_path_boundaries ... ok
+test external_has_no_owned_executable_or_lifecycle_side_effects ... ok
+test mismatched_hash_or_missing_file_does_not_register ... ok
+为 C:\Users\Cary\AppData\Local\Temp\.tmpI0sCFT\junction <<===>> C:\Users\Cary\AppData\Local\Temp\.tmpI0sCFT\real 创建的联接
+test junction_source_is_rejected ... ok
+test conflicting_duplicate_does_not_overwrite_existing_record ... ok
+test read_only_record_write_failure_keeps_prior_configuration ... ok
+test invalid_configuration_does_not_pollute_persisted_settings ... ok
+test concurrent_import_on_clones_is_idempotent ... ok
+test tampered_registration_or_installed_executable_fails_closed_on_reload ... ok
+test import_duplicate_settings_and_restart_reload ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\runtime_defects.rs (target\debug\deps\runtime_defects-a9ff92051cf09acf.exe)
+
+running 8 tests
+test managed_fixture_child ... ignored, invoked only as an isolated Managed subprocess
+test zero_retry_conflict_has_no_spawn_and_no_projection ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test def004_conflict_reselects_port_and_templates_reach_real_child ... ok
+test real_managed_singleflight_spawns_once_and_busy_is_preserved ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test abort_during_start_reclaims_job_and_marks_failed ... ok
+test def003_starting_visible_and_queued_stop_cleans_delayed_child ... ok
+
+running 1 test
+test def001_exited_child_reconciles_and_restarts_with_live_new_pid ... ok
+test def002_http200_wrong_identity_is_not_ready ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.64s
+
+     Running tests\runtime_lifecycle.rs (target\debug\deps\runtime_lifecycle-5a4a14bd238932e9.exe)
+
+running 4 tests
+test test_port_conflict_explicit_distinction ... ok
+test test_job_object_kills_process_on_drop ... ok
+running 
+错误: 不支持输入重新定向，立即退出此进程。
+test test_generic_managed_projection_and_spawn_without_hardcoding ... ok
+test test_external_service_zero_kill_protection ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+
+   Doc-tests proxyweave_plugin
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src\lib.rs (target\debug\deps\quotio_platform-e4645097b8159115.exe)
+
+running 8 tests
+test tests::replace_file_failure_preserves_existing_target ... ok
+test tests::replace_file_replaces_existing_target ... ok
+test tests::prune_keeps_only_latest_backup_for_same_source_file ... ok
+test tests::atomic_write_sensitive_file_sets_windows_protected_dacl ... ok
+test tests::atomic_write_replace_failure_cleans_temp_file_and_preserves_target_directory ... ok
+test tests::backup_then_restore_leaves_a_single_backup ... ok
+test tests::plugin_keyring_lifecycle_isolates_namespace_and_roundtrips ... ok
+test tests::atomic_write_replaces_existing_file_beyond_max_path ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src\lib.rs (target\debug\deps\quotio_types-2fbc6fb03a506544.exe)
+
+running 7 tests
+test tests::default_local_settings_use_unoccupied_management_port ... ok
+test tests::rose_theme_uses_stable_snake_case_wire_value ... ok
+test tests::api_call_contract_uses_management_api_wire_keys ... ok
+test tests::management_snapshot_collects_first_refresh_payload ... ok
+test tests::management_write_requests_keep_proxy_wire_keys ... ok
+test tests::routing_strategy_response_accepts_current_and_legacy_shapes ... ok
+test tests::legacy_codex_launch_profile_defaults_dream_skin_to_disabled ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quotio_platform
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests quotio_types
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking quotio-platform v0.1.0 (D:\ProxyWeave\crates\quotio-platform)
+    Checking proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.62s

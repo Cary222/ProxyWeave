@@ -1,0 +1,33 @@
+   Compiling proxyweave-plugin v0.1.0 (D:\ProxyWeave\crates\proxyweave-plugin)
+error[E0425]: cannot find function `pick_unused_port` in crate `proxyweave_plugin`
+   --> crates\proxyweave-plugin\tests\runtime_defects.rs:145:35
+    |
+145 |     let port = proxyweave_plugin::pick_unused_port().unwrap();
+    |                                   ^^^^^^^^^^^^^^^^ not found in `proxyweave_plugin`
+
+error[E0425]: cannot find function `pick_unused_port` in crate `proxyweave_plugin`
+   --> crates\proxyweave-plugin\tests\runtime_defects.rs:182:35
+    |
+182 |     let port = proxyweave_plugin::pick_unused_port().unwrap();
+    |                                   ^^^^^^^^^^^^^^^^ not found in `proxyweave_plugin`
+
+error[E0425]: cannot find function `pick_unused_port` in crate `proxyweave_plugin`
+   --> crates\proxyweave-plugin\tests\runtime_defects.rs:203:35
+    |
+203 |     let port = proxyweave_plugin::pick_unused_port().unwrap();
+    |                                   ^^^^^^^^^^^^^^^^ not found in `proxyweave_plugin`
+
+error[E0425]: cannot find function `pick_unused_port` in crate `proxyweave_plugin`
+   --> crates\proxyweave-plugin\tests\runtime_defects.rs:284:35
+    |
+284 |     let port = proxyweave_plugin::pick_unused_port().unwrap();
+    |                                   ^^^^^^^^^^^^^^^^ not found in `proxyweave_plugin`
+
+error[E0425]: cannot find function `pick_unused_port` in crate `proxyweave_plugin`
+   --> crates\proxyweave-plugin\tests\runtime_defects.rs:305:35
+    |
+305 |     let port = proxyweave_plugin::pick_unused_port().unwrap();
+    |                                   ^^^^^^^^^^^^^^^^ not found in `proxyweave_plugin`
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `proxyweave-plugin` (test "runtime_defects") due to 5 previous errors

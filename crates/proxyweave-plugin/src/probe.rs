@@ -31,38 +31,43 @@ pub struct ProbeReport {
     pub detail: String,
 }
 
-/// Evaluates HTTP response for wb2api `/healthz` per its Go source (`handler.go:181-203`):
-/// - 200 OK -> Ready
-/// - 503 Service Unavailable + `X-Service: workbuddy2api` -> Busy (Pool.ServableNow() is false; alive, not a crash)
-/// - Other -> Failed
-pub fn evaluate_wb2api_status(status_code: u16, x_service_header: Option<&str>) -> ProbeStatus {
-    if status_code == 200 {
+/// Evaluate the Manifest contract before trusting any HTTP status.
+pub fn evaluate_health_status(
+    health: &crate::manifest::HealthCheck,
+    status_code: u16,
+    identity: Option<&str>,
+) -> ProbeStatus {
+    if identity != Some(health.identity_value.as_str()) {
+        return ProbeStatus::Failed {
+            error: "Health check identity mismatch or missing header".into(),
+        };
+    }
+    if status_code == health.expected_status {
         ProbeStatus::Ready
-    } else if status_code == 503 {
-        let is_wb2api = x_service_header
-            .map(|h| h.trim().eq_ignore_ascii_case("workbuddy2api"))
-            .unwrap_or(false);
-        if is_wb2api {
-            ProbeStatus::Busy {
-                reason: "workbuddy2api account pool empty or saturated (X-Service: workbuddy2api)"
-                    .to_string(),
-            }
-        } else {
-            ProbeStatus::Failed {
-                error: "HTTP 503 returned without X-Service: workbuddy2api header".to_string(),
-            }
+    } else if health.busy_statuses.contains(&status_code) {
+        ProbeStatus::Busy {
+            reason: format!("Manifest-declared unavailable HTTP status {status_code}"),
         }
     } else {
         ProbeStatus::Failed {
-            error: format!("Unexpected HTTP status code: {}", status_code),
+            error: format!("Unexpected HTTP status code: {status_code}"),
         }
     }
 }
-
 /// Performs an asynchronous HTTP GET probe against a target URL.
-pub async fn probe_http(url: &str, plugin_id: Option<&str>, timeout: Duration) -> ProbeReport {
+pub async fn probe_http(
+    url: &str,
+    health: &crate::manifest::HealthCheck,
+    timeout: Duration,
+) -> ProbeReport {
+    let timeout = timeout.min(Duration::from_millis(health.timeout_ms));
     let start = Instant::now();
-    let client = match reqwest::Client::builder().timeout(timeout).build() {
+    let client = match reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(timeout)
+        .build()
+    {
         Ok(c) => c,
         Err(e) => {
             return ProbeReport {
@@ -81,28 +86,13 @@ pub async fn probe_http(url: &str, plugin_id: Option<&str>, timeout: Duration) -
             let latency_ms = start.elapsed().as_millis() as u64;
             let status_code = resp.status().as_u16();
 
-            let x_service = resp
+            let identity = resp
                 .headers()
-                .get("x-service")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
-
-            let status =
-                if plugin_id == Some("wb2api") || x_service.as_deref() == Some("workbuddy2api") {
-                    evaluate_wb2api_status(status_code, x_service.as_deref())
-                } else if status_code == 200 {
-                    ProbeStatus::Ready
-                } else {
-                    ProbeStatus::Failed {
-                        error: format!("HTTP {}", status_code),
-                    }
-                };
-
-            let detail = format!(
-                "HTTP {} in {}ms (x-service: {:?})",
-                status_code, latency_ms, x_service
-            );
-
+                .get(&health.identity_header)
+                .and_then(|v| v.to_str().ok());
+            let status = evaluate_health_status(health, status_code, identity);
+            // Never echo a peer-controlled header into status/log messages.
+            let detail = format!("HTTP {status_code} in {latency_ms}ms");
             ProbeReport {
                 status,
                 status_code: Some(status_code),
@@ -143,30 +133,50 @@ pub async fn probe_http(url: &str, plugin_id: Option<&str>, timeout: Duration) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::HealthCheck;
 
     #[test]
-    fn test_wb2api_status_evaluation() {
-        // 200 -> Ready
+    fn identity_precedes_ready_and_busy_status_contract() {
+        let health = HealthCheck {
+            path: "/healthz".into(),
+            expected_status: 200,
+            identity_header: "X-Identity".into(),
+            identity_value: "fixture".into(),
+            timeout_ms: 100,
+            busy_statuses: vec![503],
+        };
         assert_eq!(
-            evaluate_wb2api_status(200, Some("workbuddy2api")),
+            evaluate_health_status(&health, 200, Some("fixture")),
             ProbeStatus::Ready
         );
-
-        // 503 with X-Service: workbuddy2api -> Busy (NOT Failed, NOT crash, must not kill)
-        let busy = evaluate_wb2api_status(503, Some("workbuddy2api"));
-        match busy {
-            ProbeStatus::Busy { reason } => {
-                assert!(reason.contains("workbuddy2api"));
+        assert!(matches!(
+            evaluate_health_status(&health, 503, Some("fixture")),
+            ProbeStatus::Busy { .. }
+        ));
+        for identity in [
+            None,
+            Some("different-service"),
+            Some("FIXTURE"),
+            Some("fixture "),
+        ] {
+            for status in [200, 503] {
+                assert!(matches!(
+                    evaluate_health_status(&health, status, identity),
+                    ProbeStatus::Failed { .. }
+                ));
             }
-            other => panic!("expected Busy, got {:?}", other),
         }
-
-        // 503 without X-Service header -> Failed
-        let failed_503 = evaluate_wb2api_status(503, None);
-        assert!(matches!(failed_503, ProbeStatus::Failed { .. }));
-
-        // 500 Internal Server Error -> Failed
-        let failed_500 = evaluate_wb2api_status(500, Some("workbuddy2api"));
-        assert!(matches!(failed_500, ProbeStatus::Failed { .. }));
+        assert!(matches!(
+            evaluate_health_status(&health, 500, Some("fixture")),
+            ProbeStatus::Failed { .. }
+        ));
+        let no_busy = HealthCheck {
+            busy_statuses: vec![],
+            ..health
+        };
+        assert!(matches!(
+            evaluate_health_status(&no_busy, 503, Some("fixture")),
+            ProbeStatus::Failed { .. }
+        ));
     }
 }
