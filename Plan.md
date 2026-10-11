@@ -1,7 +1,9 @@
 # ProxyWeave 产品与技术架构规划书 (Plan)
 
 > **版本**：v3.0.0 (Scaffold Adoption & Production Engineering Edition)  
-> **Slogan**：Plug In. Route Anywhere.（即插即用，随心路由）  
+> **Slogan**：Plug In. Route Anywhere.（即插即用，随心路由）
+> **核心标语**：Turn AI Proxy Projects into Plug-and-Play Apps.（让每一个 AI 代理项目，都能成为即插即用的应用。）
+> **产品定位**：Local-first AI Proxy Application Platform & Desktop Workbench（本地优先的 AI 代理应用集成平台与统一工作台）  
 > **技术定位**：Local-first AI API Plugin Host（本地优先的 AI API 插件宿主与统一工作台）  
 > **核心哲学**：上游易逝，胶水永存 · Everything is a Plugin（万物皆插件）  
 > **主开发规划路径**：`Plan.md`（根目录权威文档）与 `docs/PLAN-ProxyWeave.md`（架构设计归档）  
