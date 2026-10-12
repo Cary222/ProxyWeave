@@ -559,13 +559,13 @@ pub fn credential_status_message(availability: &CredentialAvailability) -> Strin
 
 pub fn set_credential(account: &str, value: &str) -> Result<(), String> {
     credential_entry(account)?
-        .set_password(value)
+        .set_secret(value.as_bytes())
         .map_err(keyring_error)
 }
 
 pub fn get_credential(account: &str) -> Result<Option<String>, String> {
-    match credential_entry(account)?.get_password() {
-        Ok(value) => Ok(Some(value)),
+    match credential_entry(account)?.get_secret() {
+        Ok(bytes) => String::from_utf8(bytes).map(Some).map_err(|e| e.to_string()),
         Err(KeyringError::NoEntry) => Ok(None),
         Err(error) => Err(keyring_error(error)),
     }
@@ -1256,5 +1256,25 @@ mod tests {
         // 清理 p2
         delete_plugin_credential(&p2, key).expect("delete p2 credential");
         assert_eq!(get_plugin_credential(&p2, key).unwrap(), None);
+    }
+
+    #[test]
+    fn long_credential_roundtrip_supports_tokens_up_to_platform_blob_limit() {
+        let account = format!("test_long_token_{}", std::process::id());
+        // 构造类似真实 OAuth JWT 的长凭据（1600 字符，远超 Windows UTF-16 set_password 的 1280 限制）
+        let long_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9."
+            .chars()
+            .cycle()
+            .take(1600)
+            .collect::<String>();
+
+        let _ = delete_credential(&account);
+
+        set_credential(&account, &long_token).expect("set long credential must succeed");
+        let retrieved = get_credential(&account).expect("get long credential must succeed");
+        assert_eq!(retrieved.as_deref(), Some(long_token.as_str()));
+
+        delete_credential(&account).expect("delete long credential must succeed");
+        assert_eq!(get_credential(&account).unwrap(), None);
     }
 }
