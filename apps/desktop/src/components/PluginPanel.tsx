@@ -202,7 +202,9 @@ export const PluginPanel: React.FC<PluginPanelProps> = ({
             {plugins.map((record) => {
               const meta = record.manifest.metadata;
               const id = meta.id;
-              const isManaged = record.manifest.ownership === "managed";
+              const isManaged =
+                record.manifest.runtime?.ownership === "managed" ||
+                (record.manifest as any).ownership === "managed";
               const statusInfo = pluginStatuses[id] || {
                 status: "stopped",
                 active_requests: 0,
@@ -232,7 +234,7 @@ export const PluginPanel: React.FC<PluginPanelProps> = ({
                         ) : null}
                       </div>
                       <div className="plugin-id-sub">
-                        ID: <code>{id}</code> · 路径: <span className="path-text">{record.package_path}</span>
+                        ID: <code>{id}</code> · 路径: <span className="path-text">{record.package_path || (record.manifest.runtime?.endpoint ? String(record.manifest.runtime.endpoint) : "本地注册表受管")}</span>
                       </div>
                     </div>
 
@@ -310,7 +312,7 @@ export const PluginPanel: React.FC<PluginPanelProps> = ({
                   </div>
 
                   {/* Secret Configuration Section */}
-                  {record.manifest.configuration.required_secrets &&
+                  {record.manifest.configuration?.required_secrets &&
                   record.manifest.configuration.required_secrets.length > 0 ? (
                     <div className="plugin-secrets-box">
                       <div className="secrets-box-header">

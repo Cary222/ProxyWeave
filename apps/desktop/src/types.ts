@@ -25,22 +25,33 @@ export interface Configuration {
   default_settings?: Record<string, unknown>;
 }
 
+export interface RuntimeConfig {
+  ownership: "managed" | "external";
+  executable?: string;
+  sha256?: string;
+  endpoint?: string;
+  [key: string]: unknown;
+}
+
 export interface Manifest {
   schema_version: string;
   metadata: Metadata;
-  ownership: "managed" | "external";
-  runtime?: unknown;
+  runtime: RuntimeConfig;
+  ownership?: "managed" | "external"; // 保留可选兼容
   configuration: Configuration;
-  health_check: HealthCheck;
+  health_check?: HealthCheck;
+  [key: string]: unknown;
 }
 
 export interface PluginRecord {
   manifest: Manifest;
-  package_path: string;
-  data_dir: string;
-  installed_at: string;
-  updated_at: string;
+  package_path?: string;
+  data_dir?: string;
+  installed_at?: string;
+  updated_at?: string;
   settings: Record<string, unknown>;
+  fingerprint?: string;
+  [key: string]: unknown;
 }
 
 export interface ImportResult {
