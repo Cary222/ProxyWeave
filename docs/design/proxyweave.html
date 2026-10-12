@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="sky">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="color-scheme" content="light"/>
+<link rel="icon" href="data:,"/>
+<title>ProxyWeave 产品设计图</title>
+<style>
+/* ============ 主题令牌 ============ */
+/* 晴空蓝白（默认） */
+:root,[data-theme="sky"]{
+  color-scheme:light;
+  --bg:#fafafa; --well:#f4f4f5; --card:#ffffff; --sidebar:#fafafa; --line:#e4e4e7; --line2:#eeeeef;
+  --text:#18181b; --text2:#52525b; --muted:#a1a1aa;
+  --blue:#2f6bff; --blue-soft:#e9f1ff; --blue-dark:#1e4fd6; --accent-line:#c9ddff;
+  --green:#2e7d4f; --green-bg:#e7f2ea; --amber:#99690f; --amber-bg:#f7eed2; --red:#c23b32; --red-bg:#f9e9e7; --violet:#6558a6; --violet-bg:#efedf6;
+  --radius:12px; --shadow:0 1px 2px rgba(24,24,27,.05);
+  --card-border:var(--line);
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+/* 深空暗色 · Strict Dark Minimalist */
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#09090b; --well:#131316; --card:#101013; --sidebar:#0c0c0f; --line:#232327; --line2:#1a1a1e;
+  --text:#fafafa; --text2:#a1a1aa; --muted:#6b6b74;
+  --blue:#6f9bff; --blue-soft:#1a2748; --blue-dark:#9dbcff; --accent-line:#2c3d6e;
+  --green:#4caf7d; --green-bg:#12291d; --amber:#cf9a3e; --amber-bg:#2e2410; --red:#e06a62; --red-bg:#2e1715; --violet:#9a8fd0; --violet-bg:#221e38;
+  --shadow:0 1px 2px rgba(0,0,0,.35);
+}
+/* 玻璃拟态 · Frosted Glass */
+[data-theme="glass"]{
+  color-scheme:light;
+  --bg:rgba(255,255,255,.38); --well:rgba(255,255,255,.34); --card:rgba(255,255,255,.55); --sidebar:rgba(255,255,255,.42); --line:rgba(255,255,255,.55); --line2:rgba(255,255,255,.38);
+  --text:#1c2430; --text2:#4b5563; --muted:#7d8590;
+  --blue:#2f6bff; --blue-soft:rgba(214,231,255,.75); --blue-dark:#1e4fd6; --accent-line:rgba(160,195,255,.8);
+  --green:#2e7d4f; --green-bg:rgba(219,240,226,.85); --amber:#99690f; --amber-bg:rgba(250,240,205,.9); --red:#c23b32; --red-bg:rgba(250,228,225,.9); --violet:#6558a6; --violet-bg:rgba(233,230,246,.85);
+  --shadow:0 1px 3px rgba(31,41,55,.07),inset 0 1px 0 rgba(255,255,255,.65);
+  --card-border:rgba(255,255,255,.55);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Inter,sans-serif;font-size:14px;line-height:1.5;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;transition:background .3s ease,color .3s ease}
+[data-theme="glass"] body{
+  background:
+    radial-gradient(60% 50% at 14% 4%, rgba(255,255,255,.95), rgba(255,255,255,0) 62%),
+    radial-gradient(52% 46% at 88% 94%, rgba(24,24,27,.055), rgba(24,24,27,0) 62%),
+    radial-gradient(45% 40% at 88% 8%, rgba(24,24,27,.035), rgba(24,24,27,0) 60%),
+    linear-gradient(155deg,#f4f4f5 0%,#e9e9ec 52%,#f0f0f2 100%);
+  background-attachment:fixed;
+}
+[data-theme="glass"] .card,[data-theme="glass"] .sidebar,[data-theme="glass"] .mobile-nav,[data-theme="glass"] .gw-mini,[data-theme="glass"] #toast{
+  backdrop-filter:blur(var(--glass-blur,18px)) saturate(100%);-webkit-backdrop-filter:blur(var(--glass-blur,18px)) saturate(100%);
+}
+a{color:var(--blue);text-decoration:none}
+button{font:inherit;cursor:pointer} input,select,textarea{font:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.ic{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:14px;height:14px}
+.layout{display:flex;min-height:100vh}
+/* Sidebar */
+.sidebar{width:244px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:16px 12px}
+.dots{display:flex;gap:8px;padding:2px 6px 14px}.dots i{width:12px;height:12px;border-radius:50%;display:block}
+.brand{padding:0 8px 14px}.brand h1{font-size:17px;letter-spacing:-.02em;margin:0;font-weight:600}.brand p{margin:3px 0 0;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.03em;line-height:1.5}
+.nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow:auto}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text2);font-weight:500;font-size:13.5px;transition:background .15s,color .15s}
+.nav button small{margin-left:auto;background:var(--violet-bg);color:var(--violet);font-weight:500;font-size:11px;padding:2px 7px;border-radius:20px}
+.nav button small.gray{background:var(--line2);color:var(--muted)}
+.nav button.active{background:var(--blue-soft);color:var(--blue);border-color:var(--accent-line)}
+.nav button:hover{background:var(--line2)} .nav button.active:hover{background:var(--blue-soft)}
+.side-label{font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:12px 10px 6px}
+.gw-mini{margin-top:12px;background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:11px 12px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);cursor:pointer}
+.gw-mini .pause{width:32px;height:32px;border-radius:8px;background:var(--amber-bg);color:var(--amber);display:grid;place-items:center}
+.gw-mini b{font-size:13px;display:block}.gw-mini span{font-size:12px;color:var(--muted)}
+/* 主题切换 */
+.theme-switch{display:flex;background:var(--line2);border-radius:9px;padding:3px;gap:3px}
+.theme-switch button{flex:1;border:0;background:transparent;padding:6px 2px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap;transition:background .15s,color .15s}
+.theme-switch button.active{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(24,24,27,.12)}
+/* 自定义调色盘 */
+.palette{margin-top:10px;background:var(--well);border:1px solid var(--line);border-radius:10px;padding:12px}
+.palette-title{font-size:12px;font-weight:600;letter-spacing:.04em;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.palette-title button{border:0;background:transparent;color:var(--blue);font-size:12px;font-weight:500;padding:2px 4px}
+.palette label{font-size:11.5px;font-weight:500;color:var(--text2);display:block;margin:10px 0 6px}
+.palette label:first-of-type{margin-top:0}
+.swatch-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.swatch{width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.12);cursor:pointer;padding:0;flex-shrink:0}
+.swatch.active{box-shadow:0 0 0 2px var(--blue)}
+.color-pick{width:30px;height:30px;border:1px solid var(--line);border-radius:50%;overflow:hidden;padding:0;background:var(--card);cursor:pointer;flex-shrink:0}
+.color-pick::-webkit-color-swatch-wrapper{padding:2px}.color-pick::-webkit-color-swatch{border:0;border-radius:50%}
+.palette input[type=range]{width:100%;accent-color:var(--blue)}
+.palette .val{font-size:11px;color:var(--muted)}
+.palette-wide{margin-top:14px;background:var(--well);border:1px solid var(--line);border-radius:10px;padding:14px}
+.palette-wide .swatch{width:28px;height:28px}
+.glass-only{display:none}[data-theme="glass"] .glass-only{display:block}
+/* Main */
+.main{flex:1;min-width:0;padding:26px 32px 48px;max-width:1120px;margin:0 auto;width:100%}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.topbar h2{font-size:20px;margin:0;letter-spacing:-.02em;font-weight:600}
+.topbar p{margin:5px 0 0;color:var(--text2);line-height:1.55;font-size:13.5px;max-width:700px}
+.btn{border:0;border-radius:8px;padding:8px 14px;min-height:36px;font-weight:500;font-size:13.5px;display:inline-flex;align-items:center;gap:7px;transition:filter .15s,background .15s}
+.btn:hover{filter:brightness(1.05)}
+.btn-primary{background:var(--blue);color:#fff;box-shadow:none}
+.btn-ghost{background:var(--card);border:1px solid var(--line);color:var(--text)}
+.btn-soft{background:var(--blue-soft);color:var(--blue)}
+.btn-sm{padding:6px 11px;min-height:30px;font-size:12.5px;border-radius:7px}
+.btn-danger-ghost{background:var(--card);border:1px solid var(--line);color:var(--red)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:20px}
+.pill-green{background:var(--green-bg);color:var(--green)} .pill-gray{background:var(--line2);color:var(--muted)} .pill-amber{background:var(--amber-bg);color:var(--amber)} .pill-red{background:var(--red-bg);color:var(--red)} .pill-blue{background:var(--blue-soft);color:var(--blue)} .pill-violet{background:var(--violet-bg);color:var(--violet)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
+.card h3{margin:0 0 4px;font-size:15px;letter-spacing:-.01em}.card .sub{color:var(--text2);font-size:13px;line-height:1.55;margin:0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.kpi label{font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:8px}
+.kpi .big{font-size:17px;font-weight:600;word-break:break-all}
+.kpi .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+.progress{height:6px;background:var(--line2);border-radius:99px;overflow:hidden;margin-top:10px}.progress i{display:block;height:100%;background:var(--blue);border-radius:99px}
+.progress.green i{background:var(--green)}
+.mono{font-family:var(--mono);font-size:12.5px}
+.keybox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--well);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:12px}
+.keybox code{font-family:var(--mono);font-size:13px;flex:1;min-width:160px}
+.field{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.input{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:8px 11px;min-height:36px;font-size:13.5px}
+[data-theme="glass"] .input{background:rgba(255,255,255,.6)}
+select.input{padding-right:30px}
+table{width:100%;border-collapse:collapse;font-size:13px} th{text-align:left;color:var(--muted);font-size:11.5px;font-weight:500;letter-spacing:.04em;padding:8px;border-bottom:1px solid var(--line)} td{padding:10px 8px;border-bottom:1px solid var(--line2);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.tag{font-size:11px;font-weight:500;padding:3px 8px;border-radius:6px;background:var(--line2);color:var(--text2);white-space:nowrap}
+.listrow{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2);align-items:flex-start}.listrow:last-child{border-bottom:0}
+.avatar{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:600;color:#fff;flex-shrink:0;font-size:15px;box-shadow:0 1px 2px rgba(24,24,27,.14)}
+pre{background:#101014;color:#d4d4d8;border-radius:8px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.65;margin:12px 0 0}
+.code-light{background:var(--well);color:var(--text);border:1px solid var(--line)}
+.panel{display:none}.panel.active{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.panel{animation:none}*{transition:none!important}}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px}.section-head h3{margin:0;font-size:15px}
+/* roadmap */
+.road{display:flex;flex-direction:column;gap:0}
+.road-item{display:flex;gap:14px;position:relative;padding-bottom:18px}
+.road-item:before{content:"";position:absolute;left:11px;top:26px;bottom:0;width:2px;background:var(--line)}
+.road-item:last-child:before{display:none}
+.road-dot{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;font-size:12px;font-weight:600;z-index:1}
+.rd-done{background:var(--green);color:#fff}.rd-now{background:var(--blue);color:#fff;box-shadow:0 0 0 5px var(--blue-soft)}.rd-todo{background:var(--card);border:2px solid var(--line);color:var(--muted)}
+.road-item b{font-size:14px}.road-item p{margin:3px 0 0;color:var(--text2);font-size:12.5px;line-height:1.55}
+/* plugin cards */
+.plugin-head{display:flex;gap:14px;align-items:flex-start}
+.plugin-head .clickable{cursor:pointer}
+.plugin-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0;padding:12px;background:var(--well);border-radius:8px;text-align:center}
+.plugin-meta b{display:block;font-size:14px;font-weight:600}.plugin-meta span{font-size:11.5px;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+/* 插件详情页 */
+.dtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:6px 0 20px;flex-wrap:wrap}
+.dtabs button{border:0;background:transparent;padding:9px 13px;font-weight:500;font-size:13.5px;color:var(--text2);border-bottom:2.5px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:7px}
+.dtabs button.active{color:var(--blue);border-bottom-color:var(--blue)}
+.dtab-panel{display:none}.dtab-panel.active{display:block;animation:fade .2s ease}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:13px}
+.kv:last-child{border-bottom:0}.kv span{color:var(--muted);flex-shrink:0}.kv b{text-align:right;font-weight:600}
+/* 嵌入式能力面板（插件自带 UI，视觉上与宿主原生区域区分） */
+.embed{border:1px solid var(--violet);border-radius:12px;overflow:hidden;box-shadow:none}
+.embed-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--violet-bg);color:var(--text);padding:10px 14px;font-size:13px;font-weight:500;border-bottom:1px solid var(--violet)}
+.embed-bar .mono{font-weight:500;color:var(--text2);font-size:12px}
+.embed-bar .btn{margin-left:auto;background:var(--card);color:var(--violet);border:1px solid var(--violet)}
+.embed-body{background:var(--well);padding:14px}
+.embed-inner{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.boundary-note{background:var(--blue-soft);border:1px solid var(--accent-line);border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.55;color:var(--text)}
+/* flight */
+.chatbox{background:var(--well);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:220px}
+.msg{max-width:88%;padding:10px 13px;border-radius:10px;font-size:13.5px;line-height:1.6}
+.msg.user{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px}
+.metric{text-align:center;padding:14px 8px}.metric b{font-size:20px;font-weight:600;display:block}.metric span{font-size:12px;color:var(--muted)}
+.checkrow{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line2)}.checkrow:last-child{border:0}
+.check-ic{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-weight:600;font-size:14px}
+/* toast */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#18181b;color:#fff;padding:10px 18px;border-radius:10px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.18);max-width:92vw;text-align:center}
+[data-theme="glass"] #toast{background:rgba(24,24,27,.86)}
+#toast.show{opacity:1;transform:translateX(-50%)}
+.warn{background:#fbf6e3;border:1px solid #e6d489;color:#6d5410;border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.55}
+[data-theme="dark"] .warn{background:#2c2307;color:#f2d07c;border-color:#54450f}
+[data-theme="glass"] .warn{background:rgba(255,246,214,.85);border-color:rgba(230,200,110,.8)}
+.mobile-nav{display:none}
+@media(max-width:900px){
+  body{display:flex;flex-direction:column}
+  .layout{order:2}
+  .sidebar{display:none}
+  .main{padding:18px 16px 40px}
+  .grid3,.grid2,.grid4{grid-template-columns:1fr}
+  .plugin-meta{grid-template-columns:repeat(2,1fr)}
+  .mobile-nav{display:grid;grid-template-columns:repeat(4,1fr);order:1;position:sticky;top:0;background:var(--sidebar);border-bottom:1px solid var(--line);padding:8px;z-index:40;gap:4px}
+  .mobile-nav button{border:0;background:transparent;color:var(--muted);font-size:11.5px;font-weight:500;padding:7px 2px;border-radius:9px;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .mobile-nav button.active{background:var(--blue-soft);color:var(--blue)}
+  table thead{display:none} table,table tbody,table tr,table td{display:block;width:100%} table tr{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;padding:6px 10px;background:var(--card)} table td{border:0;padding:7px 0}
+  .embed-bar .btn{margin-left:0}
+}
+</style>
+</head>
+<body>
+<!-- ===== 统一线性 SVG 图标集（线宽 1.8 · 圆角端点） ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5S9.6 5.8 12 3.5z"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8M6.5 8h11V12a5.5 5.5 0 0 1-11 0V8zM12 17.5v3"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10.8 13.2M21 3l-6.8 18-3.4-7.8L3 9.8z"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6.5 4 12L16 12h5"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3.5 3L7 15.5M13 15.5h4.5"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7.5h9M17.5 7.5H20M4 16.5h3.5M12 16.5h8"/><circle cx="15" cy="7.5" r="2.2"/><circle cx="9.5" cy="16.5" r="2.2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 3.5V8h-4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19.5 12h-15M10 6l-6 6 6 6"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5L11 13M9 5H7a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 7 19h9a2.5 2.5 0 0 0 2.5-2.5V14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="14.5" r="4.5"/><path d="M11.2 11.3L20 2.5M17 5.5l3 3M14 8.5l2.5 2.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5.5 15H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 4h8A1.5 1.5 0 0 1 14.5 5.5V6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.8v5.4c0 4.4-3 7.6-7 9.3-4-1.7-7-4.9-7-9.3V5.8z"/><path d="M9 11.8l2.2 2.2L15.5 9.5"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3.5h8L19 8.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6 3.5z"/><path d="M13.5 3.5v5.5H19M8.5 13h7M8.5 16.5h7"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.6M12 17.9v2.6M3.5 12h2.6M17.9 12h2.6M6 6l1.8 1.8M16.2 16.2L18 18M18 6l-1.8 1.8M7.8 16.2L6 18"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.5l9 5-9 5-9-5z"/><path d="M3.5 13.5L12 18l8.5-4.5"/></symbol>
+</svg>
+<div class="layout">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+    <div class="brand"><h1>ProxyWeave</h1><p>编织网关</p></div>
+    <nav class="nav" id="sideNav">
+      <button data-tab="overview"><svg class="ic"><use href="#i-grid"/></svg>系统概览<small class="gray">Phase 1</small></button>
+      <button data-tab="gateway" class="active"><svg class="ic"><use href="#i-globe"/></svg>统一网关<small class="gray" id="gwBadge">OFF</small></button>
+      <button data-tab="plugins"><svg class="ic"><use href="#i-plug"/></svg>插件管理<small>2/3</small></button>
+      <button data-tab="discover"><svg class="ic"><use href="#i-compass"/></svg>插件发现</button>
+      <button data-tab="flight"><svg class="ic"><use href="#i-send"/></svg>试飞工作台</button>
+      <button data-tab="audit"><svg class="ic"><use href="#i-pulse"/></svg>审计轨迹<small>2</small></button>
+      <button data-tab="ide"><svg class="ic"><use href="#i-term"/></svg>IDE 接入</button>
+      <button data-tab="settings"><svg class="ic"><use href="#i-sliders"/></svg>系统设置</button>
+    </nav>
+    <div class="side-label">外观主题 THEME</div>
+    <div class="theme-switch" role="group" aria-label="外观主题">
+      <button data-theme-set="sky" class="active">晴空</button>
+      <button data-theme-set="glass">玻璃</button>
+      <button data-theme-set="dark">深空</button>
+    </div>
+    <div class="gw-mini" id="gwMini" role="button" tabindex="0">
+      <div class="pause" id="gwMiniIcon"><svg class="ic"><use href="#i-pause"/></svg></div>
+      <div style="flex:1"><b id="gwMiniTitle">网关已停止</b><span id="gwMiniSub">点击启动服务 · 127.0.0.1:8080</span></div><span style="color:var(--muted)">›</span>
+    </div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin:12px 0 0">上游易逝 · 平台长存</p>
+  </aside>
+
+  <main class="main">
+
+  <!-- ================= 1. 系统概览 ================= -->
+  <section class="panel" id="panel-overview">
+    <div class="topbar"><div><h2>系统概览</h2></div><span class="pill pill-blue"><span class="dot"></span>示例数据</span></div>
+    <div class="grid4">
+      <div class="card kpi"><label>网关</label><div class="big" style="color:var(--amber)">已停止</div></div>
+      <div class="card kpi"><label>监听端口</label><div class="big mono">127.0.0.1:8080</div></div>
+      <div class="card kpi"><label>核心内存 · 目标 &lt;25MB</label><div class="big">18.4 MB</div><div class="progress green"><i style="width:74%"></i></div></div>
+      <div class="card kpi"><label>今日请求</label><div class="big">1,248 次</div><div class="note">成功率 98.6% · P95 1.1ms</div></div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>插件状态</h3>
+        <div class="grid2" style="margin-top:14px;gap:10px">
+          <div style="background:var(--well);border-radius:12px;padding:14px"><b style="font-size:20px">0</b> <span class="pill pill-blue">persistent</span></div>
+          <div style="background:var(--well);border-radius:12px;padding:14px"><b style="font-size:20px">1</b> <span class="pill pill-violet">idle_timeout</span><p class="sub" style="margin-top:6px">wb2api</p></div>
+          <div style="background:var(--well);border-radius:12px;padding:14px"><b style="font-size:20px">1</b> <span class="pill pill-amber">on_demand</span><p class="sub" style="margin-top:6px">wild-work</p></div>
+          <div style="background:var(--well);border-radius:12px;padding:14px"><b style="font-size:20px">1</b> <span class="pill pill-green">external</span><p class="sub" style="margin-top:6px">external-cpa</p></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>路线图 · Plan.md v3.1.0</h3>
+        <div class="road" style="margin-top:14px">
+          <div class="road-item"><div class="road-dot rd-done">✓</div><div><b>Phase -1 · 治理</b> <span class="pill pill-green">Done</span></div></div>
+          <div class="road-item"><div class="road-dot rd-done">✓</div><div><b>Phase 0 · 基座</b> <span class="pill pill-green">Passed</span></div></div>
+          <div class="road-item"><div class="road-dot rd-now">1</div><div><b>Phase 1 · 契约与运行时</b> <span class="pill pill-blue">进行中</span><div class="progress"><i style="width:22%"></i></div></div></div>
+          <div class="road-item"><div class="road-dot rd-todo">2</div><div><b>Phase 2 · 协议与流式</b></div></div>
+          <div class="road-item"><div class="road-dot rd-todo">3</div><div><b>Phase 3 · 控制台与生态</b></div></div>
+          <div class="road-item"><div class="road-dot rd-todo">4</div><div><b>Phase 4 · 全平台发布</b></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="card">
+      <div class="section-head"><h3>最近事件</h3><button class="btn btn-soft btn-sm" data-goto="audit">全部 →</button></div>
+      <div class="listrow"><span class="pill pill-red">502</span><div><b style="font-size:14px">wb2api 上游中断</b><p class="sub">14:02:11 · 未补发 [DONE]</p></div></div>
+      <div class="listrow"><span class="pill pill-amber">429</span><div><b style="font-size:14px">external-cpa 限流</b><p class="sub">13:47:53 · 已 Fallback</p></div></div>
+      <div class="listrow"><span class="pill pill-green">200</span><div><b style="font-size:14px">wild-work 冷启动完成</b><p class="sub">13:31:20 · 860ms</p></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 统一网关 ================= -->
+  <section class="panel active" id="panel-gateway">
+    <div class="topbar"><div><h2>统一网关</h2></div><button class="btn btn-primary" id="gwToggle">启动网关</button></div>
+    <div class="grid3">
+      <div class="card kpi"><label>状态</label><div class="big"><span class="pill pill-gray" id="gwStatusPill" style="font-size:13px;padding:6px 12px">Stopped</span></div><div class="note" id="gwStatusNote">未启动</div></div>
+      <div class="card kpi"><label>监听地址</label><div class="big mono" id="gwAddr">—</div></div>
+      <div class="card kpi"><label>挂载插件</label><div class="big" style="font-size:16px">external-cpa</div></div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="stack">
+      <div class="card">
+        <h3>Master Key</h3>
+        <p class="sub">Keyring 托管 · 永不落盘</p>
+        <div class="keybox"><code id="masterKey">pw-sk-••••••••••••••••</code><button class="btn btn-ghost btn-sm" id="revealKey"><svg class="ic sm"><use href="#i-eye"/></svg>查看完整 Key</button><button class="btn btn-ghost btn-sm" id="copyKey"><svg class="ic sm"><use href="#i-copy"/></svg>复制</button><button class="btn btn-ghost btn-sm" id="regenKey" style="color:var(--red)">重新生成</button></div>
+      </div>
+      <div class="card">
+        <h3>端口设置</h3>
+        <div class="field" style="margin-top:10px"><label style="font-weight:500;font-size:14px">端口：</label><input class="input mono" id="portInput" value="8080" style="width:120px"/><button class="btn btn-soft btn-sm" id="savePort">保存</button><span class="sub">127.0.0.1 only</span></div>
+      </div>
+      <div class="card">
+        <div class="section-head" style="margin:0"><div><h3>连通性自测</h3></div><button class="btn btn-primary" id="probeBtn">探测 /v1/models</button></div>
+        <div id="probeResult" style="display:none;margin-top:14px;background:var(--well);border:1px solid var(--line);border-radius:12px;padding:14px 16px"></div>
+      </div>
+      <div class="card">
+        <h3>模型路由</h3>
+        <table>
+          <thead><tr><th>虚拟别名 Alias</th><th>首选路由 Primary</th><th>Fallback 链</th><th>协议</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td class="mono"><b>pw/coding</b></td><td>wb2api · workbuddy-code</td><td class="sub">→ external-cpa · gpt-5-codex</td><td><span class="tag">Chat ⇄ IR ⇄ Messages</span></td><td><span class="pill pill-green"><span class="dot"></span>健康</span></td></tr>
+            <tr><td class="mono"><b>pw/chat</b></td><td>external-cpa · gpt-5</td><td class="sub">→ wb2api · workbuddy-chat</td><td><span class="tag">透传 Passthrough</span></td><td><span class="pill pill-green"><span class="dot"></span>健康</span></td></tr>
+            <tr><td class="mono"><b>pw/wild</b></td><td>wild-work · wild-agent</td><td class="sub">—（无备用，明确拒绝不降级伪造）</td><td><span class="tag">Responses ⇄ Chat</span></td><td><span class="pill pill-amber"><span class="dot"></span>休眠待唤醒</span></td></tr>
+          </tbody>
+        </table>
+        <p class="sub" style="margin-top:12px">兼容：透传 / 转换 / 降级 / 拒绝 / 未验证</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. 插件管理 ================= -->
+  <section class="panel" id="panel-plugins">
+    <div class="topbar"><div><h2>插件管理</h2></div><button class="btn btn-primary" data-goto="discover">+ 安装插件</button></div>
+    <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <!-- wb2api -->
+      <div class="card">
+        <div class="plugin-head"><div class="avatar" style="background:#2f6bff">W</div><div style="flex:1"><b style="font-size:15px">wb2api</b><p class="sub">WorkBuddy → OpenAI API</p></div><span class="pill pill-green plugin-status"><span class="dot"></span>Ready</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"><span class="pill pill-blue">Managed</span><span class="pill pill-violet">idle_timeout · 300s</span><span class="tag">schema 1.0</span></div>
+        <div class="plugin-meta"><div><b class="mono">32,847</b><span>端口</span></div><div><b>64 MB</b><span>内存</span></div><div><b>2</b><span>活跃请求</span></div><div><b>12,408</b><span>累计</span></div></div>
+        <div class="actions"><button class="btn btn-primary btn-sm" data-plugin="wb2api">查看详情 →</button><button class="btn btn-danger-ghost btn-sm act-stop">停止</button><button class="btn btn-ghost btn-sm act-restart">重启</button><button class="btn btn-soft btn-sm" data-goto="flight">试飞</button></div>
+      </div>
+      <!-- wild-work -->
+      <div class="card">
+        <div class="plugin-head"><div class="avatar" style="background:#c77400">野</div><div style="flex:1"><b style="font-size:15px">wild-work</b><p class="sub">野外工作台</p></div><span class="pill pill-gray plugin-status">Stopped</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"><span class="pill pill-blue">Managed</span><span class="pill pill-amber">on_demand</span><span class="tag">schema 1.0</span></div>
+        <div class="plugin-meta"><div><b class="mono">—</b><span>端口</span></div><div><b>0 MB</b><span>内存</span></div><div><b>0</b><span>活跃请求</span></div><div><b>386</b><span>累计</span></div></div>
+        <div class="actions"><button class="btn btn-primary btn-sm" data-plugin="wild-work">查看详情 →</button><button class="btn btn-soft btn-sm act-start">启动</button><button class="btn btn-soft btn-sm" data-goto="flight">试飞</button><button class="btn btn-ghost btn-sm" style="color:var(--red)">卸载</button></div>
+      </div>
+      <!-- external-cpa -->
+      <div class="card">
+        <div class="plugin-head"><div class="avatar" style="background:#12994c">C</div><div style="flex:1"><b style="font-size:15px">external-cpa</b><p class="sub">CLIProxyAPI 挂载</p></div><span class="pill pill-green plugin-status"><span class="dot"></span>Ready</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"><span class="pill pill-green">External</span><span class="pill pill-gray">永不 Kill</span><span class="tag">schema 1.0</span></div>
+        <div class="plugin-meta"><div><b class="mono">28,317</b><span>端口</span></div><div><b>—</b><span>内存</span></div><div><b>5</b><span>活跃请求</span></div><div><b>48,912</b><span>累计</span></div></div>
+        <div class="actions"><button class="btn btn-primary btn-sm" data-plugin="external-cpa">查看详情 →</button><button class="btn btn-ghost btn-sm act-reprobe">重新探针</button><button class="btn btn-soft btn-sm" data-goto="flight">试飞</button><button class="btn btn-ghost btn-sm">断开挂载</button></div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="card"><h3>生命周期</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-weight:500;font-size:13.5px">
+        <span class="pill pill-gray" style="padding:8px 14px">Stopped</span>→<span class="pill pill-amber" style="padding:8px 14px">Starting</span>→<span class="pill pill-green" style="padding:8px 14px">Ready</span>⇄<span class="pill pill-blue" style="padding:8px 14px">Busy</span><span style="color:var(--muted);font-weight:500">任一阶段异常 →</span><span class="pill pill-red" style="padding:8px 14px">Failed</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3b. 插件详情页 ================= -->
+  <section class="panel" id="panel-plugin-detail">
+    <button class="btn btn-ghost btn-sm" id="backToPlugins"><svg class="ic sm"><use href="#i-back"/></svg>返回插件列表</button>
+    <div class="topbar" style="margin-top:16px;margin-bottom:6px">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div class="avatar" id="dAvatar" style="background:#2f6bff;width:46px;height:46px;font-size:19px">W</div>
+        <div><h2 id="dName" style="font-size:20px">wb2api</h2><p id="dDesc" style="max-width:640px">—</p></div>
+      </div>
+      <span class="pill pill-green" id="dStatus" style="font-size:13px;padding:6px 12px"><span class="dot"></span>Ready</span>
+    </div>
+    <div class="dtabs" id="detailTabs">
+      <button data-dtab="overview" class="active"><svg class="ic sm"><use href="#i-grid"/></svg>概览</button>
+      <button data-dtab="config"><svg class="ic sm"><use href="#i-gear"/></svg>配置</button>
+      <button data-dtab="panel" id="dtabBtnPanel"><svg class="ic sm"><use href="#i-layers"/></svg>能力面板</button>
+      <button data-dtab="logs"><svg class="ic sm"><use href="#i-doc"/></svg>日志</button>
+    </div>
+
+    <!-- 详情 · 概览（第一层：宿主原生） -->
+    <div class="dtab-panel active" id="dtab-overview">
+      <div class="grid2" style="align-items:start">
+        <div class="card">
+          <h3>运行状态</h3>
+          <div id="dKvRuntime"></div>
+          <div class="actions" id="dActions"></div>
+        </div>
+        <div class="card">
+          <h3>Manifest 元信息</h3>
+          <div id="dKvManifest"></div>
+        </div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="card">
+        <h3>模型与协议</h3>
+        <div id="dCaps"></div>
+      </div>
+      <div id="dExternalBox" style="display:none;margin-top:16px"></div>
+      <div style="margin-top:12px" id="dBoundaryNote"><span class="pill pill-blue">宿主：生命周期 / 路由 / 凭据</span> <span class="pill pill-violet">业务 → 能力面板</span></div>
+    </div>
+
+    <!-- 详情 · 配置（第一层：宿主原生，config_schema 驱动） -->
+    <div class="dtab-panel" id="dtab-config">
+      <div class="card">
+        <h3>配置 · config_schema</h3>
+        <div id="dConfigForm" style="margin-top:16px" class="stack"></div>
+        <div class="actions"><button class="btn btn-primary btn-sm" id="dSaveConfig">保存配置</button><button class="btn btn-ghost btn-sm">恢复为 Manifest 默认值</button></div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="card">
+        <h3>凭据</h3>
+        <div class="keybox"><svg class="ic sm" style="color:var(--muted)"><use href="#i-key"/></svg><code id="dKeyringRef">keyring://proxyweave/wb2api/upstream</code><span class="pill pill-green"><svg class="ic sm"><use href="#i-check"/></svg>已托管于系统 Keyring</span></div>
+      </div>
+    </div>
+
+    <!-- 详情 · 能力面板（第二层：插件自带页面嵌入） -->
+    <div class="dtab-panel" id="dtab-panel">
+      <div id="dPanelWrap"></div>
+    </div>
+
+    <!-- 详情 · 日志（第一层：宿主原生） -->
+    <div class="dtab-panel" id="dtab-logs">
+      <div class="card">
+        <div class="section-head" style="margin:0"><div><h3>日志</h3></div><button class="btn btn-ghost btn-sm copy-btn">导出</button></div>
+        <pre id="dLogs" style="max-height:340px"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 插件发现 ================= -->
+  <section class="panel" id="panel-discover">
+    <div class="topbar"><div><h2>插件发现</h2></div></div>
+    <div class="stack">
+      <div class="card">
+        <h3>从 GitHub 安装</h3>
+        <div class="field" style="margin-top:14px"><input class="input mono" id="repoUrl" value="https://github.com/example/proxyweave-plugin-ollama-bridge" style="flex:1;min-width:240px"/><button class="btn btn-primary" id="parseRepo">解析清单</button></div>
+        <div id="parseResult" style="display:none;margin-top:16px">
+          <div class="grid2">
+            <div><b style="font-size:15px">ollama-bridge</b> <span class="pill pill-amber">社区 · 未核验</span><p class="sub" style="margin-top:8px;line-height:1.8">类型：Managed · 运行时：外部可执行（Loopback HTTP）<br/>能力：chat.completions / models.list<br/>生命周期：idle_timeout（TTL 300s）· 健康探针：/health</p></div>
+            <div><pre class="code-light" style="margin:0">schema_version: "1.0"
+metadata: { name: ollama-bridge, version: 0.3.1 }
+lifecycle: { policy: idle_timeout, ttl_seconds: 300 }
+network: { port: dynamic, health_check: /health }
+security: { sha256: 9f2c…a41b ✓ 校验通过 }</pre></div>
+          </div>
+          <div class="warn" style="margin-top:14px">⚠ 社区插件 · 未核验 · 非沙箱，确认信任后再安装。</div>
+          <div class="actions"><button class="btn btn-primary btn-sm" id="confirmInstall">确认安装</button><button class="btn btn-ghost btn-sm">取消</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-head"><h3>Topic 发现 · <span class="mono" style="color:var(--blue)">#proxyweave-plugin</span></h3><button class="btn btn-soft btn-sm">刷新发现</button></div>
+        <table>
+          <thead><tr><th>插件</th><th>说明</th><th>信任等级</th><th>类型</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><b>wb2api</b><p class="sub">WorkBuddy → OpenAI 兼容</p></td><td class="sub">官方维护 · 首个 Managed 切片</td><td><span class="pill pill-green"><svg class="ic sm"><use href="#i-check"/></svg>官方核验</span></td><td><span class="tag">Managed</span></td><td><span class="pill pill-gray">已安装</span></td></tr>
+            <tr><td><b>external-cpa</b><p class="sub">CLIProxyAPI 挂载清单</p></td><td class="sub">官方维护 · 仅清单，无托管</td><td><span class="pill pill-green"><svg class="ic sm"><use href="#i-check"/></svg>官方核验</span></td><td><span class="tag">External</span></td><td><span class="pill pill-gray">已安装</span></td></tr>
+            <tr><td><b>ollama-bridge</b><p class="sub">本地 Ollama 模型桥接</p></td><td class="sub">社区贡献 · 42 stars</td><td><span class="pill pill-amber">社区 · 未核验</span></td><td><span class="tag">Managed</span></td><td><button class="btn btn-primary btn-sm">安装</button></td></tr>
+            <tr><td><b>vllm-external</b><p class="sub">局域网 vLLM 服务挂载模板</p></td><td class="sub">社区贡献 · 仅 External 清单</td><td><span class="pill pill-amber">社区 · 未核验</span></td><td><span class="tag">External</span></td><td><button class="btn btn-primary btn-sm">安装</button></td></tr>
+            <tr><td><b>my-local-plugin</b><p class="sub">从本地目录导入</p></td><td class="sub">未经任何远程校验</td><td><span class="pill pill-violet">本地导入</span></td><td><span class="tag">Managed</span></td><td><button class="btn btn-ghost btn-sm">选择目录…</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 5. 试飞工作台 ================= -->
+  <section class="panel" id="panel-flight">
+    <div class="topbar"><div><h2>试飞工作台</h2></div><span class="pill pill-green"><span class="dot"></span>pw/coding</span></div>
+    <div class="grid2" style="align-items:start">
+      <div class="card">
+        <div class="field" style="justify-content:space-between">
+          <select class="input" id="flightModel" style="font-weight:500"><option>pw/coding → wb2api · workbuddy-code</option><option>pw/chat → external-cpa · gpt-5</option><option>pw/wild → wild-work · wild-agent</option></select>
+          <span class="sub">温度 <b id="tempVal">0.7</b></span><input type="range" id="tempRange" min="0" max="20" value="7" style="width:110px"/>
+        </div>
+        <div class="chatbox" id="chatBox" style="margin-top:14px">
+          <div class="msg user">帮我写一个 Rust 函数：把 SSE 数据块按行切分，并保留不完整的尾行到下一次。</div>
+          <div class="msg ai">维护 <span class="mono">pending</span> 缓冲，只切分完整事件，尾行留待下一块。</div>
+        </div>
+        <div class="field" style="margin-top:12px"><input class="input" id="chatInput" placeholder="输入试飞消息，回车发送…" style="flex:1"/><button class="btn btn-primary" id="sendBtn">发送</button></div>
+        <div class="grid3" style="margin-top:14px;gap:10px">
+          <div class="card metric" style="box-shadow:none;padding:12px"><b style="color:var(--blue)">342 ms</b><span>TTFT 首字延迟</span></div>
+          <div class="card metric" style="box-shadow:none;padding:12px"><b>48.6</b><span>TPS · tok/s</span></div>
+          <div class="card metric" style="box-shadow:none;padding:12px"><b>2.9 s</b><span>总耗时 · 141 tokens</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Compatibility Flight</h3>
+        <div style="margin-top:8px">
+          <div class="checkrow"><div class="check-ic" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><b style="font-size:14.5px">1 · Chat</b></div><span class="pill pill-green">通过</span></div>
+          <div class="checkrow"><div class="check-ic" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><b style="font-size:14.5px">2 · SSE · 342ms</b></div><span class="pill pill-green">通过</span></div>
+          <div class="checkrow"><div class="check-ic" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><b style="font-size:14.5px">3 · 多轮映射</b></div><span class="pill pill-green">通过</span></div>
+          <div class="checkrow"><div class="check-ic" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><b style="font-size:14.5px">4 · Tool Calling</b></div><span class="pill pill-green">通过</span></div>
+          <div class="checkrow"><div class="check-ic" style="background:var(--amber-bg);color:var(--amber)">!</div><div style="flex:1"><b style="font-size:14.5px">5 · 长文本</b></div><span class="pill pill-amber">降级</span></div>
+          <div class="checkrow"><div class="check-ic" style="background:var(--amber-bg);color:var(--amber)">!</div><div style="flex:1"><b style="font-size:14.5px">6 · 多模态</b></div><span class="pill pill-amber">部分降级</span></div>
+        </div>
+        <p class="sub" style="margin-top:12px"><b>4 通过 / 2 降级</b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 6. 审计轨迹 / API Doctor ================= -->
+  <section class="panel" id="panel-audit">
+    <div class="topbar"><div><h2>审计 · API Doctor</h2></div><button class="btn btn-ghost">导出诊断包</button></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-head"><h3>请求链路</h3><span class="sub">已脱敏</span></div>
+      <table>
+        <thead><tr><th>时间</th><th>链路</th><th>状态</th><th>耗时 / TTFT</th><th>Doctor 归因</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">14:02:11</td><td><b>pw/coding</b> → wb2api<p class="sub mono">POST /v1/chat/completions</p></td><td><span class="pill pill-red">502</span></td><td>1,204ms / 388ms</td><td class="sub">上游中断 · 未补发 [DONE] · 建议 Fallback</td></tr>
+          <tr><td class="mono">13:58:02</td><td><b>pw/chat</b> → external-cpa<p class="sub mono">POST /v1/chat/completions</p></td><td><span class="pill pill-green">200</span></td><td>2,310ms / 410ms</td><td class="sub">正常</td></tr>
+          <tr><td class="mono">13:47:53</td><td><b>pw/chat</b> → external-cpa<p class="sub mono">POST /v1/chat/completions</p></td><td><span class="pill pill-amber">429</span></td><td>96ms / —</td><td class="sub">上游限流 · Retry-After 30s</td></tr>
+          <tr><td class="mono">13:40:17</td><td><b>pw/coding</b> → wb2api<p class="sub mono">GET /v1/models</p></td><td><span class="pill pill-red">401</span></td><td>12ms / —</td><td class="sub">Master Key 无效</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>请求详情（脱敏）</h3><pre class="code-light">POST /v1/chat/completions  ·  trace_id: tr_8f2c41
+Authorization: Bearer pw-sk-••••••••9f2c   ← 脱敏
+X-PW-Alias: pw/coding   →   plugin: wb2api:32847
+IR: Chat → IR → Messages · stream: true
+上游状态: 502 · 断开点: 第 37 个 SSE 事件后
+[DONE] 补发: 否（异常截断，红线禁止）</pre></div>
+      <div class="card"><h3>修复建议</h3>
+        <div class="listrow"><span class="pill pill-red">401</span><div><b style="font-size:14px">鉴权失败</b><p class="sub">重写 IDE 凭据</p></div></div>
+        <div class="listrow"><span class="pill pill-amber">429</span><div><b style="font-size:14px">上游限流</b><p class="sub">Fallback / 退避重试</p></div></div>
+        <div class="listrow"><span class="pill pill-red">502</span><div><b style="font-size:14px">上游中断</b><p class="sub">查探针 · Managed 可重启</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 7. IDE 接入 ================= -->
+  <section class="panel" id="panel-ide">
+    <div class="topbar"><div><h2>IDE 接入</h2></div></div>
+    <div class="card" style="margin-bottom:16px"><h3>统一接入点</h3><div class="keybox"><code>Base URL&nbsp; http://127.0.0.1:8080/v1</code><button class="btn btn-ghost btn-sm copy-btn">复制</button><code>API Key&nbsp;&nbsp; pw-sk-••••••••••••</code><button class="btn btn-ghost btn-sm copy-btn">复制</button></div></div>
+    <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(290px,1fr))">
+      <div class="card"><div class="plugin-head"><div class="avatar" style="background:#101e3c">C</div><div style="flex:1"><b style="font-size:15px">Cursor</b><p class="sub">Settings → Models → OpenAI API Key</p></div><span class="pill pill-green">已接入</span></div>
+        <pre>{
+  "openai.baseUrl": "http://127.0.0.1:8080/v1",
+  "openai.apiKey": "pw-sk-••••",
+  "model": "pw/coding"
+}</pre>
+        <div class="actions"><button class="btn btn-soft btn-sm write-btn">重新写入</button><button class="btn btn-ghost btn-sm copy-btn">复制配置</button></div></div>
+      <div class="card"><div class="plugin-head"><div class="avatar" style="background:#c77400">✳</div><div style="flex:1"><b style="font-size:15px">Claude Code</b><p class="sub">环境变量 / settings.json</p></div><span class="pill pill-gray">未接入</span></div>
+        <pre>{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8080",
+    "ANTHROPIC_AUTH_TOKEN": "pw-sk-••••"
+  }
+}</pre>
+        <div class="actions"><button class="btn btn-primary btn-sm write-btn">一键写入</button><button class="btn btn-ghost btn-sm copy-btn">复制配置</button></div></div>
+      <div class="card"><div class="plugin-head"><div class="avatar" style="background:#2f6bff">W</div><div style="flex:1"><b style="font-size:15px">Windsurf</b><p class="sub">Cascade → 自定义模型端点</p></div><span class="pill pill-gray">未接入</span></div>
+        <pre>{
+  "cascade.customEndpoint": "http://127.0.0.1:8080/v1",
+  "cascade.apiKey": "pw-sk-••••",
+  "model": "pw/chat"
+}</pre>
+        <div class="actions"><button class="btn btn-primary btn-sm write-btn">一键写入</button><button class="btn btn-ghost btn-sm copy-btn">复制配置</button></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 8. 系统设置 ================= -->
+  <section class="panel" id="panel-settings">
+    <div class="topbar"><div><h2>系统设置</h2></div></div>
+    <div class="stack">
+      <div class="card"><h3>主题</h3>
+        <div class="grid3">
+          <button class="card theme-card" data-theme-set="sky" style="box-shadow:none;text-align:left;cursor:pointer;padding:16px 18px"><b style="font-size:15px">晴空蓝白</b><div style="display:flex;gap:6px;margin-top:10px"><i style="width:22px;height:22px;border-radius:7px;background:#2f6bff;display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:#e9f1ff;display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:#ffffff;border:1px solid var(--line);display:block"></i></div></button>
+          <button class="card theme-card" data-theme-set="glass" style="box-shadow:none;text-align:left;cursor:pointer;padding:16px 18px"><b style="font-size:15px">玻璃拟态</b><div style="display:flex;gap:6px;margin-top:10px"><i style="width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#ffffff,#e4e4e7);border:1px solid var(--line);display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#f4f4f5,#d4d4d8);display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.55);border:1px solid var(--line);display:block"></i></div></button>
+          <button class="card theme-card" data-theme-set="dark" style="box-shadow:none;text-align:left;cursor:pointer;padding:16px 18px"><b style="font-size:15px">深空暗色</b><div style="display:flex;gap:6px;margin-top:10px"><i style="width:22px;height:22px;border-radius:7px;background:#0e1014;display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:#23262f;display:block"></i><i style="width:22px;height:22px;border-radius:7px;background:#6f9bff;display:block"></i></div></button>
+        </div>
+        <div class="palette-wide" id="paletteSettings">
+          <p class="palette-title" style="font-size:13px">自定义调色 · 实时生效 <button type="button" data-reset-palette>恢复默认</button></p>
+          <div class="grid2" style="gap:16px">
+            <div><label style="font-size:12px;font-weight:500;color:var(--text2)">主色</label><div class="swatch-row" data-swatches="accent" style="margin-top:8px"><button class="swatch" data-color="#2f6bff" style="background:#2f6bff"></button><button class="swatch" data-color="#7c5cff" style="background:#7c5cff"></button><button class="swatch" data-color="#0ea5a4" style="background:#0ea5a4"></button><button class="swatch" data-color="#12994c" style="background:#12994c"></button><button class="swatch" data-color="#f59e0b" style="background:#f59e0b"></button><button class="swatch" data-color="#ec4899" style="background:#ec4899"></button><button class="swatch" data-color="#111827" style="background:#111827"></button><input type="color" class="color-pick" data-pick="accent" value="#2f6bff"/></div></div>
+            <div><label style="font-size:12px;font-weight:500;color:var(--text2)">背景色</label><div class="swatch-row" data-swatches="bg" style="margin-top:8px"><button class="swatch" data-color="#f2f5fa" style="background:#f2f5fa"></button><button class="swatch" data-color="#e0eaff" style="background:#e0eaff"></button><button class="swatch" data-color="#fce7f3" style="background:#fce7f3"></button><button class="swatch" data-color="#dcfce7" style="background:#dcfce7"></button><button class="swatch" data-color="#fef3c7" style="background:#fef3c7"></button><button class="swatch" data-color="#0a0b0e" style="background:#0a0b0e"></button><button class="swatch" data-color="#1e1b4b" style="background:#1e1b4b"></button><input type="color" class="color-pick" data-pick="bg" value="#f2f5fa"/></div></div>
+          </div>
+          <div class="glass-only" style="margin-top:14px"><div class="grid2" style="gap:16px"><div><label style="font-size:12px;font-weight:500;color:var(--text2)">磨砂强度 <span data-blur-val>18px</span></label><input type="range" min="0" max="32" value="18" data-range="blur" style="width:100%;accent-color:var(--blue)"/></div><div><label style="font-size:12px;font-weight:500;color:var(--text2)">卡片透明度 <span data-opacity-val>55%</span></label><input type="range" min="20" max="90" value="55" data-range="opacity" style="width:100%;accent-color:var(--blue)"/></div></div></div>
+          <p class="sub" style="margin-top:10px">当前背景预览即整站背景 · 玻璃主题下背景色驱动 aurora 渐变</p>
+        </div>
+      </div>
+      <div class="card"><h3>通用</h3>
+        <div class="listrow"><div style="flex:1"><b style="font-size:14.5px">开机自启</b></div><span class="pill pill-blue">已开启</span></div>
+        <div class="listrow"><div style="flex:1"><b style="font-size:14.5px">隐藏到托盘</b></div><span class="pill pill-blue">已开启</span></div>
+        <div class="listrow"><div style="flex:1"><b style="font-size:14.5px">语言</b></div><select class="input"><option>简体中文</option><option>English</option></select></div>
+      </div>
+      <div class="card"><h3>凭据 · Keyring</h3><p class="sub">永不落盘</p>
+        <div class="keybox"><code>keyring://proxyweave/master-key · keyring://proxyweave/wb2api/upstream</code><button class="btn btn-ghost btn-sm">查看</button></div>
+      </div>
+      <div class="card"><h3>数据</h3>
+        <div class="listrow"><div style="flex:1"><b style="font-size:14.5px">配置文件</b><p class="sub mono">~/.proxyweave/config.json</p></div><button class="btn btn-ghost btn-sm">打开目录</button></div>
+        <div class="listrow"><div style="flex:1"><b style="font-size:14.5px">备份</b></div><span class="pill pill-green">.bak 健康</span></div>
+        <div class="actions"><button class="btn btn-soft btn-sm copy-btn">导出配置</button><button class="btn btn-ghost btn-sm">导入…</button><button class="btn btn-ghost btn-sm" style="color:var(--red)">重置</button></div>
+      </div>
+      <div class="card"><h3>关于</h3><p class="sub"><b style="color:var(--text)">ProxyWeave</b> · v0.1.0-dev · Phase 1 · Tauri v2 + Rust · <a href="https://github.com/Cary222/ProxyWeave" target="_blank" rel="noopener">GitHub</a> · Plan.md v3.1.0</p></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- Mobile top nav -->
+<nav class="mobile-nav" id="mobileNav">
+  <button data-tab="overview"><svg class="ic"><use href="#i-grid"/></svg>概览</button>
+  <button data-tab="gateway" class="active"><svg class="ic"><use href="#i-globe"/></svg>网关</button>
+  <button data-tab="plugins"><svg class="ic"><use href="#i-plug"/></svg>插件</button>
+  <button data-tab="discover"><svg class="ic"><use href="#i-compass"/></svg>发现</button>
+  <button data-tab="flight"><svg class="ic"><use href="#i-send"/></svg>试飞</button>
+  <button data-tab="audit"><svg class="ic"><use href="#i-pulse"/></svg>审计</button>
+  <button data-tab="ide"><svg class="ic"><use href="#i-term"/></svg>IDE</button>
+  <button data-tab="settings"><svg class="ic"><use href="#i-sliders"/></svg>设置</button>
+</nav>
+
+<div id="toast" role="status"></div>
+
+<script>
+var toastTimer=null;
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show')},2200);}
+/* ---------- 主页签 ---------- */
+function switchTab(name){
+  var panels=document.querySelectorAll('.panel');for(var i=0;i<panels.length;i++)panels[i].classList.remove('active');
+  var p=document.getElementById('panel-'+name);if(p)p.classList.add('active');
+  var navName=(name==='plugin-detail')?'plugins':name;
+  var btns=document.querySelectorAll('[data-tab]');for(var j=0;j<btns.length;j++)btns[j].classList.toggle('active',btns[j].getAttribute('data-tab')===navName);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+var navBtns=document.querySelectorAll('[data-tab]');
+for(var i=0;i<navBtns.length;i++){navBtns[i].addEventListener('click',function(){switchTab(this.getAttribute('data-tab'));});}
+var gotos=document.querySelectorAll('[data-goto]');
+for(var g=0;g<gotos.length;g++){gotos[g].addEventListener('click',function(){switchTab(this.getAttribute('data-goto'));});}
+/* ---------- 主题切换（仅本次会话内生效） ---------- */
+var THEME_NAMES={sky:'晴空蓝白',glass:'玻璃拟态',dark:'深空暗色'};
+function setTheme(name){
+  document.documentElement.setAttribute('data-theme',name);
+  document.querySelector('meta[name="color-scheme"]').setAttribute('content',name==='dark'?'dark':'light');
+  var bs=document.querySelectorAll('[data-theme-set]');
+  for(var i=0;i<bs.length;i++){
+    var on=bs[i].getAttribute('data-theme-set')===name;
+    if(bs[i].classList.contains('theme-card')){bs[i].style.borderColor=on?'var(--blue)':'';bs[i].style.boxShadow=on?'0 0 0 1px var(--blue)':'none';}
+    else{bs[i].classList.toggle('active',on);}
+  }
+}
+var themeBtns=document.querySelectorAll('[data-theme-set]');
+for(var t=0;t<themeBtns.length;t++){themeBtns[t].addEventListener('click',function(){var n=this.getAttribute('data-theme-set');setTheme(n);toast('已切换主题：'+THEME_NAMES[n]);});}
+/* ---------- 自定义调色盘 ---------- */
+var THEME_DEFAULTS={sky:{accent:'#2f6bff',bg:'#f2f5fa',blur:18,opacity:55},glass:{accent:'#2f6bff',bg:'#ffffff',blur:18,opacity:55},dark:{accent:'#6f9bff',bg:'#0a0b0e',blur:18,opacity:55}};
+var paletteState={sky:{accent:null,bg:null,blur:18,opacity:55},glass:{accent:null,bg:null,blur:18,opacity:55},dark:{accent:null,bg:null,blur:18,opacity:55}};
+var currentThemeName='sky';
+function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];return{r:parseInt(h.substr(0,2),16),g:parseInt(h.substr(2,2),16),b:parseInt(h.substr(4,2),16)};}
+function rgbToHex(r,g,b){function c(x){x=Math.max(0,Math.min(255,Math.round(x)));var s=x.toString(16);return s.length===1?'0'+s:s;}return '#'+c(r)+c(g)+c(b);}
+function mixHex(a,b,ratio){var A=hexToRgb(a),B=hexToRgb(b);return rgbToHex(A.r+(B.r-A.r)*ratio,A.g+(B.g-A.g)*ratio,A.b+(B.b-A.b)*ratio);}
+function hexToHsl(h){var c=hexToRgb(h);var r=c.r/255,g=c.g/255,b=c.b/255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b);var l=(mx+mn)/2;var s=0,hh=0;if(mx!==mn){var d=mx-mn;s=l>0.5?d/(2-mx-mn):d/(mx+mn);switch(mx){case r:hh=(g-b)/d+(g<b?6:0);break;case g:hh=(b-r)/d+2;break;default:hh=(r-g)/d+4;}hh*=60;}return{h:hh,s:s*100,l:l*100};}
+function hslToHex(h,s,l){h=((h%360)+360)%360/360;s=Math.max(0,Math.min(100,s))/100;l=Math.max(0,Math.min(100,l))/100;var r,g,b;if(s===0){r=g=b=l;}else{function hue(p,q,t){if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;}var q=l<0.5?l*(1+s):l+s-l*s;var pp=2*l-q;r=hue(pp,q,h+1/3);g=hue(pp,q,h);b=hue(pp,q,h-1/3);}return rgbToHex(r*255,g*255,b*255);}
+function syncPaletteUI(){
+  var st=paletteState[currentThemeName];var def=THEME_DEFAULTS[currentThemeName];
+  var accentVal=st.accent||def.accent;var bgVal=st.bg||def.bg;
+  var picks=document.querySelectorAll('[data-pick]');
+  for(var i=0;i<picks.length;i++){var k=picks[i].getAttribute('data-pick');picks[i].value=(k==='accent'?accentVal:bgVal);}
+  var sw=document.querySelectorAll('.swatch');
+  for(var j=0;j<sw.length;j++){var row=sw[j].closest('[data-swatches]');if(!row)continue;var type=row.getAttribute('data-swatches');var cur=(type==='accent'?accentVal:bgVal);sw[j].classList.toggle('active',sw[j].getAttribute('data-color').toLowerCase()===cur.toLowerCase());}
+  var ranges=document.querySelectorAll('[data-range]');
+  for(var r=0;r<ranges.length;r++){var rk=ranges[r].getAttribute('data-range');ranges[r].value=(rk==='blur'?st.blur:st.opacity);}
+  var bv=document.querySelectorAll('[data-blur-val]');for(var a=0;a<bv.length;a++)bv[a].textContent=st.blur+'px';
+  var ov=document.querySelectorAll('[data-opacity-val]');for(var b=0;b<ov.length;b++)ov[b].textContent=st.opacity+'%';
+}
+function applyPalette(){
+  var root=document.documentElement;var st=paletteState[currentThemeName];var theme=currentThemeName;
+  // reset inline overrides first
+  root.style.removeProperty('--blue');root.style.removeProperty('--blue-dark');root.style.removeProperty('--blue-soft');root.style.removeProperty('--accent-line');root.style.removeProperty('--bg');root.style.removeProperty('--well');root.style.removeProperty('--card');root.style.removeProperty('--glass-blur');
+  if(theme!=='glass'){document.body.style.background='';}
+  else if(!st.bg){document.body.style.background='';document.body.style.backgroundAttachment='';}
+  if(st.accent){
+    root.style.setProperty('--blue',st.accent);
+    root.style.setProperty('--blue-dark',mixHex(st.accent,'#000000',0.22));
+    root.style.setProperty('--blue-soft', theme==='dark'? mixHex(st.accent,'#000000',0.55) : mixHex(st.accent,'#ffffff',0.88));
+    root.style.setProperty('--accent-line',mixHex(st.accent,'#ffffff',0.55));
+  }
+  if(st.bg){
+    if(theme==='glass'){
+      var hsl=hexToHsl(st.bg);
+      var c1=hslToHex(hsl.h, Math.max(55,hsl.s), 72);
+      var c2=hslToHex(hsl.h+45, Math.max(55,hsl.s), 78);
+      var c3=hslToHex(hsl.h-35, Math.max(50,hsl.s), 76);
+      var c4=hslToHex(hsl.h+85, Math.max(50,hsl.s), 80);
+      var base1=hslToHex(hsl.h, Math.min(70,hsl.s), 92);
+      var base2=hslToHex(hsl.h+40, Math.min(60,hsl.s), 94);
+      function rgba(hex,op){var cc=hexToRgb(hex);return 'rgba('+cc.r+','+cc.g+','+cc.b+','+op+')';}
+      document.body.style.background='radial-gradient(55% 45% at 12% 6%, '+rgba(c1,0.34)+', rgba(255,255,255,0) 62%), radial-gradient(48% 40% at 88% 10%, '+rgba(c2,0.30)+', rgba(255,255,255,0) 62%), radial-gradient(55% 55% at 85% 92%, '+rgba(c3,0.28)+', rgba(255,255,255,0) 62%), radial-gradient(45% 45% at 15% 88%, '+rgba(c4,0.26)+', rgba(255,255,255,0) 62%), linear-gradient(155deg,'+base1+' 0%,'+base2+' 52%,'+base1+' 100%)';
+      document.body.style.backgroundAttachment='fixed';
+    }else{
+      root.style.setProperty('--bg',st.bg);
+      root.style.setProperty('--well',mixHex(st.bg, theme==='dark'?'#ffffff':'#000000', theme==='dark'?0.06:0.04));
+      document.body.style.background=st.bg;
+    }
+  }
+  if(theme==='glass'){
+    root.style.setProperty('--glass-blur',st.blur+'px');
+    root.style.setProperty('--card','rgba(255,255,255,'+(st.opacity/100)+')');
+  }
+  syncPaletteUI();
+}
+var _origSetTheme=setTheme;
+setTheme=function(name){currentThemeName=name;_origSetTheme(name);applyPalette();};
+// swatches
+var allSw=document.querySelectorAll('.swatch');
+for(var si=0;si<allSw.length;si++){allSw[si].addEventListener('click',function(){var row=this.closest('[data-swatches]');var type=row.getAttribute('data-swatches');var col=this.getAttribute('data-color');if(type==='accent')paletteState[currentThemeName].accent=col;else paletteState[currentThemeName].bg=col;applyPalette();});}
+var allPicks=document.querySelectorAll('[data-pick]');
+for(var pi=0;pi<allPicks.length;pi++){allPicks[pi].addEventListener('input',function(){var k=this.getAttribute('data-pick');if(k==='accent')paletteState[currentThemeName].accent=this.value;else paletteState[currentThemeName].bg=this.value;applyPalette();});}
+var allRanges=document.querySelectorAll('[data-range]');
+for(var ri=0;ri<allRanges.length;ri++){allRanges[ri].addEventListener('input',function(){var k=this.getAttribute('data-range');if(k==='blur')paletteState[currentThemeName].blur=parseInt(this.value,10);else paletteState[currentThemeName].opacity=parseInt(this.value,10);applyPalette();});}
+var resetBtns=document.querySelectorAll('[data-reset-palette]');
+for(var rbi=0;rbi<resetBtns.length;rbi++){resetBtns[rbi].addEventListener('click',function(){paletteState[currentThemeName]={accent:null,bg:null,blur:18,opacity:55};applyPalette();toast('已恢复默认配色');});}
+setTheme('sky');
+/* ---------- 网关启停 ---------- */
+var gwOn=false;
+var SVG_PLAY='<svg class="ic"><use href="#i-play"/></svg>',SVG_PAUSE='<svg class="ic"><use href="#i-pause"/></svg>';
+function setGateway(on){
+  gwOn=on;
+  document.getElementById('gwToggle').textContent=on?'停止网关':'启动网关';
+  document.getElementById('gwToggle').style.background=on?'var(--red)':'';
+  var pill=document.getElementById('gwStatusPill');
+  pill.className='pill '+(on?'pill-green':'pill-gray');pill.style.fontSize='13px';pill.style.padding='6px 12px';
+  pill.textContent=on?'Running':'Stopped';
+  document.getElementById('gwStatusNote').textContent=on?'运行中':'未启动';
+  document.getElementById('gwAddr').textContent=on?'127.0.0.1:'+document.getElementById('portInput').value:'—';
+  document.getElementById('gwBadge').textContent=on?'ON':'OFF';
+  document.getElementById('gwMiniTitle').textContent=on?'网关运行中':'网关已停止';
+  document.getElementById('gwMiniSub').textContent=on?'点击停止服务 · 127.0.0.1:'+document.getElementById('portInput').value:'点击启动服务 · 127.0.0.1:8080';
+  var ic=document.getElementById('gwMiniIcon');ic.innerHTML=on?SVG_PLAY:SVG_PAUSE;
+  ic.style.background=on?'var(--green-bg)':'var(--amber-bg)';ic.style.color=on?'var(--green)':'var(--amber)';
+}
+document.getElementById('gwToggle').addEventListener('click',function(){setGateway(!gwOn);toast(gwOn?'网关已启动 · 127.0.0.1:'+document.getElementById('portInput').value:'网关已停止');});
+document.getElementById('gwMini').addEventListener('click',function(){switchTab('gateway');});
+document.getElementById('savePort').addEventListener('click',function(){toast('端口已保存：'+document.getElementById('portInput').value+'（重启网关后生效）');if(gwOn)document.getElementById('gwAddr').textContent='127.0.0.1:'+document.getElementById('portInput').value;});
+/* ---------- Master Key（原型不持有真实密钥，此处仅演示掩码/揭示的交互形态） ---------- */
+var revealed=false;
+document.getElementById('revealKey').addEventListener('click',function(){revealed=!revealed;document.getElementById('masterKey').textContent=revealed?'pw-sk-〈示例占位 · 真实 Key 由 Keyring 解锁显示〉':'pw-sk-••••••••••••••••';this.innerHTML='<svg class="ic sm"><use href="#i-eye"/></svg>'+(revealed?'隐藏 Key':'查看完整 Key');});
+document.getElementById('copyKey').addEventListener('click',function(){toast('Master Key 已复制（原型演示）');});
+document.getElementById('regenKey').addEventListener('click',function(){revealed=false;document.getElementById('masterKey').textContent='pw-sk-••••••••••••••••';document.getElementById('revealKey').innerHTML='<svg class="ic sm"><use href="#i-eye"/></svg>查看完整 Key';toast('已重新生成 Master Key，旧 Key 立即失效');});
+/* ---------- 连通性探测 ---------- */
+document.getElementById('probeBtn').addEventListener('click',function(){
+  var box=document.getElementById('probeResult');box.style.display='block';
+  if(!gwOn){box.innerHTML='<b style="color:var(--red)">✕ 网关未启动</b>';return;}
+  box.innerHTML='<b style="color:var(--green)">✓ 200 OK · 38ms</b><p class="sub" style="margin-top:6px">workbuddy-code · gpt-5 · wild-agent</p>';
+});
+/* ---------- 插件列表快捷操作 ---------- */
+function bindClass(cls,fn){var els=document.querySelectorAll('.'+cls);for(var k=0;k<els.length;k++)els[k].addEventListener('click',fn);}
+bindClass('act-start',function(){toast('wild-work 冷启动中…探针就绪后进入 Ready');});
+bindClass('act-stop',function(){toast('wb2api 正在优雅停止：等待活跃请求归零后回收');});
+bindClass('act-restart',function(){toast('wb2api 重启中…');});
+bindClass('act-reprobe',function(){toast('external-cpa 探针：127.0.0.1:28317 可达 · 210ms');});
+/* ---------- 插件详情页（三层呈现模型） ---------- */
+function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>';}
+var WB_PANEL=
+ '<div class="embed-inner">'+
+ '<div class="section-head" style="margin:0 0 6px"><div><b style="font-size:15px">WorkBuddy 账号管理</b> <span class="pill pill-violet">wb2api 自带页面</span></div><button class="btn btn-primary btn-sm embed-act">+ 添加 WorkBuddy 账号</button></div>'+
+ '<table><thead><tr><th>账号</th><th>状态</th><th>本月经网关调用</th><th>操作</th></tr></thead><tbody>'+
+ '<tr><td><b>wb-account-01</b><p class="sub">主账号 · 登录态经 Keyring 桥接</p></td><td><span class="pill pill-green"><span class="dot"></span>已登录 · Token 有效</span></td><td>1,204 次</td><td><button class="btn btn-ghost btn-sm embed-act">刷新 Token</button> <button class="btn btn-ghost btn-sm embed-act">退出登录</button></td></tr>'+
+ '<tr><td><b>wb-account-02</b><p class="sub">备用账号</p></td><td><span class="pill pill-green"><span class="dot"></span>已登录</span></td><td>386 次</td><td><button class="btn btn-ghost btn-sm embed-act">刷新 Token</button> <button class="btn btn-ghost btn-sm embed-act">退出登录</button></td></tr>'+
+ '<tr><td><b>wb-account-03</b><p class="sub">Token 已过期，需重新授权</p></td><td><span class="pill pill-amber">已过期</span></td><td>57 次</td><td><button class="btn btn-soft btn-sm embed-act">重新登录</button></td></tr>'+
+ '</tbody></table>'+
+ '</div>';
+var WW_TASKS=
+ '<div class="embed-inner">'+
+ '<div class="section-head" style="margin:0 0 6px"><div><b style="font-size:15px">野外任务工作台</b> <span class="pill pill-violet">wild-work 自带页面</span></div><button class="btn btn-primary btn-sm embed-act">+ 新建任务</button></div>'+
+ '<div class="listrow"><span class="pill pill-blue">运行中</span><div style="flex:1"><b style="font-size:14px">批量整理本地素材库元数据</b><p class="sub">进度 62% · 由插件自身调度，宿主仅透传状态</p></div></div>'+
+ '<div class="listrow"><span class="pill pill-amber">排队中</span><div style="flex:1"><b style="font-size:14px">周报数据汇总</b><p class="sub">等待空闲槽位</p></div></div>'+
+ '<div class="listrow"><span class="pill pill-green">已完成</span><div style="flex:1"><b style="font-size:14px">发票图片 OCR 归档</b><p class="sub">今日 09:12 完成 · 结果文件位于插件工作目录</p></div></div>'+
+ '</div>';
+var PLUGINS={
+ 'wb2api':{name:'wb2api',initial:'W',color:'#2f6bff',desc:'WorkBuddy → OpenAI API',status:'Ready',statusCls:'pill-green',running:true,
+  runtime:[['生命周期状态','Ready ⇄ Busy'],['进程所有权','Managed · 宿主托管（PID 18,442）'],['监听端口','127.0.0.1:32847 · 动态 [20000, 60000]'],['插件内存','64 MB'],['活跃请求','2'],['累计请求','12,408'],['健康探针','GET /health · 200 · 12ms'],['生命周期策略','idle_timeout · 空闲 TTL 300s']],
+  manifest:[['版本','0.9.2'],['来源','官方仓库 · GitHub'],['SHA256','9f2c…a41b · ✓ 校验通过'],['schema_version','1.0'],['运行时','外部可执行 · Loopback HTTP'],['信任等级','官方核验']],
+  models:['workbuddy-code','workbuddy-chat'],proto:'Chat ⇄ IR ⇄ Messages · 支持转换 · Compatibility Flight 4 通过 / 2 降级',
+  panelUrl:'http://127.0.0.1:32847/panel/',panelHtml:WB_PANEL,keyring:'keyring://proxyweave/wb2api/upstream',
+  actions:'<button class="btn btn-danger-ghost btn-sm act-stop">停止</button><button class="btn btn-ghost btn-sm act-restart">重启</button><button class="btn btn-soft btn-sm" data-goto2="flight">去试飞</button>',
+  fields:[{l:'上游 WorkBuddy 服务地址',t:'text',v:'http://127.0.0.1:9001',h:''},{l:'默认模型',t:'select',v:'workbuddy-code',opts:['workbuddy-code','workbuddy-chat'],h:''},{l:'请求超时（ms）',t:'number',v:'60000',h:'不补发 [DONE]'},{l:'流式分片上限（KB）',t:'number',v:'64',h:''}],
+  logs:'14:02:11 [proxy] POST /v1/chat/completions stream → upstream wb:9001\n14:02:12 [warn ] upstream connection reset after 37 SSE events; error frame forwarded, [DONE] NOT synthesized (red line)\n14:01:48 [info ] health probe ok · 12ms\n13:58:30 [info ] credentials projected from keyring (tmp file 0o600) · token=••••9f2c\n13:55:02 [info ] idle timer reset by active request (count=2)'},
+ 'wild-work':{name:'wild-work',initial:'野',color:'#c77400',desc:'野外工作台',status:'Stopped',statusCls:'pill-gray',running:false,
+  runtime:[['生命周期状态','Stopped · 休眠中'],['进程所有权','Managed · 宿主托管（当前未拉起）'],['监听端口','—（唤醒时动态分配）'],['插件内存','0 MB · 休眠归 0'],['活跃请求','0'],['累计请求','386'],['健康探针','—（启动后 GET /health）'],['生命周期策略','on_demand · 请求触发冷启动 · Singleflight']],
+  manifest:[['版本','0.4.0'],['来源','社区贡献 · Topic #proxyweave-plugin'],['SHA256','77be…03d9 · ✓ 校验通过'],['schema_version','1.0'],['运行时','外部可执行 · Loopback HTTP'],['信任等级','社区 · 未核验（安装时已风险确认）']],
+  models:['wild-agent'],proto:'Responses ⇄ Chat · 支持转换',
+  panelUrl:'http://127.0.0.1:41208/panel/',panelHtml:WW_TASKS,keyring:'keyring://proxyweave/wild-work/upstream',
+  actions:'<button class="btn btn-primary btn-sm act-start">启动</button><button class="btn btn-soft btn-sm" data-goto2="flight">去试飞</button><button class="btn btn-ghost btn-sm" style="color:var(--red)">卸载</button>',
+  fields:[{l:'工作目录',t:'text',v:'~/wild-work',h:''},{l:'最大并发任务',t:'number',v:'2',h:''},{l:'任务超时（s）',t:'number',v:'900',h:''}],
+  logs:'13:31:20 [info ] cold start via Singleflight (3 concurrent wakes merged) · port 41208\n13:31:21 [info ] health probe ready in 860ms\n13:36:24 [info ] idle with 0 active requests → process reclaimed · memory back to 0'},
+ 'external-cpa':{name:'external-cpa',initial:'C',color:'#12994c',desc:'CLIProxyAPI 挂载',status:'Ready · 探针可达',statusCls:'pill-green',running:true,external:true,
+  runtime:[['挂载状态','Ready · 探针可达'],['进程所有权','External · 宿主不拥有 · 永不 Kill'],['服务地址','127.0.0.1:28317 · 固定端口（外部自定）'],['插件内存','—（外部进程自理，不计入宿主）'],['活跃请求','5'],['累计请求','48,912'],['健康探针','GET /health · 200 · 210ms · 间隔 30s'],['生命周期策略','external · 宿主仅探针监测与路由转发']],
+  manifest:[['清单版本','1.2.0（仅挂载清单，无托管载荷）'],['来源','官方维护 · GitHub'],['SHA256','c41a…8e07 · ✓ 校验通过'],['schema_version','1.0'],['运行时','外部独立进程 · CLIProxyAPI'],['信任等级','官方核验']],
+  models:['gpt-5','gpt-5-codex'],proto:'透传 Passthrough · Chat 直通',
+  panelUrl:'',panelHtml:'',keyring:'keyring://proxyweave/external-cpa/upstream',
+  actions:'<button class="btn btn-ghost btn-sm act-reprobe">重新探针</button><button class="btn btn-soft btn-sm" data-goto2="flight">去试飞</button><button class="btn btn-ghost btn-sm">断开挂载</button>',
+  fields:[{l:'挂载服务地址',t:'text',v:'http://127.0.0.1:28317',h:''},{l:'探针间隔（s）',t:'number',v:'30',h:''}],
+  logs:'14:00:31 [info ] probe ok · 210ms · models: gpt-5, gpt-5-codex\n13:47:53 [warn ] upstream 429 from external service · router fallback engaged\n13:30:01 [info ] probe ok · 198ms'}
+};
+var currentPlugin=null;
+function embedFrame(p,bodyHtml){
+  return '<div class="embed"><div class="embed-bar"><span class="pill pill-violet">插件自带面板</span><span class="mono">'+p.panelUrl+'</span><a class="btn btn-sm" href="'+p.panelUrl+'" target="_blank" rel="noopener"><svg class="ic sm"><use href="#i-ext"/></svg>打开</a></div><div class="embed-body">'+bodyHtml+'</div></div>';
+}
+function renderPanel(id,forceRun){
+  var p=PLUGINS[id];var wrap=document.getElementById('dPanelWrap');
+  if(p.external){wrap.innerHTML='';return;}
+  if(!p.running&&!forceRun){
+    wrap.innerHTML=embedFrame(p,'<div class="embed-inner" style="text-align:center;padding:30px 18px"><b style="font-size:15px">未运行</b><div style="margin-top:14px"><button class="btn btn-primary btn-sm" id="dPanelStart">启动 '+p.name+'</button></div></div>');
+    var b=document.getElementById('dPanelStart');
+    if(b)b.addEventListener('click',function(){p.running=true;toast(p.name+' 冷启动中…探针就绪，面板已加载');renderPanel(id,true);});
+    return;
+  }
+  wrap.innerHTML=embedFrame(p,p.panelHtml);
+}
+function switchDtab(name){
+  var btns=document.querySelectorAll('#detailTabs [data-dtab]');
+  for(var i=0;i<btns.length;i++)btns[i].classList.toggle('active',btns[i].getAttribute('data-dtab')===name);
+  var ps=document.querySelectorAll('.dtab-panel');
+  for(var j=0;j<ps.length;j++)ps[j].classList.toggle('active',ps[j].id==='dtab-'+name);
+}
+var dtabBtns=document.querySelectorAll('#detailTabs [data-dtab]');
+for(var d=0;d<dtabBtns.length;d++){dtabBtns[d].addEventListener('click',function(){switchDtab(this.getAttribute('data-dtab'));});}
+function openPlugin(id){
+  var p=PLUGINS[id];if(!p)return;currentPlugin=id;
+  document.getElementById('dAvatar').textContent=p.initial;document.getElementById('dAvatar').style.background=p.color;
+  document.getElementById('dName').textContent=p.name;document.getElementById('dDesc').textContent=p.desc;
+  var st=document.getElementById('dStatus');st.className='pill '+p.statusCls;st.style.fontSize='13px';st.style.padding='6px 12px';st.innerHTML=(p.statusCls==='pill-green'?'<span class="dot"></span>':'')+p.status;
+  document.getElementById('dKvRuntime').innerHTML=p.runtime.map(function(r){return kv(r[0],r[1]);}).join('');
+  document.getElementById('dKvManifest').innerHTML=p.manifest.map(function(r){return kv(r[0],r[1]);}).join('');
+  document.getElementById('dActions').innerHTML=p.actions;
+  var caps=p.models.map(function(m){return '<span class="tag mono" style="margin-right:6px">'+m+'</span>';}).join('');
+  document.getElementById('dCaps').innerHTML='<div style="margin:6px 0 10px">'+caps+'</div><p class="sub"><b style="color:var(--text)">'+p.proto+'</b></p>';
+  var ext=document.getElementById('dExternalBox');
+  if(p.external){
+    ext.style.display='block';
+    ext.innerHTML='<div class="card"><h3>外部服务</h3><div class="keybox"><code>http://127.0.0.1:28317</code><a class="btn btn-primary btn-sm" href="http://127.0.0.1:28317" target="_blank" rel="noopener"><svg class="ic sm"><use href="#i-ext"/></svg>打开管理页</a></div><p class="sub" style="margin-top:10px"><span class="pill pill-green">永不 Kill</span></p></div>';
+  }else{ext.style.display='none';ext.innerHTML='';}
+  document.getElementById('dtabBtnPanel').style.display=p.external?'none':'';
+  document.getElementById('dBoundaryNote').innerHTML=p.external?'<span class="pill pill-green">External · 永不 Kill</span> <span class="pill pill-blue">探针 / 路由</span>':'<span class="pill pill-blue">宿主：生命周期 / 路由 / 凭据</span> <span class="pill pill-violet">业务 → 能力面板</span>';
+  document.getElementById('dConfigForm').innerHTML=p.fields.map(function(f){
+    var input=f.t==='select'?'<select class="input" style="min-width:220px">'+f.opts.map(function(o){return '<option'+(o===f.v?' selected':'')+'>'+o+'</option>';}).join('')+'</select>':'<input class="input" type="'+f.t+'" value="'+f.v+'" style="min-width:220px"/>';
+    return '<div class="field" style="align-items:flex-start"><label style="font-weight:500;font-size:14px;width:190px;padding-top:9px">'+f.l+'</label><div>'+input+'<p class="sub" style="margin-top:5px">'+f.h+'</p></div></div>';
+  }).join('');
+  document.getElementById('dKeyringRef').textContent=p.keyring;
+  document.getElementById('dLogs').textContent=p.logs;
+  renderPanel(id,false);
+  var ab=document.querySelectorAll('#dActions [data-goto2]');
+  for(var a=0;a<ab.length;a++){ab[a].addEventListener('click',function(){switchTab(this.getAttribute('data-goto2'));});}
+  bindInDetail();
+  switchDtab('overview');
+  switchTab('plugin-detail');
+}
+function bindInDetail(){
+  bindClassIn(document.getElementById('dtab-overview'),'act-start',function(){toast('wild-work 冷启动中…探针就绪后进入 Ready');});
+  bindClassIn(document.getElementById('dtab-overview'),'act-stop',function(){toast('wb2api 正在优雅停止：等待活跃请求归零后回收');});
+  bindClassIn(document.getElementById('dtab-overview'),'act-restart',function(){toast('wb2api 重启中…');});
+  bindClassIn(document.getElementById('dtab-overview'),'act-reprobe',function(){toast('external-cpa 探针：127.0.0.1:28317 可达 · 210ms');});
+}
+function bindClassIn(root,cls,fn){if(!root)return;var els=root.querySelectorAll('.'+cls);for(var k=0;k<els.length;k++){if(!els[k].dataset.bound){els[k].dataset.bound='1';els[k].addEventListener('click',fn);}}}
+var detailBtns=document.querySelectorAll('[data-plugin]');
+for(var pb=0;pb<detailBtns.length;pb++){detailBtns[pb].addEventListener('click',function(){openPlugin(this.getAttribute('data-plugin'));});}
+document.getElementById('backToPlugins').addEventListener('click',function(){switchTab('plugins');});
+document.getElementById('dSaveConfig').addEventListener('click',function(){toast('配置已保存：经 config_schema 校验后原子写入 config.json（原型演示）');});
+document.getElementById('dPanelWrap').addEventListener('click',function(e){
+  var el=e.target;while(el&&el!==this){if(el.classList&&el.classList.contains('embed-act')){toast('该操作由插件自带面板处理（原型示意）');return;}el=el.parentNode;}
+});
+/* ---------- 插件发现 ---------- */
+document.getElementById('parseRepo').addEventListener('click',function(){document.getElementById('parseResult').style.display='block';toast('manifest.yaml 解析完成 · schema 1.0 校验通过');});
+document.getElementById('confirmInstall').addEventListener('click',function(){toast('ollama-bridge 已安装（Managed · idle_timeout）');switchTab('plugins');});
+/* ---------- 试飞对话 ---------- */
+var temp=document.getElementById('tempRange');
+temp.addEventListener('input',function(){document.getElementById('tempVal').textContent=(this.value/10).toFixed(1);});
+function sendMsg(){
+  var inp=document.getElementById('chatInput');var v=inp.value.trim();if(!v)return;
+  var box=document.getElementById('chatBox');
+  var u=document.createElement('div');u.className='msg user';u.textContent=v;box.appendChild(u);
+  var a=document.createElement('div');a.className='msg ai';a.textContent='已路由至 '+document.getElementById('flightModel').value.split('→')[0].trim();box.appendChild(a);
+  inp.value='';box.scrollTop=box.scrollHeight;
+}
+document.getElementById('sendBtn').addEventListener('click',sendMsg);
+document.getElementById('chatInput').addEventListener('keydown',function(e){if(e.key==='Enter')sendMsg();});
+/* ---------- 通用复制 / 写入 ---------- */
+bindClass('copy-btn',function(){toast('已复制到剪贴板（原型演示）');});
+bindClass('write-btn',function(){toast('配置已写入（写入前已自动备份原配置）');});
+</script>
+</body>
+</html>
