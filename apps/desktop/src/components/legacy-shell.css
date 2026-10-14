@@ -1,0 +1,2 @@
+/* Keep upstream shell rules available to the tray without overriding the workspace theme. */
+@import url("../App.css") layer(legacy);

@@ -578,7 +578,7 @@ security:
 |---|---|---|---|
 | **Phase -1 Gate** | **项目命名与权威规范门禁** | 🟢 **已通过 (PASSED)** | 1. 确定正式产品名 `ProxyWeave`；<br>2. 建立独立权威仓库 `https://github.com/Cary222/ProxyWeave`；<br>3. 编写权威开发政策与参考源登记表；<br>4. 统一团队提交作者身份与签名规范。 |
 | **Phase 0 Gate** | **脚手架审计与工程初始化门禁** | 🟢 **本轮 Windows 范围通过 (PASSED)** | Git 实读固定 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 / MIT；原副本 build/test 后原样引入并分轮裁剪；目标 fmt/check/test 与 embedded Tauri build 通过，窗口/托盘/关闭/单实例实测通过。证据与未验证边界见 `docs/verification/PHASE0.md`；非全平台或完整产品验收。 |
-| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | 🟡 **F1/F3 Verified，F2 DEF Verified，F4 送审中** | 1. 固化 Manifest Schema 1.0 契约（F1 Verified）；<br>2. 跑通 Axum 0.8 异步网关与流式透传（F3 Verified）；<br>3. 跑通进程生命周期、DACL、Keyring、端口与探针（F2 DEF Verified）；<br>4. 桌面宿主与 UI 测试调用闭环已开发验证（F4 ReadyForReview）；最终原生桌面 MCP 验收仍开放。 |
+| **Phase 1 Gate** | **核心微内核与 Manifest 规范门禁** | 🟢 **本轮 Windows 范围通过 (PASSED)** | 1. 固化 Manifest Schema 1.0 契约（F1 Verified）；<br>2. 跑通 Axum 0.8 异步网关与流式透传（F3 Verified）；<br>3. 跑通进程生命周期、Job Object、DACL、Keyring、端口与探针（F2 DEF Verified）；<br>4. 桌面宿主与 UI 闭环完成原生桌面 MCP 真实验收（F4 Verified）；首个本地 Managed 插件 8 项验收标准全部通过。 |
 | **Phase 2 Gate** | **协议编解码与高级流式管道门禁** | ⚪ **待启动 (PENDING)** | 1. 移植 TiyGate IR 协议转换模块；<br>2. 跑通流式终止符规范补发与异常防御；<br>3. 完成 Compatibility Flight 质检套件自测。 |
 | **Phase 3 Gate** | **桌面控制台与插件市场门禁** | ⚪ **待启动 (PENDING)** | 1. React + Tailwind CSS 极简暗色控制台；<br>2. Git-Native 插件发现与下载校验；<br>3. IDE Handoff 自动配置写入测试通过。 |
 | **Phase 4 Gate** | **发布与全平台流水线门禁** | ⚪ **待启动 (PENDING)** | 1. GitHub Actions 多平台自动化构建；<br>2. 跨平台可执行资产打包与安装包发布；<br>3. 完整性校验与安全通告审计。 |
@@ -595,10 +595,10 @@ security:
 - 剥离不必要业务，保留 `quotio-platform` 与 Tauri 外壳；
 - 原工程与最小基座分别构建/测试；目标 `cargo build` 零警告，并实测当前 Windows 窗口、托盘、关闭与单实例，证据见 `docs/verification/PHASE0.md`。
 
-#### Phase 1: 异步网关微内核、Manifest 契约与首个插件验证 (Week 2)
-- 实现 Manifest Schema 1.0 引擎与沙盒目录凭据投影；
-- 搭建 Axum 异步网关、Singleflight 冷启动互斥与端口恢复循环；
-- 接入并端到端联调首个 Managed 插件 (`wb2api`)。
+#### Phase 1: 异步网关微内核、Manifest 契约与首个插件验证 (Week 2) - 【本轮 Windows 范围通过】
+- 实现 Manifest Schema 1.0 引擎与沙盒目录凭据投影（已完成）；
+- 搭建 Axum 异步网关、Singleflight 冷启动互斥与端口恢复循环（已完成）；
+- 接入并端到端联调首个 Managed 插件 (`wb2api`)，通过原生桌面 MCP 实机验证全部 8 项准出条件（已完成）。
 
 #### Phase 2: 协议适配、SSE 管道与稳定性加固 (Week 3)
 - 提取 TiyGate 协议编解码模块；
@@ -631,6 +631,9 @@ security:
 ---
 
 ## 12. 附录与实施核验索引 (Appendix & Reference Matrix)
+
+### UI-001 单独 UI 修正（不恢复完整 Goal）
+逐插件 sidebar/detail 保留总览导入和现有启停/凭据配置/挂载。通用可选 Schema 1.0 `management: {path, presentation: browser}` 只声明公开静态相对路径；旧包省略保持 parse/fingerprint，不自动迁移记录。实时 Managed 或登记 External origin 验证后明确点击系统浏览器；当前 Windows WebView2 隔离证据不足，因此不嵌入、不扩 CSP/远程权限、不绕过安全头。能力只显示 Manifest 声明与已有实测证据，没有证据标尚未实测。实现与独立原生验收各自留证，详见 `docs/architecture/ADR-006-plugin-navigation-management.md`；本段不授权真实凭据、完整端到端或最终全项 Goal。
 
 ### 12.1 权威参考源快速索引
 - 参考源全景登记表：`docs/references/REFERENCE_REGISTRY.md`（含 M01–M15 固定 Commit、路径、许可证及三级验证状态）。

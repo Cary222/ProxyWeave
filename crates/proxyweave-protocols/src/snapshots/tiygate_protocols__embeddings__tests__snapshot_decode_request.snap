@@ -1,0 +1,43 @@
+---
+source: crates/protocols/src/embeddings.rs
+assertion_line: 296
+expression: ir
+---
+IrRequest {
+    model: "text-embedding-3-small",
+    system: None,
+    messages: [
+        Message {
+            role: User,
+            content: [
+                Text {
+                    text: "Hello world",
+                    annotations: None,
+                    prompt_cache_breakpoint: None,
+                },
+            ],
+        },
+    ],
+    tools: [],
+    params: GenerationParams {
+        max_tokens: None,
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        stop: [],
+        frequency_penalty: None,
+        presence_penalty: None,
+        seed: None,
+        thinking: None,
+        verbosity: None,
+    },
+    response_format: None,
+    stream: false,
+    ingress_protocol: ProtocolEndpoint {
+        suite: OpenAiCompatible,
+        name: "embeddings",
+        version: "v1",
+    },
+    metadata: None,
+    extensions: {},
+}

@@ -7,7 +7,10 @@ use tauri::{
     AppHandle, Manager,
 };
 
+pub mod agent_import;
+pub mod flight;
 pub mod host;
+pub mod yaml_lite;
 use host::DesktopState;
 
 #[tauri::command]
@@ -178,13 +181,18 @@ pub fn run() {
             show_menubar,
             get_platform_info,
             host::import_local_plugin,
+            host::import_project_from_directory,
+            host::import_project_from_github,
             host::list_local_plugins,
             host::save_plugin_settings,
             host::get_plugin_runtime_status,
+            host::get_plugin_management,
+            host::open_plugin_management,
             host::start_plugin,
             host::stop_plugin,
             host::restart_plugin,
             host::get_plugin_secrets_status,
+            host::get_plugin_api_key,
             host::save_plugin_secret,
             host::delete_plugin_secret,
             host::get_gateway_status,
@@ -195,13 +203,30 @@ pub fn run() {
             host::set_gateway_port,
             host::select_plugin,
             host::get_host_events,
-            host::test_gateway_models
+            host::test_gateway_models,
+            host::flight_list_models,
+            host::flight_chat_stream,
+            host::flight_chat_nonstream,
+            host::flight_cancel,
+            host::detect_agent_clients,
+            host::import_agent_client,
+            host::restore_agent_client,
+            host::list_agent_backups
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            tauri::WindowEvent::Destroyed => {
+                let app_handle = window.app_handle().clone();
+                let label = window.label().to_string();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_handle.state::<DesktopState>();
+                    state.flight().cancel_all_for_window(&label).await;
+                });
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

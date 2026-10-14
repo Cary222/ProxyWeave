@@ -76,3 +76,13 @@
 | 用户真实账号/配置 | 用户私有目录 | 本阶段无需读取，不读取/复制/提交真实凭据 |
 
 Managed/External 由进程所有权决定，不由源码可得性决定。所有 manifests 是待运行验证草案；Unix `0o600` 与 Windows ACL 分开设计验证。
+
+## UI-001 单独修正：直接 opener 依赖（待独立 Inspector UI 验收）
+
+| 成熟来源/版本 | 发布源码 Commit | 实际直接使用 | 许可证/验证边界 |
+|---|---|---|---|
+| tauri-plugin-opener 2.5.4 | 5c7668b6bb7c9a509f394d584568b3a922161e50 | Rust `open_url(url, None::<&str>)` → backend 校验当前端点；不注册 JS plugin | MIT OR Apache-2.0；原路径单元测试已读，构建/本产品 URL 策略测试分别留证；不代表真实浏览器/原生 UI 通过 |
+| open 5.4.1（官方 opener 原有依赖） | 发布包源码已读；未推测 Commit | Windows `ShellExecuteExW`，不调用 cmd 拼 URL | MIT；原 Windows tests 与许可证已读；系统浏览器加载与后续导航不由宿主保证 |
+| Tauri 2.11.2 / tauri-runtime-wry 2.11.2 / Wry 0.55.1（已有锁定依赖） | 实际 Cargo registry 源码核查 | main-frame initialization / WebView2 子帧注入边界 | 不引入 iframe/child WebView、不扩 CSP/capabilities；详见 ADR-006 |
+
+既有 Quotio React shell/PluginPanel 和原生 HTML button 直接复用，无新浏览器框架/JS opener 依赖。可选静态 management 字段无 pluginID 特例；原包与导入记录不改变；声明能力不冒充实测。此 UI-001 不更改上列历史 Feature 状态，不恢复完整 Goal；详细安全依据、旧 fingerprint 与质量门见 [ADR-006](../architecture/ADR-006-plugin-navigation-management.md) 及 developer 冻结交付。

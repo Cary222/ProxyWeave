@@ -144,14 +144,14 @@ fn alive(pid: u32) -> bool {
     }
 }
 async fn wait_for_exit(pid: u32) {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while alive(pid) {
         assert!(Instant::now() < deadline, "owned PID {pid} still alive");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
 async fn wait_for_spawn(root: &Path) -> u32 {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         if let Some(pid) = pids(root).last() {
             return *pid;

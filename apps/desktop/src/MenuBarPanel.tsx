@@ -1,4 +1,4 @@
-import "./App.css";
+import "./components/legacy-shell.css";
 import "./menubar.css";
 import { invoke } from "./lib/tauri";
 export default function MenuBarPanel() {

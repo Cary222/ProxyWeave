@@ -10,6 +10,8 @@
 
 Manifest 使用严格类型，未知字段/重复键/多文档拒绝，限制大小；只支持本轮声明的 Schema 1.0 子集。Managed（宿主启动并拥有）与 External（只挂载端点）使用互斥运行时分支，绝不以源码可得性区分。路径使用可移植相对路径，拒绝 traversal、绝对路径、Windows ADS/设备名、链接/重解析点；不复制未声明文件。登记采用已复用平台原子写入和每包目录发布，不重新实现原子覆盖算法。
 
+UI-001 单独可选扩展：`management: { path: /public-entry, presentation: browser }`，静态 origin-relative 路径严格验证，未声明不猜测页面；旧字段/序列化顺序不变，None 省略以保持旧指纹。逐插件导航复用现有控制；管理页仅用户点击经 backend 当前端点验证后由官方 opener 系统浏览器打开，无 iframe/childWebView、远程权限或安全头绕过。具体边界、声明与实测区分见 [ADR-006](ADR-006-plugin-navigation-management.md)。本补充不更改历史门禁状态，也不升级旧导入记录。
+
 ## Direct Reuse First 前置比较
 
 - 已采用：Quotio v0.7.7 / 21d75d08b38a23f97fbd534a1768a829cb147f2c，`crates/quotio-platform/src/lib.rs` → 当前同路径 `atomic_write`/Windows `MoveFileExW` 与适用原测试。非敏感登记使用 `sensitive=false`；不以此宣称 Windows ACL。

@@ -5,6 +5,7 @@ members = [
     "crates/quotio-types",
     "crates/proxyweave-plugin",
     "crates/proxyweave-gateway",
+    "crates/proxyweave-protocols",
 ]
 resolver = "2"
 

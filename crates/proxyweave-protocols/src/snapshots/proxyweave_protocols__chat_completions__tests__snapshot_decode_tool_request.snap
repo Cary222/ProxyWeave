@@ -1,0 +1,65 @@
+---
+source: crates/protocols/src/chat_completions.rs
+assertion_line: 2372
+expression: ir
+---
+IrRequest {
+    model: "gpt-4o",
+    system: None,
+    messages: [
+        Message {
+            role: User,
+            content: [
+                Text {
+                    text: "What is the weather?",
+                    annotations: None,
+                    prompt_cache_breakpoint: None,
+                },
+            ],
+        },
+    ],
+    tools: [
+        Tool {
+            name: "get_weather",
+            description: Some(
+                "Get weather",
+            ),
+            parameters: Some(
+                Object {
+                    "properties": Object {
+                        "city": Object {
+                            "type": String("string"),
+                        },
+                    },
+                    "type": String("object"),
+                },
+            ),
+            required: false,
+            tool_type: None,
+            config: None,
+        },
+    ],
+    params: GenerationParams {
+        max_tokens: None,
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        stop: [],
+        frequency_penalty: None,
+        presence_penalty: None,
+        seed: None,
+        thinking: None,
+        verbosity: None,
+    },
+    response_format: None,
+    stream: false,
+    ingress_protocol: ProtocolEndpoint {
+        suite: OpenAiCompatible,
+        name: "chat-completions",
+        version: "v1",
+    },
+    metadata: None,
+    extensions: {
+        "tool_choice": String("auto"),
+    },
+}

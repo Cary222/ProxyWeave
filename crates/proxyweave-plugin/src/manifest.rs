@@ -3,6 +3,10 @@ use serde_json::Value;
 use std::{collections::BTreeMap, net::IpAddr, path::Path};
 use url::Url;
 
+/// Canonical backend protocols; aliases are deliberately rejected at registration.
+pub const SUPPORTED_BACKEND_PROTOCOLS: &[&str] =
+    &["openai_chat", "openai_responses", "anthropic_messages"];
+
 pub const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
 pub(crate) const MAX_PACKAGE_FILE_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -17,8 +21,23 @@ pub struct Manifest {
     pub capabilities: Capabilities,
     #[serde(default)]
     pub configuration: Configuration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub management: Option<Management>,
 }
 
+/// A public static entry on the plugin's own origin; never a credential template.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Management {
+    pub path: String,
+    pub presentation: ManagementPresentation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagementPresentation {
+    Browser,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Metadata {
@@ -180,8 +199,11 @@ impl Manifest {
         {
             return Err("lifecycle bounds are invalid".into());
         }
-        if self.capabilities.protocol != "openai_chat" {
-            return Err("only same-protocol openai_chat passthrough is supported".into());
+        if let Some(management) = &self.management {
+            crate::management::validate_management_path(&management.path)?;
+        }
+        if !SUPPORTED_BACKEND_PROTOCOLS.contains(&self.capabilities.protocol.as_str()) {
+            return Err("unsupported backend protocol; expected openai_chat, openai_responses or anthropic_messages".into());
         }
         validate_http_path(&self.capabilities.models_path)?;
         validate_http_path(&self.capabilities.inference_path)?;

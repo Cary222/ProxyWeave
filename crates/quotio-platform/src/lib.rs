@@ -564,11 +564,44 @@ pub fn set_credential(account: &str, value: &str) -> Result<(), String> {
 }
 
 pub fn get_credential(account: &str) -> Result<Option<String>, String> {
-    match credential_entry(account)?.get_secret() {
-        Ok(bytes) => String::from_utf8(bytes).map(Some).map_err(|e| e.to_string()),
+    let entry = credential_entry(account)?;
+    match entry.get_secret() {
+        Ok(bytes) => {
+            // Old Windows set_password stores UTF-16LE. Only accept the proven
+            // printable-ASCII layout; never guess arbitrary untagged blob encodings.
+            #[cfg(target_os = "windows")]
+            if is_legacy_ascii_password(&bytes) {
+                return entry
+                    .get_password()
+                    .map(Some)
+                    .map_err(|_| "Cannot read legacy credential".to_string());
+            }
+            decode_utf8_credential(bytes).map(Some)
+        }
         Err(KeyringError::NoEntry) => Ok(None),
         Err(error) => Err(keyring_error(error)),
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_legacy_ascii_password(bytes: &[u8]) -> bool {
+    !bytes.is_empty()
+        && bytes.len().is_multiple_of(2)
+        && bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .all(|&[low, high]| high == 0 && (0x20..=0x7e).contains(&low))
+}
+
+fn decode_utf8_credential(bytes: Vec<u8>) -> Result<String, String> {
+    String::from_utf8(bytes)
+        .ok()
+        .filter(|value| !value.contains('\0'))
+        .ok_or_else(|| {
+            "Unsupported credential encoding; save the credential again through its settings page"
+                .to_string()
+        })
 }
 
 pub fn delete_credential(account: &str) -> Result<(), String> {
@@ -956,6 +989,16 @@ fn keyring_error(error: KeyringError) -> String {
 mod tests {
     use super::*;
 
+    // Test-only owned accounts; cleanup runs even if an assertion unwinds.
+    struct OwnedCredentials(Vec<String>);
+    impl Drop for OwnedCredentials {
+        fn drop(&mut self) {
+            for account in &self.0 {
+                let _ = delete_credential(account);
+            }
+        }
+    }
+
     #[test]
     fn replace_file_failure_preserves_existing_target() {
         let dir = std::env::temp_dir().join(format!(
@@ -1222,9 +1265,14 @@ mod tests {
 
     #[test]
     fn plugin_keyring_lifecycle_isolates_namespace_and_roundtrips() {
-        let p1 = format!("test_p1_{}", std::process::id());
-        let p2 = format!("test_p2_{}", std::process::id());
+        let nonce = current_unix_millis();
+        let p1 = format!("test_p1_{}_{nonce}", std::process::id());
+        let p2 = format!("test_p2_{}_{nonce}", std::process::id());
         let key = "api_key";
+        let _cleanup = OwnedCredentials(vec![
+            format!("plugin:{p1}:{key}"),
+            format!("plugin:{p2}:{key}"),
+        ]);
         let val1 = "secret-val-p1";
         let val2 = "secret-val-p2";
 
@@ -1258,9 +1306,78 @@ mod tests {
         assert_eq!(get_plugin_credential(&p2, key).unwrap(), None);
     }
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn legacy_windows_password_and_new_utf8_keep_original_blobs() {
+        let account = format!(
+            "test_legacy_encoding_{}_{}",
+            std::process::id(),
+            current_unix_millis()
+        );
+        let _cleanup = OwnedCredentials(vec![account.clone()]);
+        let entry = credential_entry(&account).unwrap();
+        let legacy = "dummy-legacy-plugin-key-ASCII";
+        entry
+            .set_password(legacy)
+            .expect("write owned legacy fixture");
+        let before = entry.get_secret().unwrap();
+        assert!(is_legacy_ascii_password(&before));
+        assert_eq!(get_credential(&account).unwrap().as_deref(), Some(legacy));
+        assert_eq!(
+            entry.get_secret().unwrap(),
+            before,
+            "read must not migrate stored bytes"
+        );
+        for value in ["dummy-new-key", "新令牌-🌍-dummy"] {
+            set_credential(&account, value).unwrap();
+            assert_eq!(get_credential(&account).unwrap().as_deref(), Some(value));
+            assert_eq!(entry.get_secret().unwrap(), value.as_bytes());
+        }
+        let long = "dummy-OAuth-新-🌍".repeat(70);
+        set_credential(&account, &long).unwrap();
+        assert_eq!(
+            get_credential(&account).unwrap().as_deref(),
+            Some(long.as_str())
+        );
+        assert_eq!(entry.get_secret().unwrap(), long.as_bytes());
+        for bytes in [
+            b"dummy\0mixed".to_vec(),
+            vec![0xff, 0xfe, 0xfd],
+            vec![0x41, 0, 0x42],
+            vec![0, 0],
+        ] {
+            entry.set_secret(&bytes).unwrap();
+            assert_eq!(get_credential(&account).unwrap_err(), "Unsupported credential encoding; save the credential again through its settings page");
+            assert_eq!(
+                entry.get_secret().unwrap(),
+                bytes,
+                "failure must not rewrite blob"
+            );
+        }
+        delete_credential(&account).unwrap();
+    }
+
+    #[test]
+    fn credential_encoding_errors_never_include_raw_values() {
+        assert!(decode_utf8_credential("UTF8-中文-🌍".as_bytes().to_vec()).is_ok());
+        assert_eq!(
+            decode_utf8_credential(b"dummy-private\0marker".to_vec()).unwrap_err(),
+            "Unsupported credential encoding; save the credential again through its settings page"
+        );
+        assert_eq!(
+            decode_utf8_credential(vec![0xff]).unwrap_err(),
+            "Unsupported credential encoding; save the credential again through its settings page"
+        );
+    }
+
     #[test]
     fn long_credential_roundtrip_supports_tokens_up_to_platform_blob_limit() {
-        let account = format!("test_long_token_{}", std::process::id());
+        let account = format!(
+            "test_long_token_{}_{}",
+            std::process::id(),
+            current_unix_millis()
+        );
+        let _cleanup = OwnedCredentials(vec![account.clone()]);
         // 构造类似真实 OAuth JWT 的长凭据（1600 字符，远超 Windows UTF-16 set_password 的 1280 限制）
         let long_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9."
             .chars()

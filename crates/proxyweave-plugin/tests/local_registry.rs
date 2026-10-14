@@ -373,3 +373,92 @@ fn secret_command_lines_and_projection_aliases_are_rejected() {
         assert!(Manifest::parse(text.as_bytes()).is_err());
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn real_executable_fresh_imports_and_conflicts_preserve_bytes() {
+    // Real PE image; never spawned or read from a user plugin profile.
+    let executable = fs::read(std::env::current_exe().unwrap()).unwrap();
+    let hash = format!("{:x}", Sha256::digest(&executable));
+    let tmp = tempfile::tempdir().unwrap();
+    let source = package(&tmp.path().join("source"));
+    fs::write(source.parent().unwrap().join("bin/test.exe"), &executable).unwrap();
+    let yaml = fs::read_to_string(&source).unwrap();
+    let placeholder = format!(
+        "{:x}",
+        Sha256::digest(b"test executable bytes; never executed")
+    );
+    fs::write(&source, yaml.replace(&placeholder, &hash)).unwrap();
+    for profile in [
+        tmp.path().join("short"),
+        tmp.path()
+            .join("owned-long-profile-for-real-executable-import")
+            .join("nested-configuration")
+            .join("fresh-one"),
+        tmp.path().join("fresh-two"),
+    ] {
+        let registry = Registry::open(&profile).unwrap();
+        let first = registry.import(&source).unwrap();
+        assert!(!first.already_registered);
+        let installed = registry
+            .package_dir("test-plugin")
+            .unwrap()
+            .join("bin/test.exe");
+        assert_eq!(fs::read(&installed).unwrap(), executable);
+        let record_bytes = fs::read(
+            installed
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("record.json"),
+        )
+        .unwrap();
+        assert!(registry.import(&source).unwrap().already_registered);
+        drop(registry);
+        let reopened = Registry::open(&profile).unwrap();
+        assert_eq!(reopened.load("test-plugin").unwrap(), first.record);
+        assert_eq!(
+            fs::read(
+                installed
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("record.json")
+            )
+            .unwrap(),
+            record_bytes
+        );
+        assert_eq!(fs::read_dir(profile.join("packages")).unwrap().count(), 1);
+    }
+}
+
+#[test]
+#[ignore = "requires an explicitly provided owned three-file real wb2api package"]
+fn owned_wb2api_package_import_regression() {
+    let source = std::path::PathBuf::from(
+        std::env::var_os("PROXYWEAVE_TEST_PACKAGE").expect("owned package required"),
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    for name in [
+        "short",
+        "owned-long-real-package-profile-for-publication-regression/nested/fresh",
+        "fresh-repeat",
+    ] {
+        let profile = tmp.path().join(name);
+        let registry = Registry::open(&profile).unwrap();
+        let first = registry.import(&source).unwrap();
+        assert!(!first.already_registered);
+        assert!(registry.import(&source).unwrap().already_registered);
+        let id = &first.record.manifest.metadata.id;
+        let installed = registry.package_dir(id).unwrap();
+        let before = fs::read(installed.join("record.json")).unwrap();
+        drop(registry);
+        let reopened = Registry::open(&profile).unwrap();
+        assert_eq!(reopened.load(id).unwrap(), first.record);
+        assert_eq!(fs::read(installed.join("record.json")).unwrap(), before);
+        assert_eq!(fs::read_dir(profile.join("packages")).unwrap().count(), 1);
+        println!("real package import/duplicate/reopen succeeded: {name}");
+    }
+}

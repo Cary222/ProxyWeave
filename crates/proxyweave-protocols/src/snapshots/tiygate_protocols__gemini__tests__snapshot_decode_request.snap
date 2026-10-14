@@ -1,0 +1,43 @@
+---
+source: crates/protocols/src/gemini.rs
+assertion_line: 1661
+expression: ir
+---
+IrRequest {
+    model: "models/gemini-2.0-flash",
+    system: None,
+    messages: [
+        Message {
+            role: User,
+            content: [
+                Text {
+                    text: "Hello",
+                    annotations: None,
+                    prompt_cache_breakpoint: None,
+                },
+            ],
+        },
+    ],
+    tools: [],
+    params: GenerationParams {
+        max_tokens: None,
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        stop: [],
+        frequency_penalty: None,
+        presence_penalty: None,
+        seed: None,
+        thinking: None,
+        verbosity: None,
+    },
+    response_format: None,
+    stream: false,
+    ingress_protocol: ProtocolEndpoint {
+        suite: GoogleGemini,
+        name: "generateContent",
+        version: "v1beta",
+    },
+    metadata: None,
+    extensions: {},
+}

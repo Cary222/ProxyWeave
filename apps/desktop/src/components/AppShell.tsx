@@ -1,5 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "../lib/tauri";
+import { useState, useEffect, useRef } from "react";
+import { Icon } from "./Icon";
+import { Overview, ResourceReadState } from "./Overview";
+import { GatewayPanel } from "./GatewayPanel";
+import { PluginPanel } from "./PluginPanel";
+import { DiscoverPanel } from "./DiscoverPanel";
+import { FlightPanel } from "./FlightPanel";
+import { AuditPanel } from "./AuditPanel";
+import { IdePanel } from "./IdePanel";
+import { SettingsPanel } from "./SettingsPanel";
 import {
   PluginRecord,
   PluginStatusInfo,
@@ -7,108 +15,249 @@ import {
   GatewayStatusInfo,
   HostEvent,
 } from "../types";
-import { GatewayPanel } from "./GatewayPanel";
-import { PluginPanel } from "./PluginPanel";
-import { EventsPanel } from "./EventsPanel";
-import "../App.css";
-import "./shell.css";
-import "./dashboard.css";
+import { api } from "../api";
+import "./prototype.css";
 
-const t = (_key: string, fallback: string) => fallback;
+export type NavTab =
+  | "overview"
+  | "gateway"
+  | "plugins"
+  | "discover"
+  | "flight"
+  | "audit"
+  | "ide"
+  | "settings";
 
-async function toggleMaximize() {
-  if (!("__TAURI_INTERNALS__" in window)) return;
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().toggleMaximize();
-}
-
-type TabType = "gateway" | "plugins" | "events" | "about";
+export type ThemeMode = "sky" | "glass" | "dark";
 
 export function AppShell() {
-  const [activeTab, setActiveTab] = useState<TabType>("gateway");
-  const [closeDialog, setCloseDialog] = useState(false);
-  const [rememberClose, setRememberClose] = useState(false);
-  const [minimizeDialog, setMinimizeDialog] = useState(false);
-  const [rememberMinimize, setRememberMinimize] = useState(false);
-  const [closing, setClosing] = useState(false);
-
-  // Core application data state
-  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatusInfo | null>(null);
-  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
-  const [pluginStatuses, setPluginStatuses] = useState<Record<string, PluginStatusInfo>>({});
-  const [secretsStatuses, setSecretsStatuses] = useState<Record<string, SecretStatusInfo[]>>({});
-  const [events, setEvents] = useState<HostEvent[]>([]);
-
-  const refreshAll = useCallback(async () => {
+  const [currentTab, setCurrentTab] = useState<NavTab>("overview");
+  const [theme, setTheme] = useState<ThemeMode>(() => {
     try {
-      // 1. Gateway status
-      const gw: GatewayStatusInfo = await invoke("get_gateway_status");
-      setGatewayStatus(gw);
-
-      // 2. Plugins list
-      const pl: PluginRecord[] = await invoke("list_local_plugins");
-      setPlugins(pl);
-
-      // 3. Status and secrets per plugin
-      const statuses: Record<string, PluginStatusInfo> = {};
-      const secrets: Record<string, SecretStatusInfo[]> = {};
-
-      for (const p of pl) {
-        const id = p.manifest.metadata.id;
-        try {
-          const st: PluginStatusInfo = await invoke("get_plugin_runtime_status", { id });
-          statuses[id] = st;
-        } catch {
-          // ignore individual fetch errors
-        }
-
-        try {
-          const sec: SecretStatusInfo[] = await invoke("get_plugin_secrets_status", { id });
-          secrets[id] = sec;
-        } catch {
-          // ignore individual fetch errors
+      if (typeof localStorage !== "undefined") {
+        const stored = localStorage.getItem("pw-theme");
+        if (stored === "sky" || stored === "glass" || stored === "dark") {
+          return stored;
         }
       }
-
-      setPluginStatuses(statuses);
-      setSecretsStatuses(secrets);
-
-      // 4. Host events
-      const ev: HostEvent[] = await invoke("get_host_events");
-      setEvents(ev);
-    } catch (e) {
-      console.warn("Polling error:", e);
+    } catch {
+      // ignore storage errors
     }
-  }, []);
+    return "sky";
+  });
+  const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
+
+  // Per-resource read states (DEF-019: loading / confirmed / error + stale preservation)
+  const [gatewayState, setGatewayState] = useState<ResourceReadState<GatewayStatusInfo>>({
+    status: "loading",
+    data: null,
+    isStale: false,
+  });
+  const [pluginsState, setPluginsState] = useState<ResourceReadState<PluginRecord[]>>({
+    status: "loading",
+    data: null,
+    isStale: false,
+  });
+  const [eventsState, setEventsState] = useState<ResourceReadState<HostEvent[]>>({
+    status: "loading",
+    data: null,
+    isStale: false,
+  });
+
+  const [pluginStatuses, setPluginStatuses] = useState<Record<string, PluginStatusInfo>>({});
+  const [secretsStatuses, setSecretsStatuses] = useState<Record<string, SecretStatusInfo[]>>({});
+  const [dataReady, setDataReady] = useState(false);
+
+  // Native window control & close preference dialog states (DEF-018)
+  const [closeDialog, setCloseDialog] = useState(false);
+  const [rememberClose, setRememberClose] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [windowError, setWindowError] = useState<string | null>(null);
+
+  // Generational & mount tracking for concurrent refresh safety (DEF-019)
+  const generationRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    refreshAll();
-    const timer = setInterval(refreshAll, 3000);
-    return () => clearInterval(timer);
-  }, [refreshAll]);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  function doQuit() {
+  // Sync theme attribute to documentElement and localStorage
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("pw-theme", theme);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
+
+  // Initial & periodic data fetching with per-resource state and generation guard
+  const refreshData = async () => {
+    const currentGen = ++generationRef.current;
+
+    const [gwRes, plgRes, evtRes] = await Promise.allSettled([
+      api.getGatewayStatus(),
+      api.listPlugins(),
+      api.getHostEvents(),
+    ]);
+
+    if (!isMountedRef.current || currentGen !== generationRef.current) {
+      return;
+    }
+
+    // 1. Gateway status
+    if (gwRes.status === "fulfilled") {
+      setGatewayState({
+        status: "confirmed",
+        data: gwRes.value,
+        isStale: false,
+        error: null,
+      });
+    } else {
+      const errMsg =
+        gwRes.reason instanceof Error ? gwRes.reason.message : String(gwRes.reason);
+      setGatewayState((prev) => ({
+        status: prev.data !== null ? "confirmed" : "error",
+        data: prev.data,
+        isStale: prev.data !== null,
+        error: errMsg || "读取网关状态失败",
+      }));
+    }
+
+    // 2. Plugins list
+    let confirmedPlugins: PluginRecord[] | null = null;
+    if (plgRes.status === "fulfilled") {
+      confirmedPlugins = plgRes.value;
+      setPluginsState({
+        status: "confirmed",
+        data: plgRes.value,
+        isStale: false,
+        error: null,
+      });
+    } else {
+      const errMsg =
+        plgRes.reason instanceof Error ? plgRes.reason.message : String(plgRes.reason);
+      setPluginsState((prev) => ({
+        status: prev.data !== null ? "confirmed" : "error",
+        data: prev.data,
+        isStale: prev.data !== null,
+        error: errMsg || "读取插件列表失败",
+      }));
+    }
+
+    // 3. Host events
+    if (evtRes.status === "fulfilled") {
+      setEventsState({
+        status: "confirmed",
+        data: evtRes.value,
+        isStale: false,
+        error: null,
+      });
+    } else {
+      const errMsg =
+        evtRes.reason instanceof Error ? evtRes.reason.message : String(evtRes.reason);
+      setEventsState((prev) => ({
+        status: prev.data !== null ? "confirmed" : "error",
+        data: prev.data,
+        isStale: prev.data !== null,
+        error: errMsg || "读取审计事件失败",
+      }));
+    }
+
+    // 4. Per-plugin runtime & secret statuses (only updated when plugin list read succeeded)
+    if (confirmedPlugins !== null) {
+      if (confirmedPlugins.length === 0) {
+        setPluginStatuses({});
+        setSecretsStatuses({});
+      } else {
+        const statuses: Record<string, PluginStatusInfo> = {};
+        const secrets: Record<string, SecretStatusInfo[]> = {};
+
+        await Promise.all(
+          confirmedPlugins.map(async (p: PluginRecord) => {
+            const id = p.manifest.metadata.id;
+            const [stRes, scRes] = await Promise.allSettled([
+              api.getPluginRuntimeStatus(id),
+              api.getPluginSecretsStatus(id),
+            ]);
+            if (stRes.status === "fulfilled" && stRes.value) {
+              statuses[id] = stRes.value;
+            }
+            if (scRes.status === "fulfilled" && scRes.value) {
+              secrets[id] = scRes.value;
+            }
+            return null;
+          })
+        );
+
+        if (isMountedRef.current && currentGen === generationRef.current) {
+          setPluginStatuses(statuses);
+          setSecretsStatuses(secrets);
+        }
+      }
+    }
+
+    if (isMountedRef.current && currentGen === generationRef.current) {
+      setDataReady(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Window control actions (DEF-018: Phase 0 verified close/minimize/maximize flow)
+  async function doQuit() {
     setClosing(true);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        void (async () => {
-          if (!("__TAURI_INTERNALS__" in window)) return;
-          await invoke("quit_app");
-        })();
-      }),
-    );
+    setWindowError(null);
+    try {
+      await api.quitApp();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setClosing(false);
+        setWindowError(err instanceof Error ? err.message : String(err));
+      }
+    }
   }
 
-  async function requestClose() {
-    if (!("__TAURI_INTERNALS__" in window)) return;
+  async function minimizeToTray() {
+    setWindowError(null);
+    try {
+      await api.hideWindow();
+      await api.showMenubar();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setWindowError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+
+  function requestClose() {
+    setWindowError(null);
     let saved: string | null = null;
     try {
       saved = localStorage.getItem("proxyweave.closeAction");
     } catch {
       /* storage unavailable */
     }
-    if (saved === "quit") return doQuit();
-    if (saved === "tray") return minimizeToTray();
+    if (saved === "quit") {
+      void doQuit();
+      return;
+    }
+    if (saved === "tray") {
+      void minimizeToTray();
+      return;
+    }
     setCloseDialog(true);
   }
 
@@ -124,342 +273,508 @@ export function AppShell() {
     if (choice === "tray") {
       void minimizeToTray();
     } else {
-      doQuit();
+      void doQuit();
     }
   }
 
-  async function minimizeToTray() {
-    if (!("__TAURI_INTERNALS__" in window)) return;
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().hide();
-    void invoke("show_menubar");
-  }
-
-  async function minimizeToTaskbar() {
-    if (!("__TAURI_INTERNALS__" in window)) return;
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().minimize();
-  }
-
-  async function requestMinimize() {
-    if (!("__TAURI_INTERNALS__" in window)) return;
-    let saved: string | null = null;
+  async function handleMinimize() {
+    setWindowError(null);
     try {
-      saved = localStorage.getItem("proxyweave.minimizeAction");
-    } catch {
-      /* storage unavailable */
-    }
-    if (saved === "tray") return minimizeToTray();
-    if (saved === "taskbar") return minimizeToTaskbar();
-    setMinimizeDialog(true);
-  }
-
-  function chooseMinimize(choice: "tray" | "taskbar") {
-    if (rememberMinimize) {
-      try {
-        localStorage.setItem("proxyweave.minimizeAction", choice);
-      } catch {
-        /* storage unavailable */
+      await api.minimizeWindow();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setWindowError(err instanceof Error ? err.message : String(err));
       }
     }
-    setMinimizeDialog(false);
-    if (choice === "tray") {
-      void minimizeToTray();
-    } else {
-      void minimizeToTaskbar();
+  }
+
+  async function handleToggleMaximize() {
+    setWindowError(null);
+    try {
+      await api.toggleMaximizeWindow();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setWindowError(err instanceof Error ? err.message : String(err));
+      }
     }
   }
 
-  const isGwRunning = gatewayStatus?.is_running ?? false;
-  const runningPluginCount = Object.values(pluginStatuses).filter(
-    (s) => s.status === "ready" || s.status === "busy",
+  const gatewayStatus = gatewayState.data;
+  const plugins = pluginsState.data ?? [];
+  const events = eventsState.data ?? [];
+
+  const readyPluginsCount = Object.values(pluginStatuses).filter(
+    (s) => s.status === "ready"
   ).length;
 
   return (
-    <main className="app-shell app-shell--v2">
-      {/* Left Glass Sidebar */}
+    <div className="app">
+      {/* 侧边栏 Sidebar */}
       <aside className="sidebar">
-        <div className="sidebar-titlebar">
-          <div className="window-controls">
+        <div className="dots win-dots" data-tauri-drag-region>
+          <button
+            type="button"
+            className="win-dot win-dot--close"
+            style={{
+              background: "#ff5f57",
+              cursor: "pointer",
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              border: "none",
+              padding: 0,
+              display: "block",
+            }}
+            onClick={requestClose}
+            title="关闭"
+            aria-label="关闭"
+          />
+          <button
+            type="button"
+            className="win-dot win-dot--min"
+            style={{
+              background: "#febc2e",
+              cursor: "pointer",
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              border: "none",
+              padding: 0,
+              display: "block",
+            }}
+            onClick={() => void handleMinimize()}
+            title="最小化"
+            aria-label="最小化"
+          />
+          <button
+            type="button"
+            className="win-dot win-dot--max"
+            style={{
+              background: "#28c840",
+              cursor: "pointer",
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              border: "none",
+              padding: 0,
+              display: "block",
+            }}
+            onClick={() => void handleToggleMaximize()}
+            title="最大化"
+            aria-label="最大化"
+          />
+        </div>
+        {windowError && (
+          <div
+            role="alert"
+            className="window-error"
+            style={{
+              background: "var(--red-bg, rgba(239, 68, 68, 0.14))",
+              color: "var(--red, #ef4444)",
+              borderRadius: 6,
+              padding: "6px 10px",
+              marginBottom: 8,
+              fontSize: 12,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>窗口操作失败: {windowError}</span>
             <button
               type="button"
-              className="win-dot win-dot--close"
-              onClick={() => void requestClose()}
-              aria-label="关闭"
-              title="关闭"
+              onClick={() => setWindowError(null)}
+              aria-label="忽略窗口错误"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "inherit",
+                cursor: "pointer",
+                padding: "0 4px",
+              }}
             >
-              <svg className="win-dot-icon" viewBox="0 0 12 12">
-                <path
-                  d="M3.172 3.172a.5.5 0 0 1 .707 0L6 5.293l2.121-2.121a.5.5 0 1 1 .707.707L6.707 6l2.121 2.121a.5.5 0 0 1-.707.707L6 6.707 3.879 8.828a.5.5 0 1 1-.707-.707L5.293 6 3.172 3.879a.5.5 0 0 1 0-.707Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="win-dot win-dot--min"
-              onClick={() => void requestMinimize()}
-              aria-label="最小化"
-              title="最小化"
-            >
-              <svg className="win-dot-icon" viewBox="0 0 12 12">
-                <rect x="2" y="5.25" width="8" height="1.5" rx=".75" fill="currentColor" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="win-dot win-dot--max"
-              onClick={() => void toggleMaximize()}
-              aria-label="最大化"
-              title="最大化"
-            >
-              <svg className="win-dot-icon" viewBox="0 0 12 12">
-                <path
-                  d="M2 4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm2-.75a.75.75 0 0 0-.75.75v4c0 .414.336.75.75.75h4a.75.75 0 0 0 .75-.75V4a.75.75 0 0 0-.75-.75H4Z"
-                  fill="currentColor"
-                />
-              </svg>
+              ×
             </button>
           </div>
-          <div className="titlebar-drag" data-tauri-drag-region />
+        )}
+        <div className="brand" data-tauri-drag-region>
+          <h1>ProxyWeave</h1>
+          <p>AI 编织网关宿主 · 统一网关服务</p>
         </div>
 
-        <div className="sidebar-brand">
-          <h1 className="brand-title">ProxyWeave</h1>
-          <p className="brand-subtitle">AI 编织网关宿主</p>
-        </div>
-
-        {/* Navigation List */}
-        <nav className="nav-list">
+        {/* 8 大主导航 */}
+        <nav className="nav" id="sideNav">
           <button
             type="button"
-            className={activeTab === "gateway" ? "active" : ""}
-            onClick={() => setActiveTab("gateway")}
+            className={currentTab === "overview" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("overview");
+              setSelectedPluginId(null);
+            }}
           >
-            <span className="nav-symbol">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 3v18" />
-                <path d="M3 12h18" />
-              </svg>
-            </span>
-            <span className="nav-label">统一网关</span>
-            <span className={`nav-badge ${isGwRunning ? "badge--online" : "badge--offline"}`}>
-              {isGwRunning ? "ONLINE" : "OFF"}
-            </span>
+            <Icon name="grid" className="ic" />
+            <span>系统概览</span>
+            <small className="gray">Phase 1</small>
           </button>
 
           <button
             type="button"
-            className={activeTab === "plugins" ? "active" : ""}
-            onClick={() => setActiveTab("plugins")}
+            className={currentTab === "gateway" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("gateway");
+              setSelectedPluginId(null);
+            }}
           >
-            <span className="nav-symbol">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-              </svg>
-            </span>
-            <span className="nav-label">插件管理</span>
-            {plugins.length > 0 ? (
-              <span className="nav-badge">
-                {runningPluginCount}/{plugins.length}
-              </span>
-            ) : null}
+            <Icon name="globe" className="ic" />
+            <span>统一网关</span>
+            <small className={gatewayStatus?.is_running ? "" : "gray"}>
+              {gatewayState.status === "loading"
+                ? "读取中"
+                : gatewayState.status === "error" && gatewayState.data === null
+                ? "未知"
+                : gatewayState.isStale
+                ? gatewayStatus?.is_running
+                  ? "ON (过期)"
+                  : "OFF (过期)"
+                : gatewayStatus?.is_running
+                ? "ON"
+                : "OFF"}
+            </small>
           </button>
 
           <button
             type="button"
-            className={activeTab === "events" ? "active" : ""}
-            onClick={() => setActiveTab("events")}
+            className={currentTab === "plugins" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("plugins");
+              setSelectedPluginId(null);
+            }}
           >
-            <span className="nav-symbol">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            </span>
-            <span className="nav-label">审计轨迹</span>
-            {events.length > 0 ? <span className="nav-badge">{events.length}</span> : null}
+            <Icon name="plug" className="ic" />
+            <span>插件管理</span>
+            <small>
+              {pluginsState.status === "loading"
+                ? "读取中"
+                : pluginsState.status === "error" && pluginsState.data === null
+                ? "未知"
+                : pluginsState.isStale
+                ? `${readyPluginsCount}/${plugins.length} (过期)`
+                : `${readyPluginsCount}/${plugins.length}`}
+            </small>
           </button>
 
           <button
             type="button"
-            className={activeTab === "about" ? "active" : ""}
-            onClick={() => setActiveTab("about")}
+            className={currentTab === "discover" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("discover");
+              setSelectedPluginId(null);
+            }}
           >
-            <span className="nav-symbol">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
-            </span>
-            <span className="nav-label">系统概览</span>
+            <Icon name="compass" className="ic" />
+            <span>插件发现</span>
+          </button>
+
+          <button
+            type="button"
+            className={currentTab === "flight" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("flight");
+              setSelectedPluginId(null);
+            }}
+          >
+            <Icon name="send" className="ic" />
+            <span>试飞工作台</span>
+          </button>
+
+          <button
+            type="button"
+            className={currentTab === "audit" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("audit");
+              setSelectedPluginId(null);
+            }}
+          >
+            <Icon name="pulse" className="ic" />
+            <span>审计轨迹</span>
+            <small>
+              {eventsState.status === "loading"
+                ? "读取中"
+                : eventsState.status === "error" && eventsState.data === null
+                ? "未知"
+                : eventsState.isStale
+                ? `${events.length} (过期)`
+                : events.length}
+            </small>
+          </button>
+
+          <button
+            type="button"
+            className={currentTab === "ide" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("ide");
+              setSelectedPluginId(null);
+            }}
+          >
+            <Icon name="term" className="ic" />
+            <span>IDE 接入</span>
+          </button>
+
+          <button
+            type="button"
+            className={currentTab === "settings" ? "active" : ""}
+            onClick={() => {
+              setCurrentTab("settings");
+              setSelectedPluginId(null);
+            }}
+          >
+            <Icon name="sliders" className="ic" />
+            <span>系统设置</span>
           </button>
         </nav>
 
-        {/* Sidebar Footer Status Card */}
-        <div className="sidebar-footer">
-          <div
-            className="proxy-card"
-            onClick={() => setActiveTab("gateway")}
-            title="点击切换到网关面板"
+        <div className="side-label">外观主题 THEME</div>
+        <div className="theme-switch" role="group" aria-label="外观主题">
+          <button
+            type="button"
+            className={theme === "sky" ? "active" : ""}
+            onClick={() => setTheme("sky")}
+            title="晴空蓝白 (默认)"
           >
-            <div
-              className={`proxy-card-icon ${
-                isGwRunning ? "proxy-card-icon--good" : "proxy-card-icon--warn"
-              }`}
-            >
-              {isGwRunning ? "⚡" : "⏸"}
-            </div>
-            <div className="proxy-card-text">
-              <strong>{isGwRunning ? "网关运行中" : "网关已停止"}</strong>
-              <span>
-                {isGwRunning
-                  ? `端口 :${gatewayStatus?.port ?? 28319}`
-                  : "点击启动服务"}
-              </span>
-            </div>
-            <span className="proxy-card-chevron">›</span>
-          </div>
+            晴空
+          </button>
+          <button
+            type="button"
+            className={theme === "glass" ? "active" : ""}
+            onClick={() => setTheme("glass")}
+            title="玻璃拟态 (毛玻璃)"
+          >
+            玻璃
+          </button>
+          <button
+            type="button"
+            className={theme === "dark" ? "active" : ""}
+            onClick={() => setTheme("dark")}
+            title="深空暗色 (极简深色)"
+          >
+            深空
+          </button>
         </div>
+
+        <div
+          className="gw-mini"
+          id="gwMini"
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setCurrentTab("gateway");
+            setSelectedPluginId(null);
+          }}
+          title="点击跳转至统一网关设置"
+        >
+          <div
+            className="pause"
+            id="gwMiniIcon"
+            style={{
+              background: gatewayStatus?.is_running ? "var(--green-bg)" : "var(--amber-bg)",
+              color: gatewayStatus?.is_running ? "var(--green)" : "var(--amber)",
+            }}
+          >
+            <Icon name={gatewayStatus?.is_running ? "play" : "pause"} className="ic" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b id="gwMiniTitle">
+              {gatewayStatus === null
+                ? "网关状态未知"
+                : gatewayState.isStale
+                ? gatewayStatus.is_running
+                  ? "网关运行中 (过期)"
+                  : "网关已停止 (过期)"
+                : gatewayStatus.is_running
+                ? "网关运行中"
+                : "网关已停止"}
+            </b>
+            <span id="gwMiniSub">
+              {gatewayState.status === "loading"
+                ? "正在读取宿主状态"
+                : gatewayState.status === "error" && gatewayStatus === null
+                ? "读取宿主状态失败"
+                : gatewayState.isStale
+                ? gatewayStatus?.is_running
+                  ? `127.0.0.1:${gatewayStatus.port} (刷新失败)`
+                  : "服务停止 (刷新失败)"
+                : gatewayStatus?.is_running
+                ? `127.0.0.1:${gatewayStatus.port}`
+                : "点击启动服务 · 127.0.0.1:8080"}
+            </span>
+          </div>
+          <span style={{ color: "var(--muted)" }}>›</span>
+        </div>
+        <p style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", margin: "12px 0 0" }}>
+          上游易逝 · 平台长存
+        </p>
       </aside>
 
-      {/* Main Content Area */}
-      <section className="content">
-        {activeTab === "gateway" ? (
-          <GatewayPanel gatewayStatus={gatewayStatus} onRefresh={refreshAll} />
-        ) : null}
+      {/* 主视图内容区域 Main View */}
+      <main className="main">
+        {currentTab === "overview" && (
+          <Overview
+            gatewayStatus={gatewayStatus}
+            plugins={plugins}
+            pluginStatuses={pluginStatuses}
+            events={events}
+            dataReady={dataReady}
+            gatewayState={gatewayState}
+            pluginsState={pluginsState}
+            eventsState={eventsState}
+            onNavigate={(tab) => {
+              setCurrentTab(tab);
+              setSelectedPluginId(null);
+            }}
+            onSelectPlugin={(id) => {
+              setSelectedPluginId(id);
+              setCurrentTab("plugins");
+            }}
+          />
+        )}
 
-        {activeTab === "plugins" ? (
+        {currentTab === "gateway" && (
+          <GatewayPanel
+            status={gatewayStatus}
+            plugins={plugins}
+            onRefresh={refreshData}
+          />
+        )}
+
+        {currentTab === "plugins" && (
           <PluginPanel
+            dataReady={pluginsState.status === "confirmed"}
             plugins={plugins}
             pluginStatuses={pluginStatuses}
             secretsStatuses={secretsStatuses}
             gatewayStatus={gatewayStatus}
-            onRefresh={refreshAll}
+            selectedPluginId={selectedPluginId}
+            onRefresh={refreshData}
+            onSelectPlugin={(id) => setSelectedPluginId(id)}
+            onBack={() => setSelectedPluginId(null)}
+            onNavigateFlight={() => {
+              setCurrentTab("flight");
+            }}
           />
-        ) : null}
+        )}
 
-        {activeTab === "events" ? (
-          <EventsPanel events={events} onRefresh={refreshAll} />
-        ) : null}
+        {currentTab === "discover" && (
+          <DiscoverPanel
+            onInstallSuccess={() => {
+              refreshData();
+              setCurrentTab("plugins");
+            }}
+          />
+        )}
 
-        {activeTab === "about" ? (
-          <div className="panel-section">
-            <div className="section-header">
-              <div>
-                <h3 className="section-title">系统概览与架构基线 (Overview)</h3>
-                <p className="section-desc">
-                  ProxyWeave 桌面网关宿主核心架构与运行状态基准。
-                </p>
-              </div>
-            </div>
+        {currentTab === "flight" && (
+          <FlightPanel
+            plugins={plugins}
+            pluginStatuses={pluginStatuses}
+            gatewayStatus={gatewayStatus}
+          />
+        )}
 
-            <div className="card-box">
-              <h4 className="card-box-title">研发三大不可逾越之红线</h4>
-              <ul className="rules-list">
-                <li>
-                  <strong>上游易逝，胶水永存：</strong> 宿主自身不硬编码任何具体平台的逆向逻辑，所有 2API 均作为外部黑盒插件运行。
-                </li>
-                <li>
-                  <strong>Direct-Reuse First：</strong> 非平凡系统机制（进程看护 Job Object、Windows DACL、Keyring、动态端口、Axum/Hyper 透传）直接复用工业级成熟组件，杜绝凭空手写。
-                </li>
-                <li>
-                  <strong>外部服务零伤害：</strong> 对 External 外部服务仅执行透明反向代理挂载与健康探活，绝对禁止发送 Kill 信号。
-                </li>
-              </ul>
-            </div>
+        {currentTab === "audit" && (
+          <AuditPanel events={events} onRefresh={refreshData} />
+        )}
 
-            <div className="card-box">
-              <h4 className="card-box-title">版本与许可证基线</h4>
-              <p>
-                ProxyWeave Desktop v0.1.0 · 基于 Quotio v0.7.7 (MIT) 架构重塑与业务解耦 · Axum 0.8.9 / Hyper 1.10.1 · Tokio 1.52
-              </p>
-            </div>
-          </div>
-        ) : null}
-      </section>
+        {currentTab === "ide" && <IdePanel gatewayStatus={gatewayStatus} onNavigateGateway={() => setCurrentTab("gateway")} />}
 
-      {/* Modal Dialogs */}
+        {currentTab === "settings" && (
+          <SettingsPanel currentTheme={theme} onThemeChange={setTheme} />
+        )}
+      </main>
+
+      {/* 关闭确认对话框 (DEF-018: Phase 0 Custom Close Confirmation) */}
       {closeDialog ? (
-        <div className="modal-overlay" onClick={() => setCloseDialog(false)}>
-          <div className="close-dialog" onClick={(event) => event.stopPropagation()}>
-            <strong className="close-dialog-title">{t("close.title", "关闭 ProxyWeave")}</strong>
-            <p className="close-dialog-desc">
-              {t("close.desc", "退出程序,还是最小化到托盘继续后台运行?")}
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setCloseDialog(false)}
+        >
+          <div
+            className="close-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="关闭 ProxyWeave"
+            style={{
+              width: 360,
+              maxWidth: "90vw",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              padding: 20,
+              borderRadius: 14,
+              background: "var(--card, #ffffff)",
+              border: "1px solid var(--line, #e2e8f0)",
+              boxShadow: "0 20px 50px rgba(15, 23, 42, 0.28)",
+              color: "var(--ink, #0f172a)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <strong className="close-dialog-title" style={{ fontSize: 15, fontWeight: 700 }}>
+              关闭 ProxyWeave
+            </strong>
+            <p className="close-dialog-desc" style={{ fontSize: 13, color: "var(--sub, #64748b)", margin: 0 }}>
+              退出程序,还是最小化到托盘继续后台运行?
             </p>
-            <label className="close-dialog-remember">
+            <label
+              className="close-dialog-remember"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12.5,
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={rememberClose}
                 onChange={(event) => setRememberClose(event.target.checked)}
               />
-              <span>{t("close.remember", "记住我的选择")}</span>
-            </label>
-            <div className="close-dialog-actions">
-              <button
-                type="button"
-                className="ghost-action"
-                onClick={() => setCloseDialog(false)}
-              >
-                {t("close.cancel", "取消")}
-              </button>
-              <button
-                type="button"
-                className="secondary-action"
-                onClick={() => chooseClose("tray")}
-              >
-                {t("close.tray", "最小化到托盘")}
-              </button>
-              <button
-                type="button"
-                className="danger-action"
-                onClick={() => chooseClose("quit")}
-              >
-                {t("close.quit", "退出程序")}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {minimizeDialog ? (
-        <div className="modal-overlay" onClick={() => setMinimizeDialog(false)}>
-          <div className="close-dialog" onClick={(event) => event.stopPropagation()}>
-            <strong className="close-dialog-title">最小化 ProxyWeave</strong>
-            <p className="close-dialog-desc">隐藏到托盘并弹出悬浮窗，还是最小化到任务栏？</p>
-            <label className="close-dialog-remember">
-              <input
-                type="checkbox"
-                checked={rememberMinimize}
-                onChange={(event) => setRememberMinimize(event.target.checked)}
-              />
               <span>记住我的选择</span>
             </label>
-            <div className="close-dialog-actions">
+            <div
+              className="close-dialog-actions"
+              style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}
+            >
               <button
                 type="button"
-                className="ghost-action"
-                onClick={() => setMinimizeDialog(false)}
+                className="btn btn-soft btn-sm ghost-action"
+                onClick={() => setCloseDialog(false)}
               >
                 取消
               </button>
               <button
                 type="button"
-                className="secondary-action"
-                onClick={() => chooseMinimize("taskbar")}
+                className="btn btn-soft btn-sm secondary-action"
+                onClick={() => chooseClose("tray")}
               >
-                最小化到任务栏
+                最小化到托盘
               </button>
               <button
                 type="button"
-                className="primary-action"
-                onClick={() => chooseMinimize("tray")}
+                className="btn btn-primary btn-sm danger-action"
+                style={{ background: "var(--red, #ef4444)", borderColor: "var(--red, #ef4444)", color: "#fff" }}
+                onClick={() => chooseClose("quit")}
               >
-                隐藏到托盘
+                退出程序
               </button>
             </div>
           </div>
@@ -467,6 +782,7 @@ export function AppShell() {
       ) : null}
 
       {closing ? <p role="status">Closing…</p> : null}
-    </main>
+    </div>
   );
 }
+export default AppShell;

@@ -1,0 +1,11 @@
+# Directly extracted workbench
+
+Source: `D:/workbuddy-switch-gateway/workbuddy-switch-gateway-latest/src/pages/AgentsPage.tsx`, WorkBuddy Switch Gateway HEAD `ebd9427b350a866108a8787714e8cd54fd7ed33a`.
+
+The entire source page was copied byte-for-byte as the starting point, then adapted. Original page, CSS, primitive closure, ten image assets, package manifests, LICENSE and NOTICE bytes and SHA256 records are retained in `.pi/development/ide-source-page/reference/` and `reference-sha256.json`. The scoped host page is `AgentsPage.tsx`; `IdePanel.tsx` is only its host entry.
+
+Snapshot LICENSE is MIT (copyright retained verbatim in LICENSE). NOTICE is retained verbatim; its claims about upstream consent and historic licensing are statements of that snapshot, not independent evidence. Historical ProxyWeave Plan/registry GPL no-copy restrictions described a different earlier reference; current user authorization permits this verified current MIT snapshot extraction. Earlier licensing/authorization history is not independently proven by this task. No gateway/account-management backend or full WorkBuddy app was copied. No official logo authorship is asserted: ten icon bytes are exact reference assets; unknown targets use a neutral Bot glyph, not fabricated brand artwork.
+
+Thin adaptations: relative imports; local extracted UI primitives/utils; no router runtime (host callback); existing ProxyWeave detect/models/import/backups/restore IPC, host naming and capabilities; `created_at` already milliseconds; mounted/stale-response guards; pending Set per target plus exclusive batch lock; credential preview existence only (no Keyring getter); visible sanitized rejections; truthful stopped/unknown/loading/error counts and models; Chat-only supported/installed write gating, no Messages/Responses claim; source layout retained. Tailwind utilities are generated under `@scope (.ide-workbench)` with a local subset of preflight, so no global Tailwind reset is introduced.
+
+Browser evidence uses owned IPC and clipboard promises, not a native desktop or real client configuration acceptance claim. Successful frontend build must be embedded by Main in the existing desktop shortcut target for native verification.

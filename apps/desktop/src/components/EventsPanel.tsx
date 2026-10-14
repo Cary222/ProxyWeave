@@ -2,11 +2,12 @@ import React from "react";
 import { HostEvent } from "../types";
 
 interface EventsPanelProps {
+  dataReady?: boolean;
   events: HostEvent[];
   onRefresh: () => void;
 }
 
-export const EventsPanel: React.FC<EventsPanelProps> = ({ events, onRefresh }) => {
+export const EventsPanel: React.FC<EventsPanelProps> = ({ dataReady = true, events, onRefresh }) => {
   return (
     <div className="panel-section">
       <div className="section-header">
@@ -24,7 +25,7 @@ export const EventsPanel: React.FC<EventsPanelProps> = ({ events, onRefresh }) =
       <div className="events-container card-box">
         {events.length === 0 ? (
           <div className="empty-state">
-            <p>暂无宿主审计事件记录。</p>
+            <p>{dataReady ? "暂无宿主审计事件记录。" : "宿主审计记录尚未成功读取，当前数据未知。"}</p>
           </div>
         ) : (
           <div className="events-table-wrapper">

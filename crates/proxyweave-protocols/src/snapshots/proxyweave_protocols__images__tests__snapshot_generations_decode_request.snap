@@ -1,0 +1,30 @@
+---
+source: crates/protocols/src/images.rs
+expression: snapshot
+---
+Object {
+    "extensions": Object {
+        "images_extra": Object {
+            "size": String("1024x1024"),
+        },
+        "prompt": String("A cute sea otter"),
+    },
+    "ingress_protocol": Object {
+        "name": String("images-generations"),
+        "suite": String("open_ai_compatible"),
+        "version": String("v1"),
+    },
+    "messages": Array [],
+    "model": String("gpt-image-1"),
+    "params": Object {
+        "frequency_penalty": Null,
+        "max_tokens": Null,
+        "presence_penalty": Null,
+        "seed": Null,
+        "temperature": Null,
+        "top_k": Null,
+        "top_p": Null,
+    },
+    "stream": Bool(false),
+    "system": Null,
+}

@@ -1,0 +1,176 @@
+/* Extracted WorkBuddy index.css theme and utility closure; no global preflight.
+ * Scoped to this workbench (including its Radix portal), never the host shell. */
+@import "tailwindcss/theme.css" layer(ide-theme);
+@source "./AgentsPage.tsx";
+@source "./ui";
+@custom-variant dark (&:where([data-theme="dark"] *, .dark *, [data-theme="dark"]));
+@theme inline {
+  --color-background: var(--ide-background);
+  --color-foreground: var(--ide-foreground);
+  --color-card: var(--ide-card);
+  --color-card-foreground: var(--ide-card-foreground);
+  --color-popover: var(--ide-popover);
+  --color-popover-foreground: var(--ide-popover-foreground);
+  --color-primary: var(--ide-primary);
+  --color-primary-foreground: var(--ide-primary-foreground);
+  --color-secondary: var(--ide-secondary);
+  --color-secondary-foreground: var(--ide-secondary-foreground);
+  --color-muted: var(--ide-muted);
+  --color-muted-foreground: var(--ide-muted-foreground);
+  --color-accent: var(--ide-accent);
+  --color-accent-foreground: var(--ide-accent-foreground);
+  --color-destructive: var(--ide-destructive);
+  --color-border: var(--ide-border);
+  --color-input: var(--ide-input);
+  --color-ring: var(--ide-ring);
+  --radius-sm: calc(var(--radius, 12px) - 4px);
+  --radius-md: calc(var(--radius, 12px) - 2px);
+  --radius-lg: var(--radius, 12px);
+  --radius-xl: calc(var(--radius, 12px) + 4px);
+}
+@scope (.ide-workbench) {
+  @tailwind utilities;
+}
+.ide-workbench {
+  --ide-background: var(--bg, #fafafa);
+  --ide-foreground: var(--text, #18181b);
+  --ide-card: var(--card, #ffffff);
+  --ide-card-foreground: var(--text, #18181b);
+  --ide-popover: var(--card, #ffffff);
+  --ide-popover-foreground: var(--text, #18181b);
+  --ide-primary: var(--blue, #2f6bff);
+  --ide-primary-foreground: #ffffff;
+  --ide-secondary: var(--well, #f4f4f5);
+  --ide-secondary-foreground: var(--text, #18181b);
+  --ide-muted: var(--well, #f4f4f5);
+  --ide-muted-foreground: var(--text2, #52525b);
+  --ide-accent: var(--blue-soft, #e9f1ff);
+  --ide-accent-foreground: var(--blue, #2f6bff);
+  --ide-destructive: var(--red, #c23b32);
+  --ide-border: var(--line, #e4e4e7);
+  --ide-input: var(--line, #e4e4e7);
+  --ide-ring: var(--blue, #2f6bff);
+  --radius: 12px;
+
+  /* Aliases for primitive styles without shadowing host --card */
+  --primary: var(--ide-primary);
+  --primary-foreground: var(--ide-primary-foreground);
+  --border: var(--ide-border);
+  --ring: var(--ide-ring);
+  --input: var(--ide-input);
+  --secondary: var(--ide-secondary);
+  --secondary-foreground: var(--ide-secondary-foreground);
+  --destructive: var(--ide-destructive);
+
+  color: var(--ide-foreground);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+.ide-workbench [data-slot="card"] {
+  background-color: var(--card);
+  color: var(--text);
+  border-color: var(--card-border, var(--line));
+  box-shadow: var(--shadow);
+}
+.ide-workbench [data-slot="dialog-content"] {
+  background-color: var(--card);
+  color: var(--text);
+  border-color: var(--line);
+}
+.ide-workbench [data-slot="dialog-overlay"] {
+  background-color: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.ide-workbench [data-slot="input"] {
+  background-color: var(--card);
+  color: var(--text);
+  border-color: var(--line);
+}
+[data-theme="glass"] .ide-workbench [data-slot="input"] {
+  background-color: rgba(255, 255, 255, 0.6);
+}
+[data-theme="dark"] .ide-workbench,
+.dark .ide-workbench,
+.ide-workbench[data-theme="dark"] {
+  --ide-primary-foreground: #09090b;
+}
+[data-theme="glass"] .ide-workbench,
+.ide-workbench[data-theme="glass"] {
+  --ide-primary-foreground: #ffffff;
+}
+[data-theme="glass"] .ide-workbench [data-slot="card"],
+[data-theme="glass"] .ide-workbench [data-slot="dialog-content"],
+[data-theme="glass"] .ide-workbench .ide-hero-banner {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(100%);
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(100%);
+  border-color: var(--card-border, rgba(255, 255, 255, 0.55));
+  box-shadow: var(--shadow);
+}
+.ide-workbench [data-slot="card"] {
+  border-color: var(--card-border, var(--line));
+  box-shadow: var(--shadow);
+}
+.ide-workbench .card-configured {
+  border-color: color-mix(in srgb, var(--green, #2e7d4f) 40%, transparent) !important;
+  background-color: color-mix(in srgb, var(--green-bg, #e7f2ea) 25%, transparent) !important;
+}
+.ide-workbench .badge-configured {
+  border: 1px solid color-mix(in srgb, var(--green, #2e7d4f) 35%, transparent) !important;
+  background-color: var(--green-bg, #e7f2ea) !important;
+  color: var(--green, #2e7d4f) !important;
+}
+.ide-workbench .button-configured {
+  border: 1px solid color-mix(in srgb, var(--green, #2e7d4f) 35%, transparent) !important;
+  background-color: var(--green-bg, #e7f2ea) !important;
+  color: var(--green, #2e7d4f) !important;
+}
+.ide-workbench .button-configured:hover {
+  background-color: color-mix(in srgb, var(--green-bg, #e7f2ea) 80%, var(--green, #2e7d4f)) !important;
+}
+.ide-workbench .text-configured {
+  color: var(--green, #2e7d4f) !important;
+}
+.ide-workbench .text-warn {
+  color: var(--amber, #99690f) !important;
+}
+.ide-workbench .alert-warn {
+  border-color: color-mix(in srgb, var(--amber, #99690f) 40%, transparent) !important;
+  background-color: color-mix(in srgb, var(--amber-bg, #f7eed2) 40%, transparent) !important;
+  color: var(--amber, #99690f) !important;
+}
+.ide-workbench .alert-destructive {
+  border-color: color-mix(in srgb, var(--red, #c23b32) 40%, transparent) !important;
+  background-color: color-mix(in srgb, var(--red-bg, #f9e9e7) 40%, transparent) !important;
+  color: var(--red, #c23b32) !important;
+}
+.ide-workbench .alert-success {
+  border-color: color-mix(in srgb, var(--green, #2e7d4f) 40%, transparent) !important;
+  background-color: color-mix(in srgb, var(--green-bg, #e7f2ea) 40%, transparent) !important;
+  color: var(--text, #18181b) !important;
+}
+.ide-workbench[data-sonner-toaster] [data-sonner-toast],
+.ide-workbench [data-sonner-toast] {
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  font-family: inherit !important;
+}
+[data-theme="glass"] .ide-workbench[data-sonner-toaster] [data-sonner-toast],
+[data-theme="glass"] .ide-workbench [data-sonner-toast] {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(100%) !important;
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(100%) !important;
+}
+/* Local subset of upstream preflight needed by the copied primitives. */
+:where(.ide-workbench) *, :where(.ide-workbench) *::before, :where(.ide-workbench) *::after {
+  box-sizing: border-box; border: 0 solid var(--border); outline-color: var(--ring);
+}
+:where(.ide-workbench) :where(h1,h2,h3,p) { margin: 0; font-size: inherit; font-weight: inherit; }
+:where(.ide-workbench) :where(button,input) { font: inherit; color: inherit; border-radius: 0; background-color: transparent; }
+.ide-workbench button { cursor: pointer; }
+.ide-workbench button:disabled { cursor: not-allowed; }
+:where(.ide-workbench) :where(img,svg) { display: block; vertical-align: middle; }
+:where(.ide-workbench) :where(img) { max-width: 100%; height: auto; }

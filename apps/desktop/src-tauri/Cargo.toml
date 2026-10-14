@@ -18,16 +18,21 @@ quotio-platform = { path = "../../../crates/quotio-platform" }
 quotio-types = { path = "../../../crates/quotio-types" }
 proxyweave-plugin = { path = "../../../crates/proxyweave-plugin" }
 proxyweave-gateway = { path = "../../../crates/proxyweave-gateway" }
-reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "stream"] }
+eventsource-stream = "0.2"
+futures-util = "0.3"
 serde.workspace = true
 tokio = { version = "1", features = ["sync", "time", "rt"] }
 getrandom = "0.3.4"
 serde_json.workspace = true
 tauri.workspace = true
+tauri-plugin-opener = "=2.5.4"
+tempfile = "=3.27.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance.workspace = true
 
 [dev-dependencies]
+sha2 = "=0.10.9"
 tempfile = "=3.27.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
