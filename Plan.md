@@ -635,8 +635,13 @@ security:
 ### UI-001 单独 UI 修正（不恢复完整 Goal）
 逐插件 sidebar/detail 保留总览导入和现有启停/凭据配置/挂载。通用可选 Schema 1.0 `management: {path, presentation: browser}` 只声明公开静态相对路径；旧包省略保持 parse/fingerprint，不自动迁移记录。实时 Managed 或登记 External origin 验证后明确点击系统浏览器；当前 Windows WebView2 隔离证据不足，因此不嵌入、不扩 CSP/远程权限、不绕过安全头。能力只显示 Manifest 声明与已有实测证据，没有证据标尚未实测。实现与独立原生验收各自留证，详见 `docs/architecture/ADR-006-plugin-navigation-management.md`；本段不授权真实凭据、完整端到端或最终全项 Goal。
 
+### 竞品参考补充：Magpie（2026-10-18，用户引入、审查员实查后补充，不改变任何阶段状态）
+Magpie（yetone/magpie @ `d783df4`，MIT）与本项目功能相邻：其管理对象是 Provider/模型/订阅账号/Agent 配置（网关四协议互转、路由组、为 Agent 选模型并写回配置）；本项目的管理对象是独立代理应用及其运行实例（插件包 → Manifest → 凭据托管 → 进程/端口 → 探针 → 统一入口 → 停止/升级/回滚）。本轮实查未在其公开源码与文档中发现与该链路等价的通用托管契约，故差异化主线不变：**不做第二个「模型切换 + 账号聚合」产品**；新功能先自问是加强代理应用管理契约，还是复刻其模型/账号层，后者默认降优先级。
+笼统借鉴方向（细节与证据等级见 `docs/references/MAGPIE-COMPARISON-2026-10-18.md`，登记见登记表 M16）：代码层——pluginrt 的生命周期对账（逆序释放、失败回滚且不连累他人、API 兼容范围、服务依赖、在用守卫、import 边界测试）作为 Manifest 契约演进对标；网关扩展点按风险分 fail-open/fail-closed、观察者白名单与有界队列两条原则；配置保格式编辑（只改目标键、保留注释/顺序/格式）作为 agent_import 硬化验收用例。功能层——路由组五模式（smart/order/rotate/usage/pace）与会话粘性列入 M06 候选，Phase 2 的 Model Router ADR 须显式比较三方策略后定案；网关回归维度与 deferred usage 覆盖法列入 Compatibility Flight 缺口对照；用量「计费口径与客户端可见口径分离」条约。产品设计层——路由决策实时视图（对应审计/API Doctor 可解释性）、`provider/model` 全局可搜索选择器、状态变化主动提示的交互原则；子系统文档与代码一一对应的组织方式。明确不采用：SQLite 持久化、读取 Agent 签到文件充当订阅、Bun/JS 插件宿主、Go+Wails 脚手架、Go 代码翻写冒充复用（详见对比文档 §3.6）。
+
 ### 12.1 权威参考源快速索引
 - 参考源全景登记表：`docs/references/REFERENCE_REGISTRY.md`（含 M01–M15 固定 Commit、路径、许可证及三级验证状态）。
+- 竞品代码级对比：`docs/references/MAGPIE-COMPARISON-2026-10-18.md`（Magpie @ `d783df4` 与本项目逐模块对比、借鉴分级与落地顺序；登记表 M16）。
 - 架构决策记录：`docs/architecture/ADR-001-scaffold-and-reuse-policy.md`（脚手架采用与复用优先开发政策）。
 - 历史文档标记：`docs/PLAN-GlueHarness.md`（已标记为归档历史参考，不作为当前执行依据）。
 

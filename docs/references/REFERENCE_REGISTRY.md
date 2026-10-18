@@ -29,7 +29,7 @@
 | M03 | Async Gateway | axum 0.8.9 / axum-reverse-proxy 2.2.0 / Hyper 1 / Tower HTTP | F3 实施中：直接依赖原代理，原包 `D:/temp-audit/proxyweave-feature3-proxy-audit/axum-reverse-proxy-2.2.0`，MIT commit7350d118a69b6d98ae19a767b9d71630b2a3bc80；连接所有权/凭据为薄适配，无 SQLx。来源及验证边界见 ADR-004 |
 | M04 | SSE | 原代理 `src/forward.rs` 的 `Body::new(Incoming)` | 同协议原字节/原 Content-Type 透传，不引入 TiyGate 业务状态机，不合成 DONE；原包测试及原生 TCP 断连回归进行中，未 Verified。见 ADR-004 |
 | M05 | Protocol IR | TiyGate `crates/protocols/` 等实际路径待核验 | Phase 2 候选，保留原测试，禁止整体业务合并 |
-| M06 | Model Router | TiyGate/LiteLLM 设计候选 | 未审计，不预先授权重新实现同质算法 |
+| M06 | Model Router | TiyGate/LiteLLM/Magpie 设计候选 | 未审计，不预先授权重新实现同质算法；Magpie 路由组五模式与策略 fail-open 语义见竞品参考源补充节，ADR 定案前须显式比较三方 |
 | M07 | Credential Broker | Quotio `crates/quotio-platform`；`keyring` 3.6.3；`windows-sys` 0.61.2 | Feature 2 实施中：Keyring 命名空间隔离与持久化；实现真实 Windows 文件 DACL 限制（阻断继承、独占当前用户），废除空操作。详见 ADR-003 |
 | M08 | Installer | Quotio `crates/quotio-core/src/proxy_download.rs` | 下载/校验/解压候选，未引入；后续按范围核验与泛化，不能整体否定 |
 | M09 | Config Store | Quotio platform `atomic_write`/`replace_file` 与原测试 | 已读平台文件及对应 Windows/Unix 分支；原子写入不等于双副本容灾或 Windows 凭据隔离 |
@@ -39,6 +39,12 @@
 | M13 | Desktop Shell | Quotio `apps/desktop/src-tauri/`、React bootstrap | 已直接复用；本轮 Windows 构建/测试与窗口/托盘/关闭/单实例行为验证通过；Feature 4 极简桌面宿主、IPC 胶水、网关/插件/事件管理与测试调用 UI 已实现并通过构建与测试，详见 ADR-005 与 FEATURE4.md |
 | M14 | API Doctor | tower-http trace 候选 | 未引入；版本、脱敏契约与测试开发前核验 |
 | M15 | Compatibility Flight | DSH 交互参考与协议测试候选 | 未引入；Phase 2 功能验收，Phase 4 发布回归 |
+
+## 竞品参考源补充（2026-10-18，用户引入，审查员实查登记）
+
+| 编号 | 名称 | 固定 Commit | 定位与可用范围 | 许可证 | 验证状态/边界 |
+|---|---|---|---|---|---|
+| M16 | Magpie（yetone/magpie） | `d783df46cbac9021e26a6bd71ca0b55544552eb2` | 相邻竞品/重点参考源：管理对象为 Provider/模型/订阅/Agent 配置，与本项目「代理应用管理」定位相邻不重合。可用范围限设计/测试参考：pluginrt 生命周期与回滚语义、Manifest API 兼容范围与服务依赖、路由策略集与 fail-open/fail-closed 分级、网关回归维度、配置保格式编辑行为、deferred usage 计量条约 | MIT（仓库 LICENSE 已读；其依赖含 SQLite/Wails/Bun 等，未逐项审计） | 2026-10-18 已实查 README、go.mod、docs/subsystems 与 internal/pluginrt 等重点包源码并量化各包规模；未做完整构建与全量安全审计。Go 代码不直接复用；其 SQLite 持久化、读取 Agent 签到文件作订阅、Bun 插件宿主三项与本项目红线/凭据契约冲突，明确不采用。详细对比见 [MAGPIE-COMPARISON-2026-10-18](./MAGPIE-COMPARISON-2026-10-18.md) |
 
 ## 本阶段模块溯源与验证
 
