@@ -173,20 +173,74 @@ jobs:
         with:
           pattern: bundles-*
           path: release-artifacts
-          merge-multiple: true
 
       - name: Generate SHA256 checksums
         run: |
-          cd release-artifacts
-          find . -maxdepth 1 -type f ! -name "SHA256SUMS.txt" ! -name ".*" -exec sha256sum {} + | awk '{print $1 "  " substr($2, match($2, /[^/]+$/))}' | sort -k2 > ../SHA256SUMS.txt
-          cd ..
-          if [ ! -s SHA256SUMS.txt ]; then
-            echo "Error: No release artifacts found to checksum!"
+          set -e
+          ARTIFACTS_DIR="release-artifacts"
+          echo "=== Inspecting release-artifacts directory ==="
+          if [ ! -d "$ARTIFACTS_DIR" ]; then
+            echo "Error: Directory $ARTIFACTS_DIR does not exist!"
             exit 1
           fi
+
+          echo "Directory structure (up to 50 files):"
+          find "$ARTIFACTS_DIR" -type f | head -50
+
+          WIN_COUNT=$(find "$ARTIFACTS_DIR" -path "*/bundles-windows-latest/*" -type f | wc -l)
+          UBU_COUNT=$(find "$ARTIFACTS_DIR" -path "*/bundles-ubuntu-latest/*" -type f | wc -l)
+          MAC_COUNT=$(find "$ARTIFACTS_DIR" -path "*/bundles-macos-latest/*" -type f | wc -l)
+          TOTAL_COUNT=$(find "$ARTIFACTS_DIR" -type f ! -name "SHA256SUMS.txt" ! -name ".*" | wc -l)
+
+          echo "Found bundle files: Windows=$WIN_COUNT, Ubuntu=$UBU_COUNT, macOS=$MAC_COUNT, Total=$TOTAL_COUNT"
+
+          if [ "$WIN_COUNT" -lt 1 ] || [ "$UBU_COUNT" -lt 1 ] || [ "$MAC_COUNT" -lt 1 ]; then
+            echo "Error: Missing bundle artifacts for one or more platforms!"
+            echo "Expected at least 1 artifact per platform, got Windows=$WIN_COUNT, Ubuntu=$UBU_COUNT, macOS=$MAC_COUNT"
+            echo "Actual files in $ARTIFACTS_DIR:"
+            find "$ARTIFACTS_DIR" -type f | head -50
+            exit 1
+          fi
+
+          rm -f SHA256SUMS.txt.tmp SHA256SUMS.txt
+          while IFS= read -r filepath; do
+            fname=$(basename "$filepath")
+            hash=$(sha256sum "$filepath" | awk '{print $1}')
+            echo "$hash  $fname" >> SHA256SUMS.txt.tmp
+          done < <(find "$ARTIFACTS_DIR" -type f ! -name "SHA256SUMS.txt" ! -name ".*" | sort)
+
+          sort -k2 SHA256SUMS.txt.tmp > SHA256SUMS.txt
+          rm -f SHA256SUMS.txt.tmp
+
+          if [ ! -s SHA256SUMS.txt ]; then
+            echo "Error: Generated SHA256SUMS.txt is empty!"
+            echo "Actual directory contents:"
+            find "$ARTIFACTS_DIR" -type f | head -50
+            exit 1
+          fi
+
+          DUPS=$(awk '{print $2}' SHA256SUMS.txt | sort | uniq -d)
+          if [ -n "$DUPS" ]; then
+            echo "Error: Duplicate asset filenames detected in SHA256SUMS.txt:"
+            echo "$DUPS"
+            echo "Actual directory contents:"
+            find "$ARTIFACTS_DIR" -type f | head -50
+            exit 1
+          fi
+
           echo "=== Generated SHA256SUMS.txt ==="
           cat SHA256SUMS.txt
 
+      - name: Diagnostic directory dump on failure
+        if: failure()
+        run: |
+          echo "=== Diagnostic dump of release-artifacts on failure ==="
+          if [ -d "release-artifacts" ]; then
+            find release-artifacts -type f | head -50
+          else
+            echo "Directory release-artifacts does not exist."
+            ls -la
+          fi
       - name: Upload SHA256SUMS.txt and publish release
         uses: actions/github-script@v7
         env:
