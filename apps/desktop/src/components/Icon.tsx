@@ -24,6 +24,7 @@ const paths: Record<string, ReactNode> = {
   doc: <><path d="M6 3.5h8L19 8.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6 3.5z"/><path d="M13.5 3.5v5.5H19M8.5 13h7M8.5 16.5h7"/></>,
   gear: <><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.6M12 17.9v2.6M3.5 12h2.6M17.9 12h2.6M6 6l1.8 1.8M16.2 16.2L18 18M18 6l-1.8 1.8M7.8 16.2L6 18"/></>,
   layers: <><path d="M12 3.5l9 5-9 5-9-5z"/><path d="M3.5 13.5L12 18l8.5-4.5"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></>,
 };
 
 export type IconName = keyof typeof paths;

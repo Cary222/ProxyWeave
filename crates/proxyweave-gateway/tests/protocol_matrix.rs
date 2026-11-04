@@ -182,6 +182,7 @@ impl Env {
             manifest: manifest.clone(),
             fingerprint: "owned".into(),
             settings: Default::default(),
+            source: None,
         };
         assert!(matches!(
             runtime

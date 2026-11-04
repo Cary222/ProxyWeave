@@ -4,6 +4,7 @@ import { DiscoverPanel } from "./DiscoverPanel";
 import { AuditPanel } from "./AuditPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { HostEvent, PluginRecord } from "../types";
+import { InspectProjectResult } from "../api";
 import { invoke } from "../lib/tauri";
 
 vi.mock("../lib/tauri", () => ({
@@ -65,10 +66,11 @@ describe("Wave2 Discover / Audit / Settings operational truth containment (SSR, 
       expect(html).toContain('id="repoUrl"');
       expect(html).toContain('value=""');
       expect(html).toMatch(/id="parseRepo"[^>]*disabled=""/);
-      expect(html).toContain("解析清单 (未实现)");
+      expect(html).toContain("解析清单");
+      expect(html).not.toContain("解析清单 (未实现)");
       expect(html).toMatch(/id="confirmInstall"[^>]*disabled=""/);
       expect(html).toContain("克隆并安装");
-      expect(html).toContain("只读预检未实现");
+      expect(html).toContain("支持在正式克隆安装前执行只读沙箱预检");
       expect(html.match(/生态展示 · 待接入/g)).toHaveLength(4);
       expect(html.match(/尚未接入/g)).toHaveLength(4);
       expect(html).not.toContain('id="parseResult"');
@@ -80,6 +82,65 @@ describe("Wave2 Discover / Audit / Settings operational truth containment (SSR, 
       expectNoWave2Fakes(html);
       expect(html).toContain("已安装");
       expect(html.match(/尚未接入/g)).toHaveLength(3);
+    });
+
+    it("enables parseRepo button when valid repoUrl is supplied", () => {
+      const html = renderToStaticMarkup(
+        <DiscoverPanel
+          plugins={[]}
+          initialRepoUrl="https://github.com/router-for-me/workbuddy2api"
+        />
+      );
+      expectNoWave2Fakes(html);
+      expect(html).toContain('value="https://github.com/router-for-me/workbuddy2api"');
+      expect(html).toContain('id="parseRepo"');
+      expect(html).not.toMatch(/id="parseRepo"[^>]*disabled=""/);
+      expect(html).toContain("解析清单");
+    });
+
+    it("renders inspect result card with read-only badge, model list, sha256, permissions, and security notice", () => {
+      const inspectData: InspectProjectResult = {
+        id: "wb2api",
+        name: "WorkBuddy 2API",
+        version: "1.13.0",
+        description: "WorkBuddy 平台代理转换网关",
+        author: "linguo2625469",
+        homepage: "https://github.com/linguo2625469/workbuddy2api-panel",
+        license: "MIT",
+        project_type: "manifest",
+        runtime_kind: "managed",
+        entrypoint: "bin/wb2api.exe",
+        sha256: "38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485",
+        protocols: ["openai_chat", "streaming"],
+        exported_models: ["gpt-4o (-> gpt-4o-2024-08-06)"],
+        requires_secrets: ["access_token"],
+        permissions: ["允许外网访问 (allow_internet_access)"],
+        notes: ["Only declared files are read"],
+        raw_manifest: {},
+      };
+      const html = renderToStaticMarkup(
+        <DiscoverPanel plugins={[]} initialInspectResult={inspectData} />
+      );
+      expectNoWave2Fakes(html);
+      expect(html).toContain('id="inspectResult"');
+      expect(html).toContain("只读预检通过");
+      expect(html).toContain("托管进程 (Managed)");
+      expect(html).toContain("WorkBuddy 2API");
+      expect(html).toContain("wb2api");
+      expect(html).toContain("v1.13.0");
+      expect(html).toContain("linguo2625469");
+      expect(html).toContain("bin/wb2api.exe");
+      expect(html).toContain("38c4d8e0421c6c8c...");
+      expect(html).toContain("openai_chat");
+      expect(html).toContain("streaming");
+      expect(html).toContain("gpt-4o (-&gt; gpt-4o-2024-08-06)");
+      expect(html).toContain("允许外网访问 (allow_internet_access)");
+      expect(html).toContain("access_token");
+      expect(html).toContain("独立子进程不等于操作系统底层安全沙箱");
+      expect(html).toContain('id="inspectConfirmInstall"');
+      expect(html).toContain("确认克隆并安装");
+      expect(html).toContain('id="clearInspectResult"');
+      expect(html).toContain("清除预览");
     });
   });
 

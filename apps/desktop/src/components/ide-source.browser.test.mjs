@@ -22,6 +22,7 @@ beforeAll(async () => {
       if(cmd==='detect_agent_clients'){if(window.rejectDetect)throw Error('reject');return window.targets;}
       if(cmd==='flight_list_models'){if(window.rejectModels)throw Error('owned models rejected');return {models:window.models??[{id:'owned-model'}]};}
       if(cmd==='list_agent_backups'){if(window.mode==='reject')throw Error('reject');return [{id:'1775000000000',created_at:1775000000000,path:'owned/backup'}];}
+      if(cmd==='preview_agent_diff'){return {target:args.target,models:args.models??[],files:[{path:'owned/'+args.target,original:'{}',updated:'{"updated":true}',is_new:false}]};}
       if(cmd==='import_agent_client'||cmd==='restore_agent_client'){
         if(window.mode==='pending')return new Promise((resolve,reject)=>window.queue.push({resolve,reject}));
         if(window.mode==='reject')throw Error('reject');

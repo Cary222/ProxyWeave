@@ -183,6 +183,10 @@ pub fn run() {
             host::import_local_plugin,
             host::import_project_from_directory,
             host::import_project_from_github,
+            host::inspect_project_from_github,
+            host::install_plugin_from_release,
+            host::check_plugin_update,
+            host::update_plugin_to_release,
             host::list_local_plugins,
             host::save_plugin_settings,
             host::get_plugin_runtime_status,
@@ -201,6 +205,9 @@ pub fn run() {
             host::start_gateway,
             host::stop_gateway,
             host::set_gateway_port,
+            host::set_gateway_route_strategy,
+            host::get_gateway_traces,
+            host::clear_gateway_traces,
             host::select_plugin,
             host::get_host_events,
             host::test_gateway_models,
@@ -209,9 +216,13 @@ pub fn run() {
             host::flight_chat_nonstream,
             host::flight_cancel,
             host::detect_agent_clients,
+            host::preview_agent_client,
+            host::preview_agent_diff,
             host::import_agent_client,
             host::restore_agent_client,
-            host::list_agent_backups
+            host::list_agent_backups,
+            host::get_marketplace_catalog,
+            host::search_marketplace_plugins,
         ])
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {

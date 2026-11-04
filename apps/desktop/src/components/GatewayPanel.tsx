@@ -330,6 +330,47 @@ export const GatewayPanel: React.FC<GatewayPanelProps> = ({
           ) : null}
         </div>
 
+        <div className="card" id="gwRoutingCard">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h3>路由分发策略与会话粘性</h3>
+              <p className="sub">动态调度多后端插件节点 · 保障 Prompt Caching 命中</p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { id: "smart", label: "智能优选 (Smart)" },
+                { id: "order", label: "顺序主备 (Order)" },
+                { id: "rotate", label: "轮询负载 (Rotate)" },
+              ].map((strat) => {
+                const active = (gatewayStatus?.route_strategy ?? "smart").toLowerCase() === strat.id;
+                return (
+                  <button
+                    key={strat.id}
+                    id={`route-strat-${strat.id}`}
+                    className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await invoke("set_gateway_route_strategy", { strategy: strat.id });
+                        setMessage({ text: `路由策略已切换为: ${strat.label}` });
+                        onRefresh();
+                      } catch (e: any) {
+                        setMessage({ text: String(e), error: true });
+                      }
+                    }}
+                  >
+                    {strat.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--muted)", background: "var(--well)", padding: "10px 14px", borderRadius: 8, flexWrap: "wrap" }}>
+            <div><b>当前策略:</b> <span className="mono" id="currentRouteStrat" style={{ color: "var(--text)" }}>{gatewayStatus?.route_strategy ?? "smart"}</span></div>
+            <div><b>Prompt Cache 会话粘性:</b> <span style={{ color: "var(--green)" }}>● 启用 (5min 滑动窗口)</span></div>
+            <div><b>容灾原则:</b> <span>只重排不丢弃 (Fail-Open)</span></div>
+          </div>
+        </div>
         <div className="card">
           <h3>模型路由</h3>
           <table>

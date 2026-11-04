@@ -1,5 +1,5 @@
 use getrandom::fill;
-use proxyweave_gateway::{Gateway, GatewayHandle};
+use proxyweave_gateway::{Gateway, GatewayHandle, RequestTrace, RouteStrategy};
 use proxyweave_plugin::{
     ImportResult, Ownership, PluginRecord, Registry, RuntimeManager, RuntimeStatus,
 };
@@ -14,7 +14,7 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +51,44 @@ pub struct PluginStatusInfo {
     pub reason: Option<String>,
     pub error: Option<String>,
     pub active_requests: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<proxyweave_plugin::registry::InstalledSource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginUpdateStatusDto {
+    pub status: String,
+    pub owned_update_allowed: bool,
+    pub latest_tag: Option<String>,
+    pub http_status: Option<u16>,
+    pub rate_limit_remaining: Option<u64>,
+    pub rate_limit_reset: Option<u64>,
+    pub detail: String,
+}
+
+impl From<proxyweave_plugin::updater::UpdateCheck> for PluginUpdateStatusDto {
+    fn from(check: proxyweave_plugin::updater::UpdateCheck) -> Self {
+        let status = match check.status {
+            proxyweave_plugin::updater::UpdateStatus::UpdateAvailable => "update_available",
+            proxyweave_plugin::updater::UpdateStatus::UpToDate => "up_to_date",
+            proxyweave_plugin::updater::UpdateStatus::ReleaseChanged => "release_changed",
+            proxyweave_plugin::updater::UpdateStatus::InstalledNewer => "installed_newer",
+            proxyweave_plugin::updater::UpdateStatus::NotCheckable => "not_checkable",
+            proxyweave_plugin::updater::UpdateStatus::Forbidden => "forbidden",
+            proxyweave_plugin::updater::UpdateStatus::NotFound => "not_found",
+            proxyweave_plugin::updater::UpdateStatus::InvalidVersion => "error",
+            proxyweave_plugin::updater::UpdateStatus::Error => "error",
+        };
+        Self {
+            status: status.to_string(),
+            owned_update_allowed: check.owned_update_allowed,
+            latest_tag: check.latest_tag,
+            http_status: check.http_status,
+            rate_limit_remaining: check.rate_limit_remaining,
+            rate_limit_reset: check.rate_limit_reset,
+            detail: check.detail.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +137,7 @@ pub struct GatewayStatusInfo {
     pub active_backend: Option<String>,
     pub master_key_preview: String,
     pub protocol_capabilities: GatewayProtocolCapabilities,
+    pub route_strategy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -562,6 +601,619 @@ pub async fn import_project_from_github(
     Ok(res)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InspectProjectResult {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub homepage: String,
+    pub license: String,
+    pub project_type: String,
+    pub runtime_kind: String, // "managed" | "external"
+    pub entrypoint: String,
+    pub sha256: String,
+    pub protocols: Vec<String>,
+    pub exported_models: Vec<String>,
+    pub requires_secrets: Vec<String>,
+    pub permissions: Vec<String>,
+    pub notes: Vec<String>,
+    pub raw_manifest: serde_json::Value,
+}
+
+pub fn extract_github_author(url: &str) -> String {
+    let stripped = url
+        .trim_start_matches("https://github.com/")
+        .trim_start_matches("http://github.com/")
+        .trim_start_matches("git@github.com:");
+    if let Some((owner, _)) = stripped.split_once('/') {
+        return owner.to_string();
+    }
+    String::new()
+}
+
+pub fn validate_github_repo_url(url: &str) -> Result<String, String> {
+    let raw_url = url.trim().to_string();
+    if raw_url.is_empty() {
+        return Err("GitHub 仓库 URL 不能为空".to_string());
+    }
+    if raw_url.starts_with('-')
+        || raw_url.contains('\0')
+        || raw_url.contains('\n')
+        || raw_url.contains('\r')
+    {
+        return Err("仓库地址格式非法".to_string());
+    }
+    if !raw_url.starts_with("https://github.com/")
+        && !raw_url.starts_with("http://github.com/")
+        && !raw_url.starts_with("git@github.com:")
+    {
+        return Err("当前仅支持标准 GitHub 仓库 URL (如 https://github.com/...)".to_string());
+    }
+    Ok(raw_url)
+}
+
+#[tauri::command]
+pub async fn inspect_project_from_github(
+    url: String,
+) -> Result<InspectProjectResult, String> {
+    let raw_url = validate_github_repo_url(&url)?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let staging_clone_dir = tempfile::Builder::new()
+            .prefix(".pw-git-inspect-")
+            .tempdir()
+            .map_err(|e| format!("创建临时预检目录失败: {e}"))?;
+
+        let output = std::process::Command::new("git")
+            .args(["clone", "--depth", "1", "--quiet", &raw_url, "."])
+            .current_dir(staging_clone_dir.path())
+            .output()
+            .map_err(|e| format!("执行 git 命令失败 (请确认系统已安装 git): {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git 克隆失败: {}", stderr.trim()));
+        }
+
+        let report = proxyweave_plugin::detect_project(staging_clone_dir.path())
+            .map_err(|e| format!("解析项目清单失败: {e}"))?;
+
+        let m = &report.manifest;
+        let runtime_kind = match &m.runtime {
+            proxyweave_plugin::manifest::Runtime::Managed { .. } => "managed".to_string(),
+            proxyweave_plugin::manifest::Runtime::External { .. } => "external".to_string(),
+        };
+        let entrypoint = match &m.runtime {
+            proxyweave_plugin::manifest::Runtime::Managed { executable, .. } => executable.clone(),
+            proxyweave_plugin::manifest::Runtime::External { endpoint } => endpoint.clone(),
+        };
+
+        let mut protocols = vec![m.capabilities.protocol.clone()];
+        if m.capabilities.streaming && !protocols.contains(&"streaming".to_string()) {
+            protocols.push("streaming".to_string());
+        }
+
+        let exported_models = Vec::new();
+
+        let catalog_item = proxyweave_plugin::get_builtin_catalog()
+            .into_iter()
+            .find(|item| item.id == m.metadata.id);
+
+        let (description, author, homepage) = if let Some(item) = catalog_item {
+            let author = if item.author.is_empty() {
+                extract_github_author(&raw_url)
+            } else {
+                item.author
+            };
+            let homepage = if item.repo_url.is_empty() {
+                raw_url.clone()
+            } else {
+                item.repo_url
+            };
+            (item.description, author, homepage)
+        } else {
+            let author = extract_github_author(&raw_url);
+            (String::new(), author, raw_url.clone())
+        };
+
+        let mut permissions = Vec::new();
+        if m.ownership() == proxyweave_plugin::Ownership::Managed {
+            permissions.push("独立子进程执行 (managed_process)".to_string());
+        }
+        permissions.push("本地网络端口监听与通信 (local_network)".to_string());
+        if !m.configuration.required_secrets.is_empty() {
+            permissions.push("系统安全凭据托管 (keyring_secrets)".to_string());
+        }
+
+        let raw_manifest = serde_json::to_value(m).unwrap_or(serde_json::Value::Null);
+
+        Ok(InspectProjectResult {
+            id: m.metadata.id.clone(),
+            name: m.metadata.name.clone(),
+            version: m.metadata.version.clone(),
+            description,
+            author,
+            homepage,
+            license: m.metadata.license.clone(),
+            project_type: report.project_type,
+            runtime_kind,
+            entrypoint,
+            sha256: report.executable_sha256,
+            protocols,
+            exported_models,
+            requires_secrets: m.configuration.required_secrets.clone(),
+            permissions,
+            notes: report.notes,
+            raw_manifest,
+        })
+    })
+    .await
+    .map_err(|_| "GitHub inspect task panicked".to_string())?
+}
+
+#[tauri::command]
+pub async fn install_plugin_from_release(
+    app_handle: tauri::AppHandle,
+    state: State<'_, DesktopState>,
+    repo_url: String,
+    tag: Option<String>,
+    plugin_id: String,
+    expected_sha256: Option<String>,
+) -> Result<ImportResult, String> {
+    let raw_url = repo_url.trim().to_string();
+    if raw_url.is_empty() {
+        return Err("GitHub 仓库 URL 不能为空".to_string());
+    }
+    let clean_id = plugin_id.trim().to_string();
+    if clean_id.is_empty() {
+        return Err("插件 ID 不能为空".to_string());
+    }
+
+    let handle = app_handle.clone();
+    let on_progress = move |progress: proxyweave_plugin::downloader::DownloadProgress| {
+        let _ = handle.emit("plugin_download_progress", &progress);
+    };
+
+    let registry = state.registry.clone();
+    let res = proxyweave_plugin::downloader::download_and_install_release(
+        &registry,
+        &raw_url,
+        tag.as_deref(),
+        &clean_id,
+        expected_sha256.as_deref(),
+        None,
+        on_progress,
+    )
+    .await?;
+
+    state
+        .record_event(
+            "plugin",
+            "install_release",
+            &res.record.manifest.metadata.id,
+            true,
+            &format!(
+                "已下载并安全安装 GitHub Release 资产: {} (v{})",
+                res.record.manifest.metadata.name, res.record.manifest.metadata.version
+            ),
+        )
+        .await;
+
+    // Auto-select if no plugin selected yet
+    let current_selected = {
+        let r = state.selected_plugin_id.read().await;
+        r.clone()
+    };
+    if current_selected.is_none() {
+        let new_sel = Some(res.record.manifest.metadata.id.clone());
+        let current_port = *state.gateway_port.read().await;
+        state
+            .save_desktop_config(&DesktopConfig {
+                gateway_port: current_port,
+                selected_plugin_id: new_sel.clone(),
+            })
+            .map_err(|e| format!("自动选中插件保存配置失败: {e}"))?;
+        let mut sel = state.selected_plugin_id.write().await;
+        *sel = new_sel;
+    }
+
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn check_plugin_update(
+    app_handle: tauri::AppHandle,
+    state: State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<PluginUpdateStatusDto, String> {
+    let _ = app_handle;
+    let clean_id = plugin_id.trim();
+    if clean_id.is_empty() {
+        return Err("插件 ID 不能为空".to_string());
+    }
+    let record = state.registry.load(clean_id)?;
+    let check = proxyweave_plugin::updater::check_plugin_update(&record).await;
+    Ok(PluginUpdateStatusDto::from(check))
+}
+
+pub type UpdateResultDto = proxyweave_plugin::updater::UpdateResult;
+
+#[tauri::command]
+pub async fn update_plugin_to_release(
+    app_handle: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+    expected_sha256: Option<String>,
+) -> Result<UpdateResultDto, String> {
+    let clean_id = id.trim().to_string();
+    if clean_id.is_empty() {
+        return Err("插件 ID 不能为空".to_string());
+    }
+
+    let permit = proxyweave_plugin::activation::CompatibilityPermit::default_production();
+    if !permit.is_compatible() {
+        return Err(
+            "CompatibilityUnknown: plugin update requires verified data compatibility".into(),
+        );
+    }
+    // 0. Hold singleflight operation lock
+    let _operation = state.plugin_operation(&clean_id).await;
+
+    // 1. Initial validation under file lock
+    let file_lock = state.registry.acquire_plugin_lock(&clean_id)?;
+    let record = state.registry.load(&clean_id)?;
+
+    // Reject external plugins with zero kill/modification
+    if record.manifest.ownership() != Ownership::Managed {
+        return Ok(UpdateResultDto::NotAllowedExternal);
+    }
+
+    let current_source = record
+        .source
+        .clone()
+        .ok_or_else(|| "当前插件未绑定发布来源，无法检查或下载更新".to_string())?;
+
+    // Pre-check active requests
+    let initial_active = state.runtime.active_request_count(&clean_id).await;
+    if initial_active > 0 {
+        return Ok(UpdateResultDto::BlockedActiveRequests {
+            active_requests: initial_active,
+        });
+    }
+
+    let repo_url = format!(
+        "https://github.com/{}/{}",
+        current_source.owner, current_source.repo
+    );
+    let handle = app_handle.clone();
+    let on_progress = move |progress: proxyweave_plugin::downloader::DownloadProgress| {
+        let _ = handle.emit("plugin_download_progress", &progress);
+    };
+
+    // 2. Download and verify candidate package to temp directory
+    let staged = proxyweave_plugin::downloader::download_and_stage_release_package(
+        &repo_url,
+        None,
+        &clean_id,
+        expected_sha256.as_deref(),
+        None,
+        on_progress,
+    )
+    .await?;
+
+    let candidate_version = staged.source.tag_name.trim_start_matches('v').to_string();
+
+    // 3. Store version package in versions/<candidate_version>
+    let (_version_dir, new_record) = state.registry.store_version_package(
+        &clean_id,
+        &candidate_version,
+        &staged.manifest_path,
+        Some(staged.source.clone()),
+    )?;
+
+    // 4. Read or initialize activation envelope
+    let mut envelope = match state.registry.read_activation(&clean_id)? {
+        Some(env) => env,
+        None => state
+            .registry
+            .initialize_legacy_activation(&clean_id, &record, &file_lock)?,
+    };
+
+    let candidate_ptr = proxyweave_plugin::activation::VersionPointer {
+        location: proxyweave_plugin::activation::VersionLocation::VersionKey {
+            version_key: candidate_version.clone(),
+        },
+        fingerprint: new_record.fingerprint.clone(),
+        version: new_record.manifest.metadata.version.clone(),
+        source: Some(staged.source),
+    };
+
+    let txn_id = proxyweave_plugin::activation::generate_txn_id("upd", &clean_id);
+
+    // CAS advance: Committed -> Prepared
+    let stamp = envelope.stamp.clone();
+    envelope.prepare_candidate(candidate_ptr, txn_id)?;
+    envelope = state
+        .registry
+        .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+
+    // 5. Determine runtime state and enter maintenance barrier if running
+    let runtime_status = state.runtime.get_status(&clean_id).await;
+    let is_running = matches!(
+        runtime_status,
+        RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
+    );
+
+    let maintenance_token = if is_running {
+        match state
+            .runtime
+            .enter_maintenance_barrier(&clean_id, Duration::from_secs(10))
+            .await
+        {
+            Ok(token) => Some(token),
+            Err(proxyweave_plugin::RuntimeError::ActiveRequestsTimeout {
+                active_requests, ..
+            }) => {
+                // Rollback uncommitted envelope
+                let mut env = envelope;
+                let _ = env.mark_rollback_pending();
+                let _ = env.complete_rollback(&state.registry.package_dir(&clean_id)?);
+                let _ = state.registry.write_activation(&clean_id, &env, &file_lock);
+                return Ok(UpdateResultDto::BlockedActiveRequests { active_requests });
+            }
+            Err(e) => {
+                let mut env = envelope;
+                let _ = env.mark_rollback_pending();
+                let _ = env.complete_rollback(&state.registry.package_dir(&clean_id)?);
+                let _ = state.registry.write_activation(&clean_id, &env, &file_lock);
+                return Err(format!("进入维护屏障失败: {e}"));
+            }
+        }
+    } else {
+        None
+    };
+
+    // Keep every fallible operation inside this scope so only the owner releases the fence.
+    let result = async {
+        if let Some(token) = maintenance_token.as_ref() {
+            // Stop old instance
+            if let Err(e) = state
+                .runtime
+                .stop_plugin_under_maintenance(&clean_id, token)
+                .await
+            {
+                let mut env = envelope;
+                let _ = env.mark_rollback_pending();
+                let _ = env.complete_rollback(&state.registry.package_dir(&clean_id)?);
+                let _ = state.registry.write_activation(&clean_id, &env, &file_lock);
+                return Err(format!("停止旧版本插件失败: {e}"));
+            }
+
+            // CAS: Prepared -> Stopped
+            let stamp = envelope.stamp.clone();
+            envelope.mark_stopped()?;
+            envelope = state
+                .registry
+                .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+        }
+
+        // 6. Switch activation pointer: Stopped/Prepared -> Switched
+        let stamp = envelope.stamp.clone();
+        envelope.switch_to_candidate()?;
+        envelope = state
+            .registry
+            .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+
+        // 7. Restart or keep stopped
+        let container_dir = state.registry.package_dir(&clean_id)?;
+        let old_version = record.manifest.metadata.version.clone();
+        let new_version = new_record.manifest.metadata.version.clone();
+
+        if !is_running {
+            // Was stopped: stay stopped
+            let stamp = envelope.stamp.clone();
+            envelope.commit_active()?;
+            let _ = state
+                .registry
+                .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+
+            state
+                .record_event(
+                    "plugin",
+                    "update",
+                    &clean_id,
+                    true,
+                    &format!("Plugin updated (stopped): {old_version} -> {new_version}"),
+                )
+                .await;
+
+            return Ok(UpdateResultDto::Success {
+                old_version,
+                new_version,
+                restarted: false,
+            });
+        }
+
+        // Was running: start new version
+        let token = maintenance_token
+            .as_ref()
+            .ok_or("missing maintenance owner")?;
+        let active_pkg_dir = envelope.current.resolve_package_dir(&container_dir)?;
+        let data_dir = state.registry.data_dir(&clean_id)?;
+        let api_key = load_or_create_plugin_api_key(&clean_id)?;
+
+        let start_res = state
+            .runtime
+            .start_plugin_under_maintenance(
+                &new_record,
+                &active_pkg_dir,
+                None,
+                &data_dir,
+                Some(&api_key),
+                token,
+            )
+            .await;
+
+        match start_res {
+            Ok(RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }) => {
+                // New version started successfully!
+                // Update gateway if selected
+                let selected = state.selected_plugin_id.read().await.clone();
+                if selected.as_deref() == Some(&clean_id) {
+                    state
+                        .gateway
+                        .set_backend(&new_record.manifest, &api_key)
+                        .await?;
+                }
+
+                // Commit activation
+                let stamp = envelope.stamp.clone();
+                envelope.commit_active()?;
+                let _ = state
+                    .registry
+                    .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+
+                state
+                    .record_event(
+                        "plugin",
+                        "update",
+                        &clean_id,
+                        true,
+                        &format!("Plugin updated and hot reloaded: {old_version} -> {new_version}"),
+                    )
+                    .await;
+
+                Ok(UpdateResultDto::Success {
+                    old_version,
+                    new_version,
+                    restarted: true,
+                })
+            }
+            failed => {
+                // New version failed to start: initiate automatic rollback!
+                let start_err = match failed {
+                    Err(e) => e.to_string(),
+                    Ok(s) => format!("Unexpected status: {s:?}"),
+                };
+
+                // Kill candidate if partially started
+                let _ = state
+                    .runtime
+                    .stop_plugin_under_maintenance(&clean_id, token)
+                    .await;
+
+                // Execute rollback in activation envelope
+                let rollback_res =
+                    (|| -> Result<proxyweave_plugin::activation::ActivationEnvelope, String> {
+                        let stamp = envelope.stamp.clone();
+                        envelope.mark_rollback_pending()?;
+                        let advanced = state
+                            .registry
+                            .cas_advance_activation(&clean_id, &stamp, envelope, &file_lock)?;
+
+                        let mut env = advanced;
+                        env.complete_rollback(&container_dir)?;
+                        state
+                            .registry
+                            .write_activation(&clean_id, &env, &file_lock)?;
+                        Ok(env)
+                    })();
+
+                let rolled_back_env = match rollback_res {
+                    Ok(env) => env,
+                    Err(rb_err) => {
+                        return Ok(UpdateResultDto::RollbackFailed {
+                            error: start_err,
+                            rollback_error: rb_err,
+                        });
+                    }
+                };
+
+                // Restart old version
+                let old_pkg_dir = match rolled_back_env.current.resolve_package_dir(&container_dir)
+                {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Ok(UpdateResultDto::RollbackFailed {
+                            error: start_err,
+                            rollback_error: format!("Cannot resolve old package dir: {e}"),
+                        });
+                    }
+                };
+
+                let restart_old = state
+                    .runtime
+                    .start_plugin_under_maintenance(
+                        &record,
+                        &old_pkg_dir,
+                        None,
+                        &data_dir,
+                        Some(&api_key),
+                        token,
+                    )
+                    .await;
+
+                match restart_old {
+                    Ok(RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }) => {
+                        let selected = state.selected_plugin_id.read().await.clone();
+                        if selected.as_deref() == Some(&clean_id) {
+                            state
+                                .gateway
+                                .set_backend(&record.manifest, &api_key)
+                                .await?;
+                        }
+
+                        state
+                            .record_event(
+                                "plugin",
+                                "update_rollback",
+                                &clean_id,
+                                true,
+                                &format!(
+                                "New version failed ({start_err}), rolled back to {old_version}"
+                            ),
+                            )
+                            .await;
+
+                        Ok(UpdateResultDto::RollbackSuccess {
+                            error: start_err,
+                            rolled_back_to_version: old_version,
+                        })
+                    }
+                    failed_old => {
+                        let old_err = match failed_old {
+                            Err(e) => e.to_string(),
+                            Ok(s) => format!("Unexpected old status: {s:?}"),
+                        };
+                        Ok(UpdateResultDto::RollbackFailed {
+                            error: start_err,
+                            rollback_error: format!("Old version failed to restart: {old_err}"),
+                        })
+                    }
+                }
+            }
+        }
+    }
+    .await;
+    if let Some(token) = maintenance_token.as_ref() {
+        if matches!(&result, Ok(UpdateResultDto::Success { .. })) {
+            state
+                .runtime
+                .exit_maintenance(token)
+                .await
+                .map_err(|e| e.to_string())?;
+        } else {
+            state
+                .runtime
+                .cancel_maintenance_barrier(token)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    result
+}
 #[tauri::command]
 pub async fn list_local_plugins(
     state: State<'_, DesktopState>,
@@ -616,6 +1268,8 @@ pub async fn get_plugin_runtime_status(
         RuntimeStatus::Failed { error } => ("failed".to_string(), None, None, None, Some(error)),
     };
 
+    let source = state.registry.load(&id).ok().and_then(|r| r.source);
+
     Ok(PluginStatusInfo {
         status: status_str,
         port,
@@ -623,6 +1277,7 @@ pub async fn get_plugin_runtime_status(
         reason,
         error,
         active_requests,
+        source,
     })
 }
 
@@ -632,8 +1287,7 @@ pub async fn start_plugin(
     id: String,
 ) -> Result<PluginStatusInfo, String> {
     let _operation = state.plugin_operation(&id).await;
-    let record = state.registry.load(&id)?;
-    let package_dir = state.registry.package_dir(&id)?;
+    let (record, package_dir, _) = state.registry.resolve_active_package(&id)?;
     let data_dir = state.registry.data_dir(&id)?;
 
     let api_key = load_or_create_plugin_api_key(&id)?;
@@ -777,8 +1431,7 @@ pub async fn restart_plugin(
     }
 
     // 2. Start
-    let record = state.registry.load(&id)?;
-    let package_dir = state.registry.package_dir(&id)?;
+    let (record, package_dir, _) = state.registry.resolve_active_package(&id)?;
     let data_dir = state.registry.data_dir(&id)?;
     let api_key = load_or_create_plugin_api_key(&id)?;
 
@@ -1012,6 +1665,13 @@ pub async fn get_gateway_status(
         "••••••••".to_string()
     };
 
+    let route_strategy = state
+        .gateway
+        .get_route_strategy()
+        .await
+        .as_str()
+        .to_string();
+
     Ok(GatewayStatusInfo {
         is_running,
         port,
@@ -1019,6 +1679,7 @@ pub async fn get_gateway_status(
         active_backend,
         master_key_preview,
         protocol_capabilities: GatewayProtocolCapabilities::compiled(),
+        route_strategy,
     })
 }
 
@@ -1187,6 +1848,31 @@ pub async fn stop_gateway(state: State<'_, DesktopState>) -> Result<GatewayStatu
 #[tauri::command]
 pub async fn set_gateway_port(state: State<'_, DesktopState>, port: u16) -> Result<(), String> {
     set_gateway_port_value(&state, port).await
+}
+
+#[tauri::command]
+pub async fn set_gateway_route_strategy(
+    state: State<'_, DesktopState>,
+    strategy: String,
+) -> Result<GatewayStatusInfo, String> {
+    let strat = RouteStrategy::from_str_name(&strategy)
+        .ok_or_else(|| format!("未知路由策略: {strategy}，仅支持 smart, order, rotate"))?;
+    state.gateway.set_route_strategy(strat).await;
+    get_gateway_status(state).await
+}
+
+#[tauri::command]
+pub async fn get_gateway_traces(
+    state: State<'_, DesktopState>,
+    limit: Option<usize>,
+) -> Result<Vec<RequestTrace>, String> {
+    Ok(state.gateway.get_traces(limit).await)
+}
+
+#[tauri::command]
+pub async fn clear_gateway_traces(state: State<'_, DesktopState>) -> Result<(), String> {
+    state.gateway.clear_traces().await;
+    Ok(())
 }
 
 async fn set_gateway_port_value(state: &DesktopState, port: u16) -> Result<(), String> {
@@ -1496,6 +2182,34 @@ pub async fn detect_agent_clients(
 }
 
 #[tauri::command]
+pub async fn preview_agent_client(
+    state: State<'_, DesktopState>,
+    target: String,
+    models: Vec<String>,
+) -> Result<crate::agent_import::AgentDiffPreview, String> {
+    let port = {
+        let gh = state.gateway_handle.lock().await;
+        if let Some(h) = gh.as_ref() {
+            h.address().port()
+        } else {
+            *state.gateway_port.read().await
+        }
+    };
+    let master_key = state.gateway_master_key.read().await.clone();
+    let gateway_base = format!("http://127.0.0.1:{port}/v1");
+    crate::agent_import::preview_target(&target, &gateway_base, &master_key, &models)
+}
+
+#[tauri::command]
+pub async fn preview_agent_diff(
+    state: State<'_, DesktopState>,
+    target: String,
+    models: Vec<String>,
+) -> Result<crate::agent_import::AgentDiffPreview, String> {
+    preview_agent_client(state, target, models).await
+}
+
+#[tauri::command]
 pub async fn import_agent_client(
     state: State<'_, DesktopState>,
     target: String,
@@ -1578,6 +2292,24 @@ pub async fn list_agent_backups(
 ) -> Result<Vec<crate::agent_import::AgentBackupItem>, String> {
     let backup_dir = state.profile_dir.join("agent-backups");
     Ok(crate::agent_import::list_backups_in(&backup_dir, &target))
+}
+
+#[tauri::command]
+pub async fn get_marketplace_catalog(
+    refresh_online: Option<bool>,
+) -> Result<proxyweave_plugin::marketplace::MarketplaceCatalogResponse, String> {
+    let refresh = refresh_online.unwrap_or(false);
+    proxyweave_plugin::marketplace::get_marketplace_catalog(refresh).await
+}
+
+#[tauri::command]
+pub async fn search_marketplace_plugins(
+    query: Option<String>,
+    category: Option<String>,
+    refresh_online: Option<bool>,
+) -> Result<proxyweave_plugin::marketplace::MarketplaceCatalogResponse, String> {
+    let refresh = refresh_online.unwrap_or(false);
+    proxyweave_plugin::marketplace::search_marketplace(query, category, refresh).await
 }
 
 #[cfg(test)]

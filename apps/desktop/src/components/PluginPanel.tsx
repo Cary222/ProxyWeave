@@ -410,12 +410,25 @@ export const PluginPanel: React.FC<PluginPanelProps> = ({
                     {isManaged ? "Managed (托管进程)" : "External (外部服务·零杀伤)"}
                   </span>
                   <span className="pill pill-violet">
-                    {isManaged ? "idle_timeout · 300s" : "永不 Kill"}
+                    {!isManaged
+                      ? "永不 Kill"
+                      : record.manifest.lifecycle?.idle_timeout_ms === null
+                        ? "不启用空闲回收"
+                        : typeof record.manifest.lifecycle?.idle_timeout_ms === "number"
+                          ? `配置空闲超时 ${record.manifest.lifecycle.idle_timeout_ms / 1000}s（尚未生效）`
+                          : "空闲策略未声明"}
                   </span>
                   <span className="tag">{record.manifest.schema_version ?? "schema 1.0"}</span>
                   {isCurrentBackend ? (
                     <span className="pill pill-amber">★ 统一网关活跃后端</span>
                   ) : null}
+                  {(record.source ?? currentStatus?.source) ? (
+                    <span className="pill pill-gray mono" style={{ fontSize: 11 }}>
+                      来源: {(record.source ?? currentStatus?.source)!.owner}/{(record.source ?? currentStatus?.source)!.repo}@{(record.source ?? currentStatus?.source)!.tag_name}
+                    </span>
+                  ) : (
+                    <span className="pill pill-gray" style={{ fontSize: 11 }}>本地/未绑定市场</span>
+                  )}
                 </div>
 
                 <div className="sub mono" style={{ fontSize: 12, marginTop: 8, overflowWrap: "anywhere" }}>

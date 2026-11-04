@@ -145,3 +145,83 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
     let gh = state.gateway_handle.lock().await;
     assert!(gh.is_none());
 }
+
+
+#[tokio::test]
+async fn test_inspect_project_from_github_url_validation_and_author_extraction() {
+    use quotio_desktop_lib::host::{
+        extract_github_author, inspect_project_from_github, validate_github_repo_url,
+        InspectProjectResult,
+    };
+
+    // 1. Empty URL
+    let err = validate_github_repo_url("   ").unwrap_err();
+    assert!(err.contains("不能为空"));
+    let err = inspect_project_from_github("".into()).await.unwrap_err();
+    assert!(err.contains("不能为空"));
+
+    // 2. Illegal chars & dashes
+    let err = validate_github_repo_url("--upload-pack=evil").unwrap_err();
+    assert!(err.contains("格式非法"));
+    let err = inspect_project_from_github("https://github.com/a/b\0c".into())
+        .await
+        .unwrap_err();
+    assert!(err.contains("格式非法"));
+    let err = inspect_project_from_github("https://github.com/a/b\nc".into())
+        .await
+        .unwrap_err();
+    assert!(err.contains("格式非法"));
+
+    // 3. Non-GitHub URL
+    let err = validate_github_repo_url("https://gitlab.com/owner/repo").unwrap_err();
+    assert!(err.contains("当前仅支持标准 GitHub 仓库 URL"));
+
+    // 4. Valid GitHub URLs
+    let ok = validate_github_repo_url("  https://github.com/router-for-me/workbuddy2api  ").unwrap();
+    assert_eq!(ok, "https://github.com/router-for-me/workbuddy2api");
+    let ok_ssh = validate_github_repo_url("git@github.com:router-for-me/workbuddy2api.git").unwrap();
+    assert_eq!(ok_ssh, "git@github.com:router-for-me/workbuddy2api.git");
+
+    // 5. Author extraction
+    assert_eq!(
+        extract_github_author("https://github.com/linguo2625469/workbuddy2api-panel"),
+        "linguo2625469"
+    );
+    assert_eq!(
+        extract_github_author("git@github.com:proxyweave/test-plugin.git"),
+        "proxyweave"
+    );
+
+    // 6. InspectProjectResult serialization round-trip
+    let inspect_sample = InspectProjectResult {
+        id: "wb2api".into(),
+        name: "WorkBuddy 2API".into(),
+        version: "1.13.0".into(),
+        description: "Test description".into(),
+        author: "linguo2625469".into(),
+        homepage: "https://github.com/linguo2625469/workbuddy2api-panel".into(),
+        license: "MIT".into(),
+        project_type: "manifest".into(),
+        runtime_kind: "managed".into(),
+        entrypoint: "bin/wb2api.exe".into(),
+        sha256: "38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485".into(),
+        protocols: vec!["openai_chat".into(), "streaming".into()],
+        exported_models: vec![],
+        requires_secrets: vec!["access_token".into()],
+        permissions: vec![
+            "独立子进程执行 (managed_process)".into(),
+            "本地网络端口监听与通信 (local_network)".into(),
+        ],
+        notes: vec!["Only declared files are read".into()],
+        raw_manifest: serde_json::json!({
+            "schema_version": "1.0",
+            "metadata": { "id": "wb2api" }
+        }),
+    };
+    let json = serde_json::to_string(&inspect_sample).expect("serialize");
+    let deserialized: InspectProjectResult = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(deserialized.id, "wb2api");
+    assert_eq!(deserialized.runtime_kind, "managed");
+    assert_eq!(deserialized.protocols.len(), 2);
+    assert_eq!(deserialized.permissions.len(), 2);
+}

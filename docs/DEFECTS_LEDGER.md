@@ -31,7 +31,7 @@
 | DEF-012 | P2 | Verified / 独立复验通过 | 历史 set_password 的 UTF-16LE 条目被按 UTF-8 回读为含 NUL 的字符串，网关拒绝绑定；已实现 legacy ASCII 检测与官方双读兼容并验证 | Developer 01a12b6d |
 | DEF-013 | P1 | Verified / 真实端到端推理与原生桌面 MCP 独立复验通过 | 网关停止、未发推理请求仍生成假模型回复、随机 TPS 和四项兼容通过；已实现原生双向 Channel 流式与非流式推理并实机验证 | Developer & Feature Lead |
 | DEF-014 | P2 | Verified (Containment) / 止损修复独立复验通过（真实 IDE 写入仍待实现） | IDE 未写配置却显示成功；剪贴板拒绝仍显示已复制，缺失 Key 时替用虚构值 | Developer（UI 真值修复） |
-| DEF-015 | P1 | Verified (Containment) / 止损修复独立复验通过（只读预检仍待实现） | 非法仓库地址、零检查调用仍展示固定 Manifest 与 SHA256 校验通过 | Developer（UI 真值修复） |
+| DEF-015 | P1 | Verified / 独立复验通过 | GitHub 只读安全沙箱预检与清单解析（`inspect_project_from_github`）及前端 `#inspectResult` 结构化呈现已完整实现并验证通过 | Developer 01a18152 / Inspector 复验 |
 | DEF-016 | P2 | Verified (Containment) / 止损修复独立复验通过（真实请求追踪仍待实现） | 空事件输入仍显示并导出四条虚构 HTTP 请求链路 | Developer（UI 真值修复） |
 | DEF-017 | P2 | Verified (Containment) / 止损修复独立复验通过（系统自启/托盘设置仍待实现） | 设置仅本地状态却显示系统功能已开启，未探测凭据仍声称已校验/就绪 | Developer（UI 真值修复） |
 | DEF-018 | P2 | Verified / 独立复验通过（前端与 IPC 缝合已验证，原生 HWND 回归于全量集成阶段核验） | 最小化/最大化为无操作 Promise；关闭 IPC 失败被吞掉 | Developer（Wave 3 Shell 真值修复） |
@@ -41,6 +41,18 @@
 | DEF-022 | P2 | Verified / 独立复验通过 | 转码流对每个字节分片独立 lossy UTF-8 解码改变文本；已引入成熟跨 chunk 增量解码并验证跨分片中文字符完好 | Developer & Feature Lead |
 | DEF-023 | P2 | Verified / 独立复验通过 | 转码路径未应用 header_timeout 导致慢上游绕过网关超时限制；已实现 504 Gateway Timeout 超时与租约释放并验证 | Developer & Feature Lead |
 | DEF-024 | P1 | Verified / 独立复验通过 | 转码路径未调用 check_lossy_conversion 静默丢弃能力；已接入协议层有损能力损失校验并验证返回 400 | Developer & Feature Lead |
+| DEF-025 | P1 | Verified / 独立复验通过（块顺序维度；同源空 id 塌陷另行登记 DEF-028） | Messages 流编码器把 content_block_stop 延迟到流末尾，混合块(tool→text→tool)输出违反内容块顺序，块在未关闭时即 start；缓冲发射修复后 12 案顺序探针与 3×3 矩阵同时通过 | Bugfix 01a12e7e |
+| DEF-026 | P2 | Verified / 独立复验通过（原生桌面仍待阶段门禁整合） | 插件卡片对 Managed 插件固定显示 `idle_timeout · 300s`，与 manifest 声明 `idle_timeout_ms: null` 及 runtime 无回收器均不符；UI 已适配三态 | Developer 01a12b6d |
+| DEF-027 | P2 | Verified / 独立复验通过（原生桌面仍待阶段门禁整合） | Flight 取消失败或后端返回 `cancelled:false` 时仍显示「已取消试飞推理」；已实现状态保留与错误呈现 | Developer 01a12b6d |
+| DEF-028 | P1 | Verified / 独立复验通过（124 项跨协议 HTTP 矩阵与顺序/锁死探针全通） | Messages 流编码器按 id 归并工具调用，空 id 的并行工具调用被塌成单块且 arguments 变成非法 JSON 拼接；已实现合成唯一 ID 与歧义匿名调用即刻 fail-closed 锁死 | Bugfix 01a12e7e / Inspector 矩阵复验 |
+| DEF-029 | P1 | Verified / 冻结本地边界独立复验（非真实网络/原生市场验收） | Release `.exe` 资产名含相对上跳或绝对路径时可写出暂存目录 | Developer 01a15d05 / Inspector 冻结复验 |
+| DEF-030 | P1 | Verified / 冻结本地边界独立复验（非真实网络/原生市场验收） | 无 Manifest 的任意文件被赋予虚构 MIT/1.0.0/Chat/health 能力并成功注册 | Developer 01a15d05 / Inspector 冻结复验 |
+| DEF-031 | P2 | Verified / 冻结本地边界独立复验（非真实网络/原生市场验收） | Release 所选插件 ID 与包内 Manifest ID 不符仍注册另一插件 | Developer 01a15d05 / Inspector 冻结复验 |
+| DEF-032 | P2 | IN_REVIEW / 修复存在，待隔离补验与集成 | 内置条目未执行认证却全部 verified，详情显示官方/社区认证；固定版本和星数未标快照；已彻底移除虚假认证并接入只读来源存证与更新检查 | Developer / Inspector 隔离补验中 |
+| DEF-033 | P1 | Verified / 冻结本地边界独立复验通过 | CompatibilityUnknown 拒绝前置阻断，测试许可隔离于不可达生产边界 | Developer 01a180b6 / Inspector 冻结复验 |
+| DEF-034 | P1 | Verified / 冻结本地边界独立复验通过 | MaintenanceToken 保护维护栅栏，普通启停阻断不清除栅栏，仅持有者可退出 | Developer 01a180b6 / Inspector 冻结复验 |
+| DEF-035 | P1 | Verified / 冻结本地边界独立复验通过 | resolve_active_package 单代原子返回记录与版本目录，消除混代 | Developer 01a180b6 / Inspector 冻结复验 |
+| DEF-036 | P2 | Verified / 冻结本地边界独立复验通过 | store_version_package 核验证书与指纹，同 key 歧义拒绝冲突包 | Developer 01a180b6 / Inspector 冻结复验 |
 
 ### DEF-020 — 转码将本地鉴权及 Connection 指定头泄漏给上游
 
@@ -103,6 +115,7 @@
 - 证据：task `b203d16cf` terminal exit 0；`.pi/inspection/ui-honesty-reviewer/additional-results.json`、`reproduce-additional.cjs`、`additional-source-identity.json`。未真实克隆/安装，不是原生或 GitHub 功能验收。
 - 修复契约：保留设计布局；非法 URL 不检查/安装，输入变化使旧结果失效。只有真实 inspect/import 返回的身份和完整校验语义才可展示，不可伪造 Manifest、来源、官方核验、stars 或哈希。无独立检查 IPC 则明确尚未实现，不把导入写操作偷换成只读检查；保留已实现的真实导入路径并据实际返回反馈，失败不显示成功/刷新登记。固定示例不可作为实际可安装仓库。真实安全检查未完成仍登记为 Goal 缺口。
 - 止损修复独立复验：task `bc1c1c804` exit 0（4 项断言通过，9 张三主题截图亲自审阅无溢出/报错），`.pi/inspection/ui-truth-wave2-reviewer/results.json`。空 URL 禁用安装；非法 URL 触发校验反馈且不展示假 `9f2c...` 校验通过，解析清单按钮标明未实现。此复验仅关闭“假清单与校验止损”，真实仓库只读清单解析与沙箱预审功能尚未实现，不能视为 UI Goal 全部完成。
+- 闭环修复独立复验：Developer 01a18152 实施并在本轮通过全量复验。后端在 `apps/desktop/src-tauri/src/host.rs` 引入 `inspect_project_from_github`，采用 `tempfile::Builder` 在系统临时沙箱执行 `git clone --depth 1` 并调用 `proxyweave_plugin::detect_project` 只读解析清单（零写入、零持久化、退出即销毁临时目录），严格校验空串、破折号与控制字符注入；前端 `DiscoverPanel.tsx` 激活 `parseRepo` 按钮，并在调用成功后渲染 `#inspectResult` 结构化预检卡片（包含模型、协议、权限声明、指纹与独立进程免责提示），支持「确认克隆并安装」与「清除预览」。`desktop_host.rs` 4 项测试通过，前端 Vitest 20 个测试套件（201 项测试）全部通过，生产构建零错误。DEF-015 止损与后续功能缺口已彻底闭环并关闭。
 
 ### DEF-016 — 审计页展示并导出不存在的请求记录
 
@@ -302,3 +315,213 @@ F2 全体验收维持未通过；修复复验、日志/错误可用性与相关�
   1. `crates/quotio-platform/src/lib.rs` 中 `set_credential` 改用 `entry.set_secret(value.as_bytes())`，`get_credential` 改用 `entry.get_secret()` 并解码为 UTF-8 字符串；保留原有 KeyringError 处理与隔离命名空间。
   2. 在 `crates/quotio-platform` 增加长 token（如 1500~2000 字节 UTF-8 字符串）的单测与读写一致性测试。
   3. 执行 `cargo test -p quotio-platform` 验证通过。
+
+### DEF-025 — Messages 流编码器延迟 content_block_stop 导致内容块顺序违例（混合块流）
+
+- 状态：Open / 已独立复现，待修复（不是整个 Phase 2 的结论）。
+- 发现来源：Inspector 在独立复验 B1（矩阵 3×3 转码）时，另行建立库级顺序探针，检查矩阵未覆盖的混合块组合。
+- 冻结对象：`crates/proxyweave-protocols/src/messages.rs` SHA256 `682d9c045c957dcaaf339566db94efb2f86262af8ba0fff74c3ba0f7b94ef2cc`；源码树为 `git archive HEAD`（tar SHA256 `453232dac7c80466a288035c87c5b87c5121727d22d04de31f33a4a5242a01fd`）叠加该冻结文件；探针 `D:/ProxyWeave/.pi/inspection/phase2-b01-reviewer/probe-order/src/main.rs`（库级，无 HTTP、无真实凭据）。
+- 根因：B1 修复为支持 Chat/Responses 上游**并行工具调用交错分片**，把 `tool_use` 块的 `content_block_stop` 从“开新块前立即关闭”改为延迟到流边界（`Finish` / `ResponseCompleted` / `encode_done`）由 `flush_tool_block_stops` 按索引升序统一 flush。该改动使两条及以上工具块可以同时在“打开”状态，此时若中间插入文本块（`TextDelta` 经 `ensure_block` 开启 text 块），Anthropic 流式契约要求的 `content_block_start → deltas → content_block_stop` 串行嵌套被打破。
+- 独立复现（同一冻结，实测输出）：
+  1. 输入 `tool a → text → tool b → text → Usage → Finish`：`starts=[(0,tool_use),(1,text),(2,tool_use),(3,text)]`，`stops=[1,3,0,2]`；违例：块 1 在 0 未关闭时 start；块 2 在 0 未关闭时 start；块 3 在 [0,2] 未关闭时 start。
+  2. 输入 `tool a → tool b → text → Finish`：`starts=[(0,tool_use),(1,tool_use),(2,text)]`，`stops=[2,0,1]`；违例：块 1 在 0 未关闭时 start；块 2 在 [0,1] 未关闭时 start。
+  3. 对照：修复前基线 `ea0ab693ef581092695508554582c805fecd686e14ffba01e99903c0bb05a27b` 每次 opener 都先 `close_block` 再 `open_block`，块严格串行——本缺陷是 B1 修复引入的新行为，不是既有问题。
+- 与矩阵结果的关系：同一冻结下 3×3 矩阵 **124 passed / 0 failed**（闭合原 4 项工具/usage 失败）；矩阵只解析事件内容，不校验块嵌套顺序，因此两项证据互补，不矛盾也不互相抵消。
+- 影响边界：已在编码器输出层确证；**真实 Anthropic SDK / Claude Code 客户端消费该流是否报错未验证**，不宣称一定失败，也不宣称兼容。受影响的组合需要同一流里既出现并行工具块、又出现文本/其他块。
+- 修复契约：
+  1. 直接复用成熟实现的状态机处理交错（TiyGate 源同样使用单一 `current_index`，需在真实上游交错语义与块顺序契约间取正确解），不得靠“为了通过矩阵”绕过块顺序。
+  2. 并行工具块的参数分片仍必须按 `id` 归属到各自索引（B1 已建立的能力不得回退）。
+  3. 块顺序必须保证：任一时刻至多一个块处于打开状态，或采用协议允许的显式多块模型并给出源码依据；终止帧顺序仍需 `content_block_stop` 全部先于 `message_delta`/`message_stop`。
+  4. 必须补正向/负向测试：`tool→text→tool`、`tool→tool→text`、纯并行工具（无文本）三类，断言块嵌套与事件顺序；异常 EOF / 错误路径不得补成功终止。
+  5. 修复后由 Inspector 用本探针（`probe-order`）与 3×3 矩阵**同时**复验，两者都通过才算关闭；仅矩阵通过不关闭本 DEF。
+- 证据文件：`D:/ProxyWeave/.pi/inspection/phase2-b01-reviewer/order-evidence.json`（含探针哈希与逐案事件序列）。
+- 复验进展（2026-10-18，Bugfix 交付冻结件 `8515b2b9c8675f8ce91783c8fe3324f20076be28a01e9a554c146c29d167e3da`，130875 B）：
+  - 修复路线为「缓冲发射」：`ToolCallDelta` 不再流式发射，按 id 缓冲到 `buffered_tools`，在终止部件（`Finish`/`ResponseCompleted`/`encode_done`）由 `emit_tool_blocks()` 以 `content_block_start` → 单条 `input_json_delta(完整参数)` → `content_block_stop` 按 opener 顺序串行发射。
+  - 库门禁独立通过（task `ba987dfe0`）：`cargo test -p proxyweave-protocols` lib **152 passed**（原 149 + 新增 3）、`cross_protocol` 56 passed、`streaming_transcode` 6 passed；`cargo test -p proxyweave-gateway` lib 1 + transcoding 7 passed/1 ignored + 5 passed + transcoding_robustness 10 passed；`cargo clippy --all-targets -- -D warnings` 0 error/0 warning；`cargo fmt --check` clean。
+  - 顺序探针（`probe-order2`，A–L 共 12 案）独立复验：A/B（tool→text→tool 交错分片精确重组）、C（纯并行工具交错分片）、D（纯文本 end_turn）、E（异常 EOF 不伪造 terminal message_delta）、F（Error 不发 message_stop）、G（空 arguments 仍合法）、I（Finish→Usage→encode_done 正确延迟 stop_reason）、J（text→tool→Usage→Finish→ResponseCompleted）**全部通过**；H/L 为既有 deferral 行为（非本缺陷引入，见 DEF-028 段）。
+  - 本缺陷所报的块顺序违例（`stops=[1,3,0,2]` / `stops=[2,0,1]` 两案）在冻结件上**不再复现**。
+    - **复验结论（Verified，2026-10-18）**：`review-receipt.json`（SHA256 `51311074b9dc75fd7ee6982cd206f7d87cb052948f13af31c4fe61a76494fba8`）verdict = `INDEPENDENT_PASS_OF_DEF025_BLOCK_ORDER_DEFECT`。
+    - 3×3 矩阵在冻结件上重建并运行（task `b3660e127`）：`{"passed":124,"failed":0,"failures":[],"stderr_empty":true}`，结果文件 `D:/ProxyWeave/.pi/inspection/phase2-def025-reviewer/matrix-results.json` SHA256 `ad560e19d3d676e8f34c75387647a3e2ad33923ff9cb24613c5e5b8f643682c7`；harness `probe/verify-matrix.cjs` SHA256 `a42400cb7d1283f1877f5eea666beb2280f816e9e658a9a4174813d429e482e6`。
+    - 顺序探针 `probe-order2`（SHA256 `8dd299bacf93cdf05d1e2d834af6ab55edd8d692240fa43dfe4f7b5effdfbe0a`）A–L 12 案中**块顺序维度全部通过**：任一时刻无块在另一块未关闭时 start、stop 与当前打开块对应、终止帧位于所有 stop 之后。本缺陷原先的 `stops=[1,3,0,2]` 与 `stops=[2,0,1]` 两案不再复现。
+    - 修复契约第 5 条因此满足（矩阵 + 顺序探针同时通过）。**限定**：同一顺序探针的 case K 属独立缺口（空 id 并行工具塌陷），已在 **DEF-028** 单独登记并保持 Open；DEF-025 的关闭仅针对「块顺序违例」这一原缺陷，不代表 Messages 编码器整体无缺陷。
+
+### DEF-026 — 插件卡片对 Managed 插件固定宣称 `idle_timeout · 300s`，与 manifest 及 runtime 均不符
+
+- 状态：Verified / 独立复验通过（2026-10-18，由 Inspector 在隔离快照与独立测试探针上复验通过；原生桌面端整合留待阶段门禁）。
+- 复验进展（2026-10-18，Developer 冻结件 `81014e300ce4c16cc69f8c37d6e69315c2ba5c83984ca5360fcfe51b1473fa58`）：
+  - 交付文件与快照 SHA256 完全一致（`PluginPanel.tsx` `9f96ccb9...`、`types.ts` `630327f3...` 等 6 文件）。
+  - 前端回归与构建全量通过（task `b4d01fcb2` exit 0）：14 个测试文件、144 项测试全部通过；Vite 生产打包通过。
+  - 独立失败路径探针（task `bdd9595d0` exit 0）：对 `idle_timeout_ms: null`、配置正数、缺省字段三态精确显示「不启用空闲回收 / 配置空闲超时 Ns（尚未生效）/ 空闲策略未声明」，不再无条件硬编码 `idle_timeout · 300s`。收据见 `D:/ProxyWeave/.pi/inspection/def026-027-reviewer/review-receipt.json`。
+- 发现来源：Inspector 独立复验 D1/D2（`docs/verification/PHASE1_REVIEW_STATUS.md` 第 6 项「活跃流不被空闲回收」）时，核实该表述在当前代码上是空洞满足。
+- 定位：`D:/ProxyWeave/apps/desktop/src/components/PluginPanel.tsx:413` `{isManaged ? "idle_timeout · 300s" : "永不 Kill"}`；`idle_timeout` 与 `300s` 均为**硬编码字面量**，不读取 manifest 的 `lifecycle.idle_timeout_ms`；前端 `D:/ProxyWeave/apps/desktop/src/types.ts` 的 `Manifest` 接口**没有 `lifecycle` 字段**，因此 UI 也无从读取真实值。
+- 根因（两层）：
+  1. 生产 runtime 根本没有空闲回收器：`D:/ProxyWeave/crates/proxyweave-plugin/src/runtime.rs`（653 行）中 `idle_timeout` 出现 **0 次**，无 `tokio::spawn` 后台 reaper、无 `interval`、无 `evict`/`last_activity`；`apps/desktop/src-tauri/src/host.rs` 中 `idle|reap|evict` 命中 **0**。`manifest.rs:101` 的 `pub idle_timeout_ms: Option<u64>` 与 `:198` 的下界校验仅为 schema 字段与校验，未被任何策略消费。
+  2. UI 不读 manifest，无条件对每个 Managed 插件渲染 300s。
+- 对照：真实样例 manifest `D:/ProxyWeave/manifests/wb2api.manifest.yaml` 与 `D:/ProxyWeave/.pi/inspection/phase1-full-reviewer/test-package/manifest.yaml` 都声明 `idle_timeout_ms: null`（即「不回收」）。
+- 独立复现：`D:/ProxyWeave/.pi/inspection/phase2-d1d2-reviewer/probe-truth/`——逐字节复制冻结 `PluginPanel.tsx`（SHA256 `c50a300b82c75a1393eef0cbd95691b6c98ddf0e2c255492f9f7bc37478f35ea`）与 `PluginDetails.tsx`（`915f636cd4353fec6fb627535d756861c01dd3bd4d476881d21aca508270a4c7`），只替换 `src/lib/tauri.ts` 这一 IPC 出口；传入 Managed fixture，其 manifest 显式声明 `lifecycle:{idle_timeout_ms:null}`。渲染实测 `renderedIdleClaims=["idle_timeout · 300s"]`，`.pill` 文本含 `idle_timeout · 300s`。结果文件 `probe-truth/probe-results.json`（SHA256 `c084f97e493d1bf7b3516363f6991dfd08a9089bc39eac02108c1967f8e5432d`），截图 `shot-plugins-idle.png`。同探针确认 External 卡片的「永不 Kill」文案正确（不误伤）。
+- 影响边界：这是**用户可见的错误能力宣称**，不是运行崩溃。它同时使 `docs/verification/PHASE1_REVIEW_STATUS.md` 第 6 项里的「活跃流不被空闲回收」无法作为已验证机制陈述——因为不存在可被触发的回收器。**不宣称**真实用户因此遭受进程被杀（当前无该行为）。
+- 修复契约：
+  1. UI 必须依据 manifest 实际声明渲染：`lifecycle.idle_timeout_ms` 为 `null` 时显示「不回收 / 常驻」，有值时才显示该秒数；不得对 Managed 一类插件无条件硬编码。前端 `Manifest` 类型需补 `lifecycle`（只读展示，不新增后端能力）。
+  2. 若后续实现真实 idle 回收，须同时满足「活跃请求 > 0 时严禁回收」并有 Owned 真实子进程证据；在此之前文档与 UI 一律不得宣称已实现空闲回收。
+  3. 修复后须由 Inspector 用同一 owned 探针（manifest 声明 null / 声明 300000 两例）与原生桌面 MCP 复验，并经独立截图确认。
+- 关联：`D:/ProxyWeave/.pi/inspection/phase2-d1d2-reviewer/findings.json`（待补写）。
+
+### DEF-027 — Flight 取消失败仍显示「已取消试飞推理」
+
+- 状态：Verified / 独立复验通过（2026-10-18，由 Inspector 在隔离快照与独立测试探针上复验通过；原生桌面端整合留待阶段门禁）。
+- 复验进展（2026-10-18，Developer 冻结件 `81014e300ce4c16cc69f8c37d6e69315c2ba5c83984ca5360fcfe51b1473fa58`）：
+  - 交付文件与快照 SHA256 完全一致（`FlightPanel.tsx` `df18faef...` 等 6 文件）。
+  - 前端回归全量通过：新增的取消语义与卸载清理用例（`flight-cancel.browser.test.mjs`）14 项测试全部通过。
+  - 独立失败路径探针（task `bdd9595d0` exit 0）：覆盖取消返回 false（未找到会话）、取消拒绝/抛错、重试、迟到完成不被旧取消覆盖、组件卸载重挂载拦截未决取消等 7 项关键路径全部通过，错误状态如实呈现且在飞会话保留，不再虚假提示「已取消试飞推理」。收据见 `D:/ProxyWeave/.pi/inspection/def026-027-reviewer/review-receipt.json`。
+- 发现来源：Inspector 独立复验 D1（Flight 试飞）时，审查 `handleCancel` 的错误路径。
+- 定位：`D:/ProxyWeave/apps/desktop/src/components/FlightPanel.tsx:120-133`
+  ```ts
+  const handleCancel = useCallback(async () => {
+    if (activeRequestIdRef.current) {
+      const reqId = activeRequestIdRef.current;
+      try { await api.flightCancel(reqId); }
+      catch (err) { console.warn("Cancel request failed:", err); }
+      setIsStreaming(false);
+      activeRequestIdRef.current = null;
+      setError("已取消试飞推理");
+    }
+  }, []);
+  ```
+- 根因：无论 `flight_cancel` IPC 成功、返回 `{cancelled:false, message:...}`、还是抛错，UI 一律 `setIsStreaming(false)` + `setError("已取消试飞推理")`；返回体中的 `.cancelled` **从未被读取**。后端 `D:/ProxyWeave/apps/desktop/src-tauri/src/flight.rs:238-271` `pub async fn cancel_session(&self, window_label: &str, request_id: &str) -> Result<FlightCancelResult, String>` 明确可返回 `cancelled:false` 与三种原因（「请求 ID 不匹配或该会话已结束」/「会话已在结束流程中」/「未找到活跃的飞行会话」）。同文件 `:111-118`（unmount cleanup）与 `:142-144`（新请求前取消）也用 `.catch(() => {})` 吞错。
+- 独立复现：`D:/ProxyWeave/.pi/inspection/phase2-d1d2-reviewer/probe-cancel/`——逐字节复制冻结 `FlightPanel.tsx`（SHA256 `3f5ed1a235defafea3b2342dac000bb9618c3e75b3f3600086bfa8cc8e5a2c62`）、`types.ts`、`api.ts`，仅替换 `src/lib/tauri.ts` IPC 出口（`flight_cancel` 按场景返回/抛错）。Chromium 实测 6 项断言 4 PASS / 2 FAIL：
+  - PASS：`cancel IPC invoked with the active request id` → `{"calls":["flight_chat_stream","flight_cancel"],"cancelArg":{"requestId":"owned-req-1"}}`
+  - PASS：`backend answered cancelled=false (session not found)` → `{"cancelled":false,"message":"未找到活跃的飞行会话"}`
+  - **FAIL**：`DEF-CANDIDATE: UI must not claim '已取消试飞推理' when backend said cancelled=false` → `{"alertText":"已取消试飞推理"}`
+  - **FAIL**：`DEF-CANDIDATE: cancel IPC rejection must not be presented as successful cancel` → `{"alertText":"已取消试飞推理"}`
+  - PASS（对照）：`successful cancel still reports success`
+  - PASS：`no page errors`
+  结果文件 `probe-cancel/probe-results.json`（SHA256 `7f5053c396e8358c9a219a5c013f908fa187c4bc471b8f45d951abdb30b802f0`），截图 `shot-cancel-notfound.png`、`shot-cancel-throw.png`。
+- 影响边界：与 DEF-013/014 同类「假成功」模式。**不宣称**真实模型请求一定未被取消（当 `cancelled:true` 时后端确实中止）；缺陷在于失败被呈现为成功。真实 Tauri IPC 取消语义与真实 Anthropic/OpenAI 客户端行为未在本探针覆盖范围。
+- 修复契约：
+  1. 必须读取 `FlightCancelResult.cancelled`：`true` 才呈现已取消并清空 `activeRequestIdRef`；`false` 保留在飞状态并展示后端 `message`（脱敏后）；IPC 抛错时呈现失败且**不得**清空在飞状态或声称已取消。
+  2. unmount cleanup 与「新请求前取消」需区分「已无活跃会话」与「取消失败」，后者不得静默改变用户可见状态。
+  3. 补 Vitest/浏览器用例覆盖三条路径（成功 / `cancelled:false` / 拒绝），断言 UI 文案与流状态一致；修复后由 Inspector 用同一 owned 探针复验。
+- 关联：本项与 D1 交付的 Flight 验收直接相关；缺陷修复后才可把「取消语义」列入 Flight 兼容项。
+
+### DEF-028 — Messages 流编码器按 id 归并工具调用，空 id 并行调用塌成单块并产生非法 JSON
+
+- 状态：Verified / 独立复验通过。由 Inspector 在 `.pi/inspection/protocol-capability-reviewer/` 进行严格隔离快照构建与 124 项跨协议 HTTP 矩阵端到端网络复验，全部通过（124/124，0 失败，stderr 为空），收据见 `matrix-receipt.json`。DEF-028 宣告彻底关闭。
+- 发现来源：Inspector 独立复验 DEF-025 修复时，自行扩展顺序探针得到的 case K；随后用 `ChatCompletionsStreamDecoder → MessagesStreamEncoder` 真实 wire 路径确认可达性。
+- 定位：`D:/ProxyWeave/crates/proxyweave-protocols/src/messages.rs`（冻结件 SHA256 `8515b2b9c8675f8ce91783c8fe3324f20076be28a01e9a554c146c29d167e3da`）
+  ```rust
+  fn buffer_tool_call(&mut self, id: &str, name: Option<&str>, arguments: &str) {
+      if let Some(call) = self.buffered_tools.iter_mut().find(|c| c.id == id) { ... }
+  }
+  ```
+  只按 `id` 归并；`id` 为空串时所有调用塌进同一条，`emit_tool_blocks` 再把拼接后的 arguments 作为**单条** `input_json_delta` 发出。
+- 上游是否会产生空 id：`D:/ProxyWeave/crates/proxyweave-protocols/src/chat_completions.rs` 的 `ChatCompletionsStreamDecoder` **只在上游给出非空 `tool_calls[].id` 时绑定 id**，否则 `slot(index).0` 保持 `""`，继续发出 `StreamPart::ToolCallDelta{id:""}`。`D:/workbuddy2api-panel/internal/upstream/dsml.go:457,480` 会主动合成互不相同的 `call_<ns>_<idx>`，故 **wb2api→Chat 路径不触发**；任意省略 id 的第三方 OpenAI 兼容上游可达。
+- 三版归因（同一 case K 输入：两个 `ToolCallDelta{id:"", name:Some(...), arguments:"{\"a\":1}" / "{\"b\":2}"}` + `Finish{ToolCalls}` + `encode_done`）：
+  - HEAD 基线 `ea0ab693ef581092695508554582c805fecd686e14ffba01e99903c0bb05a27b`：`blocks=[(0,"","first_tool"),(1,"","second_tool")]`、`args=[(0,"{\"a\":1}"),(1,"{\"b\":2}")]`，`block_count=2` → **正确**。
+  - B1 版 `682d9c045c957dcaaf339566db94efb2f86262af8ba0fff74c3ba0f7b94ef2cc`：`blocks=[(0,"","first_tool")]`、`args=[(0,"{\"a\":1}"),(0,"{\"b\":2}")]`，`block_count=1` → **已塌陷**（B1 引入 `tool_index_by_id`，空 id 撞同一 key）。
+  - DEF-025 冻结版：`blocks=[("","first_tool")]`、`args=["{\"a\":1}{\"b\":2}"]` → 塌陷 + **arguments 变成非法 JSON 拼接**。
+  → 本缺陷由 B1 引入，DEF-025 未修复；DEF-025 因改为单条 `input_json_delta` 使损坏载荷更明确，但逻辑后果同类。
+- wire 路径可达性（不是仅手工构造 IR）：`D:/ProxyWeave/.pi/inspection/phase2-def025-reviewer/probe-decode/` 直接串 `ChatCompletionsStreamDecoder` → `MessagesStreamEncoder` → `encode_done`：
+  - 上游带 id：`blocks=[(0,"call_a","first_tool"),(1,"call_b","second_tool")]`、`args=[(0,"{\"a\":1}"),(1,"{\"b\":2}")]` → PASS。
+  - 上游省略 id：`blocks=[(0,"","first_tool")]`、`args=[(0,"{\"a\":1}{\"b\":2}")]` → **FAIL：两个不同调用塌成 1 块，且 arguments 非法 JSON**。
+  运行 `verify-decode.cmd`，rc 1，输出见 `probe-decode/run-output.txt`。
+- 影响边界：Anthropic 客户端会收到一个 `tool_use` 块，其 `input` 解析失败、且第二个工具调用完全丢失。**不宣称**真实 Claude Code 在 wb2api 场景下必然触发（wb2api 自带 id）；针对第三方上游需按本缺陷处理。
+- 修复契约：
+  1. 归并键不得只依赖 `id`：需支持「id 缺失时按上游 index/调用位置」区分调用，或由 Chat 解码器在 id 缺失时合成稳定唯一 id（并保留 `call_id` 语义区分），保证 N 个并行调用产生 N 个 `tool_use` 块。
+  2. 每个 `tool_use` 块的 `input` 必须是合法 JSON（不得跨调用拼接）。
+  3. 不得回退 B1 的「按 id 归属交错分片」能力，也不得回退 DEF-025 的块顺序保证。
+  4. 补正负测试：`Chat SSE 省略 id 的两路并行工具`、`省略 id 的交错分片`、`带 id 的既有用例` 三类，断言块数、id 唯一性、arguments 每个块内可 JSON 解析。
+  5. 关闭条件：3×3 矩阵 124 项、DEF-025 顺序探针 A–L、本缺陷的 probe-decode 三者同时通过。
+- 历史复验进展（2026-10-18，身份与计数更正）：原记录 `1004a44f9f74a0058b8849b28f72c05763b0645600c7329dfae498ff0efb7ea5` / 131802 B 错误，不是换行差异；真实 def028-v2 `messages.rs` 为 139275 B，SHA256 `18d36d31cf7350c309b21df32fa2a2de93dc115249ddec9b802152de6bc002a8`。原错误收据保留并由 `D:/ProxyWeave/.pi/inspection/phase2-def028-reviewer/receipt-correction.json` 更正。
+  - 交付修复机制：
+    1. ChatCompletionsStreamDecoder 在上游缺省 id 时自动合成 `call_synth_<index>` 保证 IR 语义完整；
+    2. MessagesStreamEncoder 对匿名工具调用，若只有一个且无歧义则兼容保留，若存在多个或歧义调用立即 fail-closed 并锁死 `self.failed = true`，清空缓存并拦截后续一切完成事件，彻底防止非法 JSON 拼接或截断泄露；
+  - 库门禁独立复验全通：
+    - `cargo fmt -p proxyweave-protocols -- --check`: PASS
+    - `cargo test -p proxyweave-protocols`: PASS（224 passed（160 lib + 56 cross_protocol + 8 streaming_transcode；原记 212 错误）, 0 failed, 0 ignored）
+    - `cargo test -p proxyweave-gateway`: PASS（23 passed, 1 ignored fixture, 0 failed）
+    - `cargo clippy -p proxyweave-protocols -p proxyweave-gateway --all-targets --no-deps -- -D warnings`: PASS（0 warnings）
+  - 独立探针复验全通：
+    - `probe-decode`（端到端 wire 解码）：PASS（`blocks=[(0, "call_synth_0", "first_tool"), (1, "call_synth_1", "second_tool")]`，零塌陷，两路合法 JSON）
+    - `probe-order`（块顺序探针 A~L）：PASS（7 checks, 0 failures）
+    - `probe-latch`（失活锁死与安全防护）：PASS（歧义分片拒收，fail-closed 锁死且不误发 message_stop）
+    - `verify-matrix.cjs`（3×3 跨协议网络矩阵）：PASS（124/124 全部通过，0 failed，stderr 为空）
+  - 复验结论（Verified，2026-10-18）：收据见 `D:/ProxyWeave/.pi/inspection/phase2-def028-reviewer/review-receipt.json`。DEF-028 宣告关闭。
+
+
+### DEF-029 — Release 资产名在 `.exe` 分支逃逸暂存目录
+
+- 状态：Verified / Inspector 独立冻结本地边界复验通过；P1。仅关闭本缺陷的限定修复，不宣布整个市场安装可安全使用。
+- 冻结：`D:/ProxyWeave/.pi/inspection/market-install-reviewer/snapshot/crates/proxyweave-plugin/src/downloader.rs`，SHA256 `e0ebf33ef3e963ae2cc11306b59289ba4bc516674679b3477a46de0d722fd083`。对应产品 `D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:413-427`；`:424` 为 `let dest = target_dir.join(asset_name);`。下载路径 `D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:690` 同样直接拼接远端 `asset.name`，该网络入口尚未动态复现。
+- 独立复现：任务 `bfdfde11b` 编译成功，随后安全断言失败退出 1。传入 `../escaped.exe` 和审查自有绝对路径，两者均返回 Ok 且在 stage 外写入。仅使用自有 TempDir 内的惰性字节，不执行、不联网、不访问凭据或用户配置。不宣称 GitHub 当前允许返回此类名称，也不把 helper 测试说成网络端到端攻击证明。
+- 证据：`D:/ProxyWeave/.pi/inspection/market-install-reviewer/boundary-results.json` SHA256 `c3281644af53de246d99973219741cbdc8e09e8e33b079db2b724d5b5fe17e00`；原日志 SHA256 `24ee1cc62cd3fcaaf56668b875b8465662f8be855d7b8129ea06c6a5ba8457ed`。完整来源及清理更正在同目录 `review-receipt.json`：失败退出绕过 TempDir Drop，原 stdout 的 cleaned 字样不准确；之后只删除该审查目录残留并保留结果。
+- 修复契约：所有资产名在任何 File::create/copy 前共用严格单文件名验证；拒绝绝对、盘符、UNC、上跳、任一斜杠、Windows ADS/设备名等跨平台危险形式，不以取 basename 静默改名。保留已有 zip/tar 条目验证、哈希检查与原测试。普通合法 exe/zip/tar 正向通过；恶意名称失败且 stage/下载目录之外无新增写入。网络流程入口必须复用同一验证。
+
+### DEF-030 — 无真实契约的任意文件被编造 Manifest 并成功注册
+
+- 状态：Verified / Inspector 独立冻结本地边界复验通过；P1。无契约拒绝是安全收敛，不是任意项目适配或真实市场安装已完成。
+- 定位：`D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:531-592` 的 `build_minimal_manifest`，以及 `D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:596-637` 的 `ensure_staging_manifest`。同 DEF-029 冻结源。
+- 独立复现：自有目录只有惰性 `arbitrary.exe`；调用 `ensure_staging_manifest(..., "owned-arbitrary", "not-semver")` 返回成功，随后实际 `Registry::import` 成功。生成声明为 MIT、版本 1.0.0、openai_chat、streaming=true、/health、x-plugin-id 及空 required_secrets；这些均无实际插件契约依据。不是只审代码注释，也未证明真实运行 Ready。
+- 证据：同 `boundary-results.json` 的 `no_manifest`。原测试仅证明生成结构可通过 schema，不证明这些能力为真。
+- 修复契约：删除/禁用猜测型注册 fallback；只有包内显式有效 Manifest 或已审查、与产物身份绑定的现有完整适配契约可以进入 Registry。未知契约须明确报不支持，不能默认许可证/版本/协议/探针/配置。显式无效 Manifest 不得降级猜测。缺契约/错哈希失败无注册；真实显式 Manifest/现有已审查适配器正向保持。若暂仅拒绝无 Manifest，这是安全收敛，不代表真实市场安装全闭环完成。
+
+### DEF-031 — 市场选择的插件身份未与实际包内 Manifest 绑定
+
+- 状态：Verified / Inspector 独立冻结本地边界复验通过；P2。实际 GitHub 网络和原生安装集成验收仍待后续门禁。
+- 定位：`D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:603-615` 对已有 Manifest 直接返回，`D:/ProxyWeave/crates/proxyweave-plugin/src/downloader.rs:807-810` 随后注册；未在发布前比对请求 plugin_id 与包内 metadata.id。
+- 独立复现：已有有效 Manifest ID=owned-other；以 requested-plugin 再调用 ensure_staging_manifest 获得同一路径，随后 Registry 实际注册 owned-other。证据同 `boundary-results.json` 的 `mismatched_requested_id`。这是 staging helper→Registry 路径，不是已完成 GitHub 网络集成验收。
+- 修复契约：包验证完成、任何注册发布发生前校验所选 ID 与 Manifest ID；不符必须失败且两 ID 均不产生新增包/记录，已有包无损。根目录或单层包装 Manifest 行为一致；匹配 ID 正向保留。不得仅在 import 成功后回看 ID 再返回错误（已产生副作用）。版本/仓库来源持久化属于后续明确来源契约，不在本最小修复中擅加字段。
+- DEF-029/030/031 共同独立复验收据：`D:/ProxyWeave/.pi/inspection/market-boundary-repair-reviewer/review-receipt.json`。两文件冻结 SHA256：`downloader.rs` 为 `10e82c6faf4eda8a7b0e05d49f690897460a92b58dd3e3f7e3d6edc7b1a940bc`，`tests/downloader.rs` 为 `b9f8e128eaed059ebc2adc550856accb675e7ca8943d57cdb1857c787c84714c`。任务 `bb246af40` exit0：29 项自有惰性字节/Registry 边界断言、15 项下载器测试、两文件 rustfmt 及 scoped all-targets Clippy `-D warnings` 通过；原始日志 SHA256 `3895b6f6669e4c597ab71edc4b2d95d227b6a8adf1c7cbc93e47e6964ed6086c`。保留的 reduced workspace 353 项 registry 锁身份与参考产品锁匹配，非完整桌面 feature 闭包；此前非 locked metadata 尝试及后续锁更正如实保留。无联网、进程执行、凭据、真实插件/原生桌面测试；后续来源/版本开发改动需另冻复验，不能沿用本结论覆盖新版本。
+
+### DEF-032 — 市场条目无认证依据却展示官方/社区认证及未标明的固定元数据
+
+- 状态：IN_REVIEW / 虚假认证与星数的源码修复存在，隔离子集补验进行中；撤回旧收据的全量冻结通过表述。P2。原生市场与只读来源/更新交互尚待统一集成门禁。
+- 冻结：`D:/ProxyWeave/.pi/inspection/market-install-reviewer/snapshot/crates/proxyweave-plugin/src/marketplace.rs`，13568 B，SHA256 `162762350251891b807b5743bc55a3dad938f6adc17065cfa098d4243a99b20f`。`D:/ProxyWeave/.pi/inspection/market-install-reviewer/catalog-ui/components/DiscoverPanel.tsx`，48461 B，SHA256 `48e7d70a839756b2b2be1ef3b626459ac4bfd0b3b6f722528e05a73957589e8a`。
+- 定位：`D:/ProxyWeave/crates/proxyweave-plugin/src/marketplace.rs:55-185` 内置 catalog 六项全部固定 `verified: true`、版本、星数；`D:/ProxyWeave/apps/desktop/src/components/DiscoverPanel.tsx:389-390` 将该布尔值显示为 `✓ 官方/社区认证`。在线映射另在 `D:/ProxyWeave/crates/proxyweave-plugin/src/marketplace.rs:252-270` 根据作者赋 verified、版本写死0.1.0、default_branch赋release_tag；这部分本次仅源码核对，未执行网络复现。
+- 复现：task `bfd7215fa` exit0，调用冻结公开 `get_builtin_catalog()`，`count=6 verified=6 fixed_stars=6 network_requests=0`。随后 `check-catalog-ui.cjs` 对原封不动组件注入该 catalog 标志作惰性 SSR，`official_or_community_certification_rendered=true`、`ipc_calls=0`。无认证API调用或证据绑定；未测试上游实时版本/星数值是否恰巧相同，也不据此声称所有固定数据均与上游不符。
+- 证据：`D:/ProxyWeave/.pi/inspection/market-install-reviewer/catalog-review-receipt.json`；`catalog-truth-results.json` SHA256 `06f99cedee20a135be816cb7b2560f47dd32d9fe8520e1eacedddefe6f925ff7`；`catalog-ui-results.json` SHA256 `5469a09d47d102e24ee3800e121686344f37368d26d488e0a951ac6a52393026`；依赖身份152 Windows registry版本匹配、278 lock项完整身份匹配，helper非完整workspace TLS功能闭包，未执行HTTPS。
+- 修复契约：发现信息不是认证或安装授权。删除无依据认证标识；若保留审核状态必须绑定具体对象/范围/证据而非作者/topic。固定数据明确标离线快照及其来源/观察时间，否则未知，不伪装实时。branch不作Release tag，未知版本/能力不猜；保留在线搜索、筛选和明确错误/离线状态。owned fixture/真实catalog负向均不再显示认证；实际可靠来源/版本查询正向不得被统一清空冒充完成。Task3-B 接续单writer实现，当前下载安全writer范围不扩展；尚未修复、未原生验收。
+- 历史修复测试与范围纠正：`b136197ee` exit0 的 `verify.cmd` 实际切换到共享 `D:/ProxyWeave`，未使用隔离冻结源；只执行市场测试、plugin Clippy、宿主编译与前端测试/构建，**未执行此前误记的平台/下载器/协议全量测试**。历史 187 个前端测试成功不等于当前完整 Task3-B 冻结或原生市场验收，Vite chunk warning 也不能称零警告。原收据保留，由 `D:/ProxyWeave/.pi/inspection/task3b-reviewer/receipt-correction.json` 更正。Task4 已改变其中六个交付文件，具体 SHA 差异见 `post-start-identity.json`；仅未变的 market/Discover 子集可独立补验，其他门禁需原字节恢复或重新集成冻结。当前不据旧收据宣布 DEF-032 全项关闭。
+- 隔离子集补验结果（任务 `bc9bfa343` exit0）：11 项惰性 catalog/详情 SSR 断言、4 项 marketplace 测试通过；六项内置 `verified` 全 false、固定星数全 None，真实传入星数仍显示。四个捕获文件 SHA 与清单完全匹配，278 registry 锁身份无偏差；收据 `D:/ProxyWeave/.pi/inspection/task3b-reviewer/catalog-subset-review-receipt.json`。本次零网络、零 IPC、非原生验收；六项固定版本/Release tag 仍未标来源或观察时间，故 DEF-032 保持 IN_REVIEW，不将虚假认证子集通过扩大成全项关闭。
+
+### DEF-033 — CompatibilityUnknown 未阻断更新，测试许可暴露于正常库
+
+- 状态：Verified；P1。
+- 冻结：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-review/source-identity.json`，67 项原始业务文件；Host SHA256 `58bc7af7fbbe7fb54b594ba55d3bd1f6f5ebc089573c1d8dab861af0b08a6e5b`，activation SHA256 `3390a775426bcc36a793145e2cc349f24a53535270376314517498f1bab20a85`。执行与记录时主树对应原字节相同。
+- 定位：`D:/ProxyWeave/apps/desktop/src-tauri/src/host.rs:766-770`：`if !permit.is_compatible() { /* comment only */ }` 未返回错误。`D:/ProxyWeave/crates/proxyweave-plugin/src/activation.rs:605-618` 的测试许可构造器在普通库中公开可调用，注释不是编译期隔离；不据此宣称远程可直接调用。
+- 复现：逐字提取 Host 兼容分支，生产判定为 CompatibilityUnknown 却继续；惰性 Registry 包可推进至 switched version 2.0.0。普通库依赖亦能调用 public test_permit 并取得 Compatible。结果 `registry-results.json` SHA256 `4d5fe7491118777c6fd0f4b9451be93d5711ca86bad3c21c33ebb68ddaf89bc4`。
+- 修复契约：在网络、版本发布、停止及 activation 修改之前明确拒绝 compatibility_unknown；Stopped 同样拒绝，保留旧 PID/文件/数据/网关。生产无可信证据来源时保持安全拒绝，不由远端 bool、调用方字符串或插件 ID 授权。测试许可隔离于不可达生产的可信测试边界；保留 owned 正向测试而不暴露生产开关。完整 Host 命令拒绝副作用须另测。
+- 独立复验通过：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-verification/verification-receipt.json`，任务 `b58b1d669` exit 0。Developer 01a180b6 在 `apps/desktop/src-tauri/src/host.rs` 实施前置生产兼容判定，生产环境无来源时返回 `CompatibilityUnknown` 即刻 Err 拒绝更新，前置于网络、下载、暂存与生命周期副作用；在 `crates/proxyweave-plugin/src/activation.rs` 将 `test_permit` 与 `test_incompatible` 收拢至 `#[cfg(any(test, feature = "test-support"))]` 编译条件，正常生产库构建不暴露测试许可。复验 harness 确证兼容拦截且生产隔离完好。
+
+### DEF-034 — 公共启停与无持有者 cancel 绕过事务维护栅栏
+
+- 状态：Verified；P1。
+- 冻结 runtime SHA256 `7e37db055c0ef8e0336c06980d40502aa64de0d8c97c13e64894518dcf9dac57`。定位 `D:/ProxyWeave/crates/proxyweave-plugin/src/runtime.rs:241-346` 维护/退出接口，以及 `D:/ProxyWeave/crates/proxyweave-plugin/src/runtime.rs:568`、`D:/ProxyWeave/crates/proxyweave-plugin/src/runtime.rs:778`、`D:/ProxyWeave/crates/proxyweave-plugin/src/runtime.rs:827-834` 的 maintenance=false。
+- 复现：真实自有 HTTP fixture 旧 PID 17088，进入维护 generation 1 后 fence=true；公共 stop 后 fence=false，普通 start 生成 PID 32152 / generation 3，显式退出维护或提交前 acquire_request 已成功。另一次没有维护持有者凭证的公共 cancel 成功并重新准入。中止维护等待后 fence 仍保留是正向事实，但无凭证 cancel 能打开它，不能作为安全恢复。所有自有进程最终清理。
+- 证据：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-review/runtime-results.json` SHA256 `f1439716d04918d5743cde6a85d15f449f525d51ddb959ed6afafc54ab983002`。
+- 修复契约：复用同一每插件 FIFO/租约准入，维护所有权覆盖事务全程；普通 start/stop/restart/acquire 拒绝绕过，仅持有者内部生命周期操作可进行，旧 token/generation 不可撤销新维护。避免持锁递归调用公共启停死锁；Drop/取消/恢复失败保持 fenced/manual_recovery_required，只有确认恢复或提交可开放。确定性并发、真实 Gateway SSE 租约、取消与旧 token 回归均须冻结复验，External 无损。
+- 独立复验通过：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-verification/verification-receipt.json`，任务 `b58b1d669` exit 0。Developer 01a180b6 在 `crates/proxyweave-plugin/src/runtime.rs` 实现 `MaintenanceToken` 凭证化所有权栅栏。进入维护后普通 start/stop/restart/acquire fail-closed 返回 `ServiceUnderMaintenance` 且保持 fence=true，普通操作拒绝不清除维护栅栏；仅持有效 token 可执行 `stop_plugin_under_maintenance`、`start_plugin_under_maintenance`、`exit_maintenance` 与 `cancel_maintenance_barrier`。复验 harness 确证真实子进程在维护期正常操作被拒绝、凭证操作成功执行、且退出维护后成功重新准入。
+
+### DEF-035 — 激活新版记录与普通启动包目录不同代
+
+- 状态：Verified；P1。
+- 冻结 registry SHA256 `a83d08a8996eca84a0b054e67b2bf0e6c554bb6cccae8bb3c2c481def2789440`。定位 `D:/ProxyWeave/crates/proxyweave-plugin/src/registry.rs:409` 的 load 与 `D:/ProxyWeave/crates/proxyweave-plugin/src/registry.rs:552-557` 的 package_dir；Host 普通启动组合在 `D:/ProxyWeave/apps/desktop/src-tauri/src/host.rs:1103-1104`，重启组合在 `D:/ProxyWeave/apps/desktop/src-tauri/src/host.rs:1248-1249`。
+- 复现：提交 owned 惰性 v2 后 load 返回 manifest 2.0.0；package_dir 却仍指向含 v1 文件的旧容器，按该路径取字节与 v2 Manifest SHA256 不符；真正 active version 目录字节与 v2 声明一致。因此仅将 UI 记录更新为 v2 不代表后续普通启动会用 v2。
+- 证据：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-review/reopen-results.json` SHA256 `aaaeb31e5aa6d85a1436b4e0781c8eaabcd9ba6d9f605db6f5c0de6511e41d07`。
+- 修复契约：以单次 coherent resolution 返回 record+active package path+activation stamp；容器/文件锁目录 API 与活跃包 API 明确分离。审查启动/重启/配置资源/Registry 读/Backend 调用链，防激活切换穿插后的混代，不能只替换 package_dir 实现导致版本目录递归。测试 legacy、重开、两版不同 exe/资源与真实 owned 身份响应、旧 Backend generation 拒绝及恢复失败；不得运行真实用户新版。
+- 独立复验通过：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-verification/verification-receipt.json`，任务 `b58b1d669` exit 0。Developer 01a180b6 在 `crates/proxyweave-plugin/src/registry.rs` 提供 `resolve_active_package(id)` 单代一致解析接口，原子返回 `(PluginRecord, PathBuf, Option<ActivationStamp>)`；`host.rs` 的普通启动与重启接入该接口，彻底消除 load 与 package_dir 分离导致的记录与版本目录混代。复验 harness 确证 active version 目录读取字节与 v2 声明 SHA256 精确一致，旧容器文件隔离不被误读。
+
+### DEF-036 — 不可变版本 key 冲突被静默复用旧包
+
+- 状态：Verified；P2。
+- 定位：`D:/ProxyWeave/crates/proxyweave-plugin/src/registry.rs:708-733` 的 store_version_package；target 已存在即读 record 返回，未核验请求候选包身份。冻结与共同证据同 DEF-035。
+- 复现：version_key 已发布 2.0.0 后，再用同 key 请求 manifest 3.0.0 的不同包，collision_rejected=false，调用成功但返回 2.0.0。存在路径不等于请求候选已验证，也不等于实际安装了请求的新 release。
+- 修复契约：复用 staging/Manifest/包摘要/source 绑定校验；只有精确相同 Manifest/fingerprint、实际包字节、仓库/release/asset/摘要来源身份才允许幂等复用，缺失或冲突准确拒绝且保留原包/激活。并发同 key 相同与不同候选、损坏既有包、source 不同及声明/实际 hash 不符均回归；不按 tag/版本文字相同就授权复用。
+- 独立复验通过：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-verification/verification-receipt.json`，任务 `b58b1d669` exit 0。Developer 01a180b6 在 `crates/proxyweave-plugin/src/registry.rs` 的 `store_version_package` 增加候选包身份与完整性校验。当目标版本目录已存在时，必须验证候选包的 Manifest、文件指纹（sha256/fingerprint）与来源一致才允许幂等返回；不同候选包请求同 key 立即返回冲突错误（`immutable version key conflict`），拒绝静默复用旧包。复验 harness 确证相同包幂等复用成功，不同包碰撞准确拒绝。
+
+#### DEF-033—036 共同复现收据与限制
+
+- 初始复现收据：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-review/review-receipt.json`，任务 `b280b19c0` exit0：三个测试成功采集并断言旧缺陷存在，结论 **FAILED_STAGE3_SAFETY_REVIEW**，不是修复通过。原始日志 SHA256 `1ed0456bd440e2ef253d0ad758ec0c0d76060322b814267a37337e5ddd22cc44`。
+- 独立复验通过收据：`D:/ProxyWeave/.pi/inspection/task4-reviewer/stage3-verification/verification-receipt.json`，任务 `b58b1d669` exit 0，结论 **VERIFIED_STAGE3_SAFETY_BOUNDARIES**。由独立隔离副本运行两项严格断言 `reviewer_verified_maintenance_fence_and_token_protection` 与 `reviewer_verified_registry_and_compatibility` 均绿，四项缺陷全数独立闭环。
+- Reduced workspace 保持产品 registry 依赖版本/source/checksum 和解析依赖边子集，不声称完整桌面 feature 闭包等同；早期 harness 格式/锁问题与失败日志保留，不记产品缺陷。
+- 观察到持锁时 load 有界拒绝、锁释放后未提交激活回旧版、真实 active 包 hash 正确及 Owned 清理，这些局部正向不消除四项缺口。Stage1/2 旧共享树测试收据不得外推安全事务通过。
+- 本次无真实 GitHub 下载、完整 Host 更新 IPC、真实插件/Keyring/用户数据/IDE 写入、原生桌面更新验收、Goal 恢复或提交推送。修复 writer 在发现页 writer 冻结释放后顺序授权；Main 不写业务源码。

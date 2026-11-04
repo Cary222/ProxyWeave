@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import {
+  FlightCancelResult,
   FlightDiscoveredModel,
   FlightMessageInput,
   FlightStreamEvent,
+  FlightToolCall,
   FlightUsage,
   GatewayStatusInfo,
   PluginRecord,
@@ -15,19 +17,72 @@ interface FlightPanelProps {
   targetPluginId?: string | null;
   plugins?: PluginRecord[];
   pluginStatuses?: Record<string, PluginStatusInfo>;
+  initialModel?: string | null;
 }
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   reasoning?: string;
+  toolCalls?: FlightToolCall[];
 }
 
 type CheckStatus = "untested" | "passed" | "failed";
 
+// Preserve an unresolved unmount cancellation across navigation without retaining component state.
+let detachedFlight: {
+  requestId: string;
+  message: string;
+  pending: Promise<void> | null;
+} | null = null;
+let pendingFlightStart: Promise<void> | null = null;
+const noActiveSession = "未找到活跃的飞行会话";
+const cancelReasons = new Set([
+  noActiveSession,
+  "请求 ID 不匹配或该会话已结束",
+  "会话已在结束流程中",
+]);
+
+async function requestFlightCancellation(requestId: string): Promise<FlightCancelResult> {
+  try {
+    const result = await api.flightCancel(requestId);
+    return result.cancelled
+      ? { cancelled: true }
+      : {
+          cancelled: false,
+          message: `取消未完成：${result.message && cancelReasons.has(result.message) ? result.message : "后端未确认取消"}`,
+        };
+  } catch {
+    // IPC errors can contain private data; never render or log raw rejection values.
+    return { cancelled: false, message: "取消请求失败：无法确认后端状态，请重试" };
+  }
+}
+
+function rememberDetachedCancellation(requestId: string, result: FlightCancelResult) {
+  if (detachedFlight?.requestId !== requestId) return;
+  if (result.cancelled) {
+    detachedFlight = null;
+  } else {
+    detachedFlight.message = result.message ?? "取消未完成：后端未确认取消";
+  }
+}
+
+async function cancelDetachedFlight(requestId: string) {
+  if (detachedFlight?.requestId === requestId && detachedFlight.pending) {
+    return detachedFlight.pending;
+  }
+  const retained = { requestId, message: "上一试飞会话取消确认中", pending: null as Promise<void> | null };
+  detachedFlight = retained;
+  retained.pending = requestFlightCancellation(requestId).then((result) => {
+    rememberDetachedCancellation(requestId, result);
+    retained.pending = null;
+  });
+  return retained.pending;
+}
 export const FlightPanel: React.FC<FlightPanelProps> = ({
   gatewayStatus,
   targetPluginId,
+  initialModel,
 }) => {
   const [models, setModels] = useState<FlightDiscoveredModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
@@ -46,6 +101,8 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
   const [ttft, setTtft] = useState<number | null>(null);
   const [totalElapsed, setTotalElapsed] = useState<number | null>(null);
   const [tokenUsage, setTokenUsage] = useState<FlightUsage | null>(null);
+  const [lastFinishReason, setLastFinishReason] = useState<string | null>(null);
+  const [longContextBytes, setLongContextBytes] = useState<number>(8192);
 
   // Compatibility checklist items
   const [compatStatus, setCompatStatus] = useState<Record<string, CheckStatus>>({
@@ -58,6 +115,12 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
   });
 
   const activeRequestIdRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const cancellingRef = useRef<object | null>(null);
+  const sendingRef = useRef(false);
+  const activeRunRef = useRef<{ terminal: boolean; requestId: string | null; cleanupStarted: boolean } | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
 
   const isGatewayRunning = Boolean(gatewayStatus?.is_running);
 
@@ -76,6 +139,7 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
           setLoadingModels(false);
           if (list.length > 0) {
             setSelectedModel((prev) => {
+              if (initialModel && list.some((m) => m.id === initialModel)) return initialModel;
               if (prev && list.some((m) => m.id === prev)) return prev;
               return list[0].id;
             });
@@ -102,44 +166,93 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
     };
   }, [isGatewayRunning, targetPluginId]);
 
-  // Clean cancellation on unmount
   useEffect(() => {
+    if (initialModel) {
+      setSelectedModel(initialModel);
+      const chatInput = document.getElementById("chatInput");
+      if (chatInput instanceof HTMLInputElement) {
+        chatInput.focus();
+      }
+    }
+  }, [initialModel]);
+
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (activeRequestIdRef.current) {
-        const reqId = activeRequestIdRef.current;
-        activeRequestIdRef.current = null;
-        api.flightCancel(reqId).catch(() => {});
+      mountedRef.current = false;
+      const requestId = activeRequestIdRef.current;
+      if (requestId) {
+        if (activeRunRef.current) activeRunRef.current.cleanupStarted = true;
+        void cancelDetachedFlight(requestId);
       }
     };
   }, []);
 
   const handleCancel = useCallback(async () => {
-    if (activeRequestIdRef.current) {
-      const reqId = activeRequestIdRef.current;
-      try {
-        await api.flightCancel(reqId);
-      } catch (err) {
-        console.warn("Cancel request failed:", err);
-      }
-      setIsStreaming(false);
+    const requestId = activeRequestIdRef.current;
+    if (!requestId || cancellingRef.current) return;
+    const cancellation = {};
+    cancellingRef.current = cancellation;
+    setIsCancelling(true);
+    const result = await requestFlightCancellation(requestId);
+    if (cancellingRef.current === cancellation) cancellingRef.current = null;
+    if (!mountedRef.current) {
+      rememberDetachedCancellation(requestId, result);
+      return;
+    }
+    if (!cancellingRef.current) setIsCancelling(false);
+    // A terminal event may have settled the request while cancellation was pending.
+    if (activeRequestIdRef.current !== requestId) return;
+    if (result.cancelled) {
+      if (activeRunRef.current) activeRunRef.current.terminal = true;
+      sendingRef.current = false;
       activeRequestIdRef.current = null;
+      if (detachedFlight?.requestId === requestId) detachedFlight = null;
+      setIsStreaming(false);
       setError("已取消试飞推理");
+    } else {
+      // The IPC did not confirm cancellation. Keep the existing stream state and ID.
+      setError(result.message ?? "取消未完成：后端未确认取消");
     }
   }, []);
-
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const prompt = input.trim();
-    if (!prompt || !selectedModel || !isGatewayRunning || isStreaming) {
+    if (!prompt || !selectedModel || !isGatewayRunning || isStreaming || sendingRef.current) {
       return;
     }
-
-    // Cancel any previous active session before starting a new one
-    if (activeRequestIdRef.current) {
-      api.flightCancel(activeRequestIdRef.current).catch(() => {});
-      activeRequestIdRef.current = null;
+    sendingRef.current = true;
+    setIsPreparing(true);
+    if (pendingFlightStart) {
+      await pendingFlightStart;
+      if (!mountedRef.current) { sendingRef.current = false; return; }
     }
-
+    // An unmount may have left an unconfirmed cancellation. Never overlap it.
+    if (detachedFlight) {
+      await cancelDetachedFlight(detachedFlight.requestId);
+      if (!mountedRef.current) { sendingRef.current = false; return; }
+      if (detachedFlight) {
+        setError(detachedFlight.message);
+        setIsPreparing(false);
+        sendingRef.current = false;
+        return;
+      }
+    }
+    if (activeRequestIdRef.current) {
+      const previousId = activeRequestIdRef.current;
+      const result = await requestFlightCancellation(previousId);
+      if (!mountedRef.current) { sendingRef.current = false; return; }
+      if (activeRequestIdRef.current === previousId && !result.cancelled) {
+        setError(result.message ?? "取消未完成：后端未确认取消");
+        setIsPreparing(false);
+        sendingRef.current = false;
+        return;
+      }
+      if (activeRequestIdRef.current === previousId) activeRequestIdRef.current = null;
+    }
+    const run = { terminal: false, requestId: null as string | null, cleanupStarted: false };
+    activeRunRef.current = run;
+    setIsPreparing(false);
     const nextMessages: ChatMessage[] = [
       ...messages,
       { role: "user", content: prompt },
@@ -153,13 +266,43 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
     setTtft(null);
     setTotalElapsed(null);
     setTokenUsage(null);
+    setLastFinishReason(null);
     setIsStreaming(true);
 
-    const flightMessages: FlightMessageInput[] = nextMessages.map((m) => ({
+    // Long-context quality test: bounded, user-configurable synthetic block.
+    // No silent truncation: the size is visible and finish_reason/usage reflect the outcome.
+    const lcBytes = Math.min(Math.max(longContextBytes, 0), 64 * 1024);
+    const longContextNote =
+      lcBytes > 0
+        ? "\n\n[长上下文测试附加 " + lcBytes + " 字节] " + "A".repeat(lcBytes)
+        : "";
+
+    const flightMessages: FlightMessageInput[] = nextMessages.map((m, i) => ({
       role: m.role,
-      content: m.content,
+      content:
+        i === nextMessages.length - 1 ? m.content + longContextNote : m.content,
     }));
 
+    // Standard bounded get_weather tool definition to probe tool-calling support.
+    const toolDefs = [
+      {
+        type: "function",
+        function: {
+          name: "get_weather",
+          description: "Get current weather for a city",
+          parameters: {
+            type: "object",
+            properties: { city: { type: "string" } },
+            required: ["city"],
+          },
+        },
+      },
+    ];
+
+    let resolvePending!: () => void;
+    const pending = new Promise<void>((resolve) => { resolvePending = resolve; });
+    pendingFlightStart = pending;
+    try {
     if (streamMode) {
       try {
         const startResult = await api.flightChatStream(
@@ -168,8 +311,30 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
             messages: flightMessages,
             temperature: temperature / 10,
             stream: true,
+            tools: toolDefs,
+            tool_choice: "auto",
           },
           (event: FlightStreamEvent) => {
+            if (activeRunRef.current !== run || run.terminal) return;
+            if (run.requestId && event.request_id && run.requestId !== event.request_id) return;
+            run.requestId = event.request_id ?? run.requestId;
+            const terminal = ["completed", "done", "cancelled", "failed", "error"].includes(event.type);
+            if (terminal) {
+              run.terminal = true;
+              sendingRef.current = false;
+              cancellingRef.current = null;
+              activeRequestIdRef.current = null;
+              if (detachedFlight?.requestId === run.requestId) detachedFlight = null;
+            }
+            if (!mountedRef.current) {
+              if (!terminal && event.type === "started") {
+                run.cleanupStarted = true;
+                void cancelDetachedFlight(event.request_id);
+              }
+              return;
+            }
+            if (terminal) setIsCancelling(false);
+            if (terminal) setError(null);
             switch (event.type) {
               case "started":
                 activeRequestIdRef.current = event.request_id;
@@ -200,6 +365,11 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                   setTotalElapsed(event.elapsed_ms);
                 }
                 break;
+              case "tool_call_delta":
+                if (event.elapsed_ms != null) {
+                  setTotalElapsed(event.elapsed_ms);
+                }
+                break;
               case "completed":
                 setMessages((prev) => {
                   const copy = [...prev];
@@ -209,6 +379,7 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                       ...last,
                       content: event.total_text,
                       reasoning: event.total_reasoning || last.reasoning,
+                      toolCalls: event.total_tool_calls || undefined,
                     };
                   }
                   return copy;
@@ -220,6 +391,7 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                 if (event.usage) {
                   setTokenUsage(event.usage);
                 }
+                setLastFinishReason(event.finish_reason ?? null);
                 setIsStreaming(false);
                 activeRequestIdRef.current = null;
                 setCompatStatus((prev) => ({
@@ -227,6 +399,15 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                   chat: "passed",
                   sse: "passed",
                   multiturn: nextMessages.length > 2 ? "passed" : prev.multiturn,
+                  tools:
+                    event.finish_reason === "tool_calls" ||
+                    (event.total_tool_calls && event.total_tool_calls.length > 0)
+                      ? "passed"
+                      : prev.tools,
+                  longtext:
+                    lcBytes > 0 && event.finish_reason && event.finish_reason !== ""
+                      ? "passed"
+                      : prev.longtext,
                 }));
                 break;
               case "done":
@@ -270,10 +451,18 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
             }
           },
         );
-        activeRequestIdRef.current = startResult.request_id;
+        if (!run.terminal && activeRunRef.current === run) {
+          run.requestId = startResult.request_id;
+          activeRequestIdRef.current = startResult.request_id;
+          if (!mountedRef.current && !run.cleanupStarted) void cancelDetachedFlight(startResult.request_id);
+        }
       } catch (err) {
-        setIsStreaming(false);
+        if (run.terminal || activeRunRef.current !== run) return;
+        run.terminal = true;
+        sendingRef.current = false;
         activeRequestIdRef.current = null;
+        if (!mountedRef.current) return;
+        setIsStreaming(false);
         const msg = err instanceof Error ? err.message : String(err);
         setError(msg);
         setCompatStatus((prev) => ({
@@ -290,7 +479,10 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
           messages: flightMessages,
           temperature: temperature / 10,
           stream: false,
+          tools: toolDefs,
+          tool_choice: "auto",
         });
+        if (!mountedRef.current || activeRunRef.current !== run) return;
         if (res.first_content_ms != null) {
           setTtft(res.first_content_ms);
         }
@@ -298,6 +490,7 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
         if (res.usage) {
           setTokenUsage(res.usage);
         }
+        setLastFinishReason(res.finish_reason ?? null);
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
@@ -306,6 +499,7 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
               ...last,
               content: res.text || res.content || "",
               reasoning: res.reasoning || undefined,
+              toolCalls: res.tool_calls || undefined,
             };
           }
           return copy;
@@ -316,8 +510,18 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
           ...prev,
           chat: "passed",
           multiturn: nextMessages.length > 2 ? "passed" : prev.multiturn,
+          tools:
+            res.finish_reason === "tool_calls" ||
+            (res.tool_calls && res.tool_calls.length > 0)
+              ? "passed"
+              : prev.tools,
+          longtext:
+            lcBytes > 0 && res.finish_reason && res.finish_reason !== ""
+              ? "passed"
+              : prev.longtext,
         }));
       } catch (err) {
+        if (!mountedRef.current || activeRunRef.current !== run) return;
         setIsStreaming(false);
         activeRequestIdRef.current = null;
         const msg = err instanceof Error ? err.message : String(err);
@@ -327,6 +531,11 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
           chat: "failed",
         }));
       }
+    }
+    } finally {
+      if (!streamMode) sendingRef.current = false;
+      if (pendingFlightStart === pending) pendingFlightStart = null;
+      resolvePending();
     }
   };
 
@@ -342,8 +551,8 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
 
   // Checkbox & input readiness
   const canSend = Boolean(isGatewayRunning && selectedModel && !loadingModels);
-  const isInputDisabled = !canSend || isStreaming;
-  const isSendDisabled = !canSend || isStreaming || !input.trim();
+  const isInputDisabled = !canSend || isStreaming || isPreparing;
+  const isSendDisabled = !canSend || isStreaming || isPreparing || !input.trim();
 
   // Metrics string formatting
   const ttftDisplay =
@@ -375,6 +584,10 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
   const untestedCount = checklistItems.filter(
     (i) => i.status === "untested",
   ).length;
+  // Capability disclosure: the current backend manifest does not declare any
+  // multimodal capability field, so the multimodal check is never executed and
+  // must not be shown as passed. It stays "untested" with an explicit note.
+  const multimodalUnsupported = true;
 
   return (
     <section className="panel" id="panel-flight">
@@ -452,6 +665,30 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                 disabled={isStreaming || !canSend}
                 style={{ width: 110 }}
               />
+              <label
+                style={{
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span className="sub">长上下文</span>
+                <select
+                  className="input"
+                  id="longContextBytes"
+                  aria-label="长上下文附加字节数"
+                  value={longContextBytes}
+                  onChange={(e) => setLongContextBytes(Number(e.target.value))}
+                  disabled={isStreaming}
+                  style={{ width: 92, padding: "2px 4px", fontSize: 12 }}
+                >
+                  <option value={0}>关闭</option>
+                  <option value={8192}>8 KB</option>
+                  <option value={32768}>32 KB</option>
+                  <option value={65536}>64 KB</option>
+                </select>
+              </label>
             </div>
           </div>
 
@@ -517,6 +754,30 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                         ? "等待回复中…"
                         : "")}
                   </div>
+                  {msg.toolCalls && msg.toolCalls.length > 0 ? (
+                    <div
+                      className="sub"
+                      style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}
+                    >
+                      {msg.toolCalls.map((tc) => (
+                        <div
+                          key={tc.id || tc.name}
+                          style={{
+                            border: "1px solid var(--border, #e5e7eb)",
+                            borderRadius: 6,
+                            padding: "4px 8px",
+                            marginTop: 4,
+                          }}
+                        >
+                          <b>工具调用</b> {tc.name}
+                          <span style={{ opacity: 0.7 }}> ({tc.id})</span>
+                          <div style={{ fontFamily: "monospace", fontSize: 11 }}>
+                            {tc.arguments}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
@@ -527,6 +788,15 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                 style={{ color: "var(--red, #ef4444)", marginTop: 4 }}
               >
                 {error}
+              </div>
+            ) : null}
+            {lastFinishReason === "length" ? (
+              <div
+                className="sub"
+                role="status"
+                style={{ color: "var(--yellow, #d97706)", marginTop: 4 }}
+              >
+                上游因长度限制截断了输出 (finish_reason=length)，未伪造完整结果。
               </div>
             ) : null}
           </div>
@@ -556,9 +826,11 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                 id="cancelBtn"
                 type="button"
                 onClick={handleCancel}
+                disabled={isCancelling}
+                aria-busy={isCancelling}
                 style={{ marginRight: 6 }}
               >
-                取消
+                {isCancelling ? "取消确认中…" : "取消"}
               </button>
             ) : null}
             <button
@@ -650,6 +922,11 @@ export const FlightPanel: React.FC<FlightPanelProps> = ({
                 : `${untestedCount} 项未测试 · 真实试飞结果`}
             </b>
           </p>
+          {multimodalUnsupported ? (
+            <p className="sub" style={{ marginTop: 4, fontSize: 12 }}>
+              当前后端未声明多模态能力，多模态项保持未测试（不会伪造结果）。
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

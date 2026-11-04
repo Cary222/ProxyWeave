@@ -190,6 +190,7 @@ configuration: {{config_template: {{}}}}
             manifest: Manifest::parse(yaml.as_bytes()).unwrap(),
             fingerprint: "fixture".into(),
             settings: Default::default(),
+            source: None,
         };
         let runtime = RuntimeManager::new();
         let status = runtime
@@ -558,6 +559,7 @@ capabilities: {{protocol: openai_chat, models_path: /actual/models, inference_pa
         manifest: manifest.clone(),
         fingerprint: "external".into(),
         settings: Default::default(),
+        source: None,
     };
     let temp = tempfile::tempdir().unwrap();
     assert!(matches!(

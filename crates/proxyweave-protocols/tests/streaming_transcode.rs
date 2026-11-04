@@ -507,3 +507,157 @@ fn matrix_usage_roundtrip_incremental_protocols() {
         }
     }
 }
+
+#[test]
+fn chat_idless_parallel_tools_reach_distinct_valid_messages_blocks() {
+    // DEF-028: exercise the actual wire path, not only decoder IR identities.
+    for (label, ids, fragmented, late_id) in [
+        ("omitted ids, complete arguments", false, false, false),
+        ("omitted ids, interleaved fragments", false, true, false),
+        ("real ids, interleaved fragments", true, true, false),
+        ("late real id keeps first binding", false, true, true),
+    ] {
+        let mut calls = vec![
+            serde_json::json!({"index":0,"function":{"name":"first_tool","arguments":if fragmented { "{\"a\"" } else { "{\"a\":1}" }}}),
+            serde_json::json!({"index":1,"function":{"name":"second_tool","arguments":if fragmented { "{\"b\"" } else { "{\"b\":2}" }}}),
+        ];
+        if ids {
+            calls[0]["id"] = serde_json::json!("call_a");
+            calls[1]["id"] = serde_json::json!("call_b");
+        }
+        let mut chunks = vec![
+            serde_json::json!({"id":"owned-def028","choices":[{"index":0,"delta":{"tool_calls":calls}}]}),
+        ];
+        if fragmented {
+            let mut last = serde_json::json!({"index":0,"function":{"arguments":":1}"}});
+            if late_id {
+                last["id"] = serde_json::json!("late_real_id");
+            }
+            chunks.push(serde_json::json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":":2}"}}]}}]}));
+            chunks.push(serde_json::json!({"choices":[{"index":0,"delta":{"tool_calls":[last]}}]}));
+        }
+        chunks.push(
+            serde_json::json!({"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}),
+        );
+        let mut upstream = chunks
+            .iter()
+            .map(|v| format!("data: {v}\n\n"))
+            .collect::<String>();
+        upstream.push_str("data: [DONE]\n\n");
+        let client = transcode(
+            ProtocolSuite::OpenAiCompatible,
+            ProtocolSuite::AnthropicMessages,
+            upstream.as_bytes(),
+        );
+        let events = sse_json_events(&client);
+        let starts: Vec<_> = events
+            .iter()
+            .filter(|v| v["type"] == "content_block_start")
+            .collect();
+        assert_eq!(starts.len(), 2, "{label}: {events:?}");
+        let first_id = starts[0]["content_block"]["id"].as_str().unwrap();
+        let second_id = starts[1]["content_block"]["id"].as_str().unwrap();
+        assert!(!first_id.is_empty() && !second_id.is_empty(), "{label}");
+        assert_ne!(first_id, second_id, "{label}");
+        if ids {
+            assert_eq!((first_id, second_id), ("call_a", "call_b"), "{label}");
+        }
+        let mut open = None;
+        let mut arguments = [String::new(), String::new()];
+        for event in &events {
+            match event["type"].as_str().unwrap() {
+                "content_block_start" => {
+                    assert!(open.is_none(), "{label}: overlapping blocks");
+                    open = event["index"].as_u64();
+                }
+                "content_block_delta" => {
+                    assert_eq!(event["index"].as_u64(), open, "{label}");
+                    let index = event["index"].as_u64().unwrap() as usize;
+                    arguments[index].push_str(event["delta"]["partial_json"].as_str().unwrap());
+                }
+                "content_block_stop" => {
+                    assert_eq!(event["index"].as_u64(), open.take(), "{label}");
+                }
+                "message_stop" => assert!(open.is_none(), "{label}: terminal before block stop"),
+                _ => {}
+            }
+        }
+        assert!(open.is_none(), "{label}");
+        for (index, expected_name, expected_input) in [
+            (0, "first_tool", serde_json::json!({"a":1})),
+            (1, "second_tool", serde_json::json!({"b":2})),
+        ] {
+            assert_eq!(
+                starts[index]["content_block"]["name"], expected_name,
+                "{label}"
+            );
+            let input: Value = serde_json::from_str(&arguments[index])
+                .expect("each block must contain valid JSON");
+            assert_eq!(input, expected_input, "{label}");
+        }
+    }
+}
+
+#[test]
+fn chat_synthetic_ids_never_merge_different_upstream_indices() {
+    for (label, first_id, second_id) in [
+        ("real matches prior synthetic", None, Some("call_synth_0")),
+        ("synthetic matches prior real", Some("call_synth_1"), None),
+        (
+            "real duplicates prior real",
+            Some("same_real"),
+            Some("same_real"),
+        ),
+    ] {
+        let mut calls = [
+            serde_json::json!({"index":0,"function":{"name":"first","arguments":"{\"a\""}}),
+            serde_json::json!({"index":1,"function":{"name":"second","arguments":"{\"b\""}}),
+        ];
+        for (call, id) in calls.iter_mut().zip([first_id, second_id]) {
+            if let Some(id) = id {
+                call["id"] = serde_json::json!(id);
+            }
+        }
+        let mut upstream = String::new();
+        // Deliberately separate chunks: future colliding IDs are not knowable
+        // when a synthesized ID has already been emitted into IR.
+        for call in calls {
+            let chunk = serde_json::json!({"id":"collision","choices":[{"index":0,"delta":{"tool_calls":[call]}}]});
+            upstream.push_str(&format!("data: {chunk}\n\n"));
+        }
+        for (index, arguments) in [(1, ":2}"), (0, ":1}")] {
+            let chunk = serde_json::json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":index,"function":{"arguments":arguments}}]}}]});
+            upstream.push_str(&format!("data: {chunk}\n\n"));
+        }
+        upstream.push_str("data: [DONE]\n\n");
+        let client = transcode(
+            ProtocolSuite::OpenAiCompatible,
+            ProtocolSuite::AnthropicMessages,
+            upstream.as_bytes(),
+        );
+        let events = sse_json_events(&client);
+        let starts: Vec<_> = events
+            .iter()
+            .filter(|v| v["type"] == "content_block_start")
+            .collect();
+        let args: Vec<Value> = events
+            .iter()
+            .filter(|v| v["delta"]["type"] == "input_json_delta")
+            .map(|v| serde_json::from_str(v["delta"]["partial_json"].as_str().unwrap()).unwrap())
+            .collect();
+        assert_eq!(starts.len(), 2, "{label}");
+        assert_ne!(
+            starts[0]["content_block"]["id"], starts[1]["content_block"]["id"],
+            "{label}"
+        );
+        assert_eq!(
+            args,
+            vec![serde_json::json!({"a":1}), serde_json::json!({"b":2})],
+            "{label}"
+        );
+        if let Some(id) = first_id {
+            assert_eq!(starts[0]["content_block"]["id"], id);
+        }
+        assert!(events.iter().any(|v| v["type"] == "message_stop"));
+    }
+}

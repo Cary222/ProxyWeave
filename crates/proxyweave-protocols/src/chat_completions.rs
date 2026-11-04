@@ -1569,6 +1569,8 @@ pub struct ChatCompletionsStreamDecoder {
     /// single `Option<String>` which mis-attributed arg deltas when more than
     /// one tool call streamed concurrently.
     tool_calls: Vec<(String, String)>,
+    /// Reuse the existing Responses ID allocator for collision-free slot bindings.
+    used_tool_ids: std::collections::HashSet<String>,
     /// Whether a `choices[].finish_reason` produced a `Finish` in-band.
     saw_finish: bool,
     /// Whether any `tool_calls` delta was observed. Used to infer
@@ -1588,6 +1590,7 @@ impl ChatCompletionsStreamDecoder {
         Self {
             response_id: None,
             tool_calls: Vec::new(),
+            used_tool_ids: std::collections::HashSet::new(),
             saw_finish: false,
             saw_tool_calls: false,
         }
@@ -1726,10 +1729,20 @@ impl StreamDecoder for ChatCompletionsStreamDecoder {
                                 // id/name per index so argument fragments are
                                 // bound to the right call.
                                 let index = tc["index"].as_u64().unwrap_or(0) as usize;
-                                if let Some(tc_id) = tc["id"].as_str() {
-                                    if !tc_id.is_empty() {
-                                        self.slot(index).0 = tc_id.to_string();
-                                    }
+                                if self.slot(index).0.is_empty() {
+                                    let fallback = format!("call_synth_{index}");
+                                    let raw_id = tc["id"]
+                                        .as_str()
+                                        .filter(|id| !id.is_empty())
+                                        .unwrap_or(&fallback);
+                                    // Allocate once per index; a later real ID may
+                                    // equal an earlier synthetic ID (or vice versa).
+                                    let id = crate::responses::unique_responses_call_id(
+                                        raw_id,
+                                        0,
+                                        &mut self.used_tool_ids,
+                                    );
+                                    self.slot(index).0 = id;
                                 }
                                 let tc_name = tc["function"]["name"]
                                     .as_str()
@@ -2565,6 +2578,141 @@ mod tests {
         });
         assert_eq!(arg0, Some(("call_a".to_string(), "{\"x\":1}".to_string())));
         assert_eq!(arg1, Some(("call_b".to_string(), "{\"y\":2}".to_string())));
+    }
+
+    #[test]
+    fn test_stream_decoder_omitted_id_parallel_tool_calls() {
+        // DEF-028 回归:上游省略 tool_calls[].id 时,解码器必须按 index
+        // 合成稳定唯一 id,否则 N 个并行调用在下游(按 id 归并的
+        // MessagesStreamEncoder.buffer_tool_call)塌成 1 个块且参数被
+        // 非法拼接。
+        let mut decoder = ChatCompletionsStreamDecoder::new();
+        // 两个 opener,均无 id,只有 index 与 name
+        decoder
+            .feed(r#"data: {"id":"r1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"fa","arguments":""}}]}}]}"#)
+            .unwrap();
+        decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"name":"fb","arguments":""}}]}}]}"#)
+            .unwrap();
+        // 各自的参数分片(无 id、无 name,仅 index)
+        let p0 = decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"a\":1}"}}]}}]}"#)
+            .unwrap();
+        let p1 = decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"b\":2}"}}]}}]}"#)
+            .unwrap();
+
+        let arg0 = p0.iter().find_map(|p| match p {
+            StreamPart::ToolCallDelta {
+                id,
+                name: None,
+                arguments,
+                ..
+            } => Some((id.clone(), arguments.clone())),
+            _ => None,
+        });
+        let arg1 = p1.iter().find_map(|p| match p {
+            StreamPart::ToolCallDelta {
+                id,
+                name: None,
+                arguments,
+                ..
+            } => Some((id.clone(), arguments.clone())),
+            _ => None,
+        });
+        // 两个不同 index 的分片必须绑定到不同且非空的 id
+        let (id0, a0) = arg0.expect("index0 fragment must emit a ToolCallDelta with an id");
+        let (id1, a1) = arg1.expect("index1 fragment must emit a ToolCallDelta with an id");
+        assert!(
+            !id0.is_empty(),
+            "synthesized id for index 0 must be non-empty"
+        );
+        assert!(
+            !id1.is_empty(),
+            "synthesized id for index 1 must be non-empty"
+        );
+        assert_ne!(
+            id0, id1,
+            "parallel calls with omitted ids must not share an id"
+        );
+        assert_eq!(a0, "{\"a\":1}".to_string());
+        assert_eq!(a1, "{\"b\":2}".to_string());
+    }
+
+    #[test]
+    fn test_stream_decoder_omitted_id_interleaved_fragments_keep_binding() {
+        // DEF-028 回归:省略 id 的并行调用交错分片仍按 index 绑定到
+        // 合成 id,交错不串扰。
+        let mut decoder = ChatCompletionsStreamDecoder::new();
+        decoder
+            .feed(r#"data: {"id":"r1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"fa","arguments":"{\"x\""}}]}}]}"#)
+            .unwrap();
+        decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"name":"fb","arguments":"{\"y\""}}]}}]}"#)
+            .unwrap();
+        let p0 = decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":":2}"}}]}}]}"#)
+            .unwrap();
+        let p1 = decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":":1}"}}]}}]}"#)
+            .unwrap();
+        let f1 = p0.iter().find_map(|p| match p {
+            StreamPart::ToolCallDelta {
+                id,
+                name: None,
+                arguments,
+                ..
+            } => Some((id.clone(), arguments.clone())),
+            _ => None,
+        });
+        let f0 = p1.iter().find_map(|p| match p {
+            StreamPart::ToolCallDelta {
+                id,
+                name: None,
+                arguments,
+                ..
+            } => Some((id.clone(), arguments.clone())),
+            _ => None,
+        });
+        let (id_a, _) = f0.expect("index0 fragment bound");
+        let (id_b, _) = f1.expect("index1 fragment bound");
+        assert_ne!(id_a, id_b);
+        // 每个分片的 id 与其 opener 的合成 id 一致(不因交错漂移)
+        assert!(
+            id_a.starts_with("call_synth_0"),
+            "index0 keeps its synthesized id: {id_a}"
+        );
+        assert!(
+            id_b.starts_with("call_synth_1"),
+            "index1 keeps its synthesized id: {id_b}"
+        );
+    }
+
+    #[test]
+    fn test_stream_decoder_real_id_not_overwritten_by_synth_or_late_dup() {
+        // DEF-028 边界:真实 id 优先,永不合成覆盖;晚到的重复 id 声明
+        // 不会改写已固定的真实 id(保持首个绑定)。
+        let mut decoder = ChatCompletionsStreamDecoder::new();
+        decoder
+            .feed(r#"data: {"id":"r1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_real","function":{"name":"fa","arguments":""}}]}}]}"#)
+            .unwrap();
+        let p = decoder
+            .feed(r#"data: {"object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_late","function":{"arguments":"{\"a\":1}"}}]}}]}"#)
+            .unwrap();
+        let frag = p.iter().find_map(|p| match p {
+            StreamPart::ToolCallDelta {
+                id,
+                name: None,
+                arguments,
+                ..
+            } => Some((id.clone(), arguments.clone())),
+            _ => None,
+        });
+        assert_eq!(
+            frag,
+            Some(("call_real".to_string(), "{\"a\":1}".to_string())),
+            "first-bound real id wins; late ids never rebind a slot"
+        );
     }
 
     #[test]

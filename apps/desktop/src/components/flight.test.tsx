@@ -5,6 +5,7 @@ import { api } from "../api";
 import {
   FlightChatRequestInput,
   FlightStreamEvent,
+  FlightToolCall,
   GatewayStatusInfo,
 } from "../types";
 import * as tauriLib from "../lib/tauri";
@@ -157,7 +158,17 @@ describe("Flight Frontend API Wrapper", () => {
         elapsed_ms: 160,
       });
 
-      // Dispatch completed event with total usage
+      // Dispatch tool_call_delta event (fragment aggregation passthrough)
+      capturedChannel!.onmessage!({
+        type: "tool_call_delta",
+        request_id: "req-stream-002",
+        fragments: [
+          { index: 0, id: "call_abc", name: "get_weather", arguments_delta: "{\"city\":\"" },
+        ],
+        elapsed_ms: 200,
+      });
+
+      // Dispatch completed event with total usage and assembled tool calls
       capturedChannel!.onmessage!({
         type: "completed",
         request_id: "req-stream-002",
@@ -167,17 +178,31 @@ describe("Flight Frontend API Wrapper", () => {
         elapsed_ms: 500,
         saw_done: true,
         usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+        finish_reason: "tool_calls",
+        total_tool_calls: [
+          { id: "call_abc", type: "function", name: "get_weather", arguments: "{\"city\":\"Beijing\"}" },
+        ],
       });
 
-      expect(events).toHaveLength(3);
+      expect(events).toHaveLength(4);
       expect(events[0].type).toBe("started");
       expect(events[1].type).toBe("delta");
-      expect(events[2].type).toBe("completed");
-      if (events[2].type === "completed") {
-        expect(events[2].usage?.completion_tokens).toBe(20);
-        expect(events[2].elapsed_ms).toBe(500);
+      expect(events[2].type).toBe("tool_call_delta");
+      expect(events[3].type).toBe("completed");
+      if (events[2].type === "tool_call_delta") {
+        expect(events[2].fragments[0].name).toBe("get_weather");
+        expect(events[2].fragments[0].arguments_delta).toContain("city");
+      }
+      if (events[3].type === "completed") {
+        expect(events[3].usage?.completion_tokens).toBe(20);
+        expect(events[3].elapsed_ms).toBe(500);
+        expect(events[3].finish_reason).toBe("tool_calls");
+        const calls = events[3].total_tool_calls as FlightToolCall[];
+        expect(calls).toHaveLength(1);
+        expect(calls[0].name).toBe("get_weather");
+        expect(calls[0].arguments).toContain("Beijing");
         // Verify real TPS calculation formula: 20 / 0.5s = 40.0
-        const tps = (events[2].usage!.completion_tokens / (events[2].elapsed_ms / 1000)).toFixed(1);
+        const tps = (events[3].usage!.completion_tokens / (events[3].elapsed_ms / 1000)).toFixed(1);
         expect(tps).toBe("40.0");
       }
     });
@@ -211,6 +236,102 @@ describe("Flight Frontend API Wrapper", () => {
       if (events[0].type === "failed") {
         expect(events[0].error_message).toBe("上游网关连接重置");
       }
+    });
+  });
+
+  describe("Tool-Calling Payload Passthrough", () => {
+    it("forwards tools and tool_choice verbatim in streaming requests", async () => {
+      const req: FlightChatRequestInput = {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "北京天气如何？" }],
+        stream: true,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "get_weather",
+              description: "Get current weather for a city",
+              parameters: {
+                type: "object",
+                properties: { city: { type: "string" } },
+                required: ["city"],
+              },
+            },
+          },
+        ],
+        tool_choice: "auto",
+      };
+      let capturedArgs: unknown = null;
+      vi.mocked(tauriLib.invoke).mockImplementation(async (cmd, args) => {
+        if (cmd === "flight_chat_stream") {
+          capturedArgs = args;
+          return { request_id: "req-tools-004", model: "gpt-4o" };
+        }
+        throw new Error("unexpected command: " + cmd);
+      });
+      await api.flightChatStream(req, () => {});
+      expect(capturedArgs).not.toBeNull();
+      const input = (capturedArgs as { input: FlightChatRequestInput }).input;
+      expect(Array.isArray(input.tools)).toBe(true);
+      expect((input.tools as unknown[]).length).toBe(1);
+      expect(input.tool_choice).toBe("auto");
+    });
+
+    it("forwards tools verbatim in non-streaming requests and parses tool_calls", async () => {
+      const req: FlightChatRequestInput = {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "北京天气如何？" }],
+        stream: false,
+        tools: [
+          { type: "function", function: { name: "get_weather", parameters: { type: "object" } } },
+        ],
+        tool_choice: "auto",
+      };
+      const mockResp = {
+        request_id: "req-tools-005",
+        model: "gpt-4o",
+        text: "",
+        first_content_ms: 90,
+        elapsed_ms: 210,
+        finish_reason: "tool_calls",
+        tool_calls: [
+          { id: "call_x", type: "function", name: "get_weather", arguments: "{\"city\":\"Beijing\"}" },
+        ],
+      };
+      vi.mocked(tauriLib.invoke).mockResolvedValueOnce(mockResp);
+      const result = await api.flightChatNonstream(req);
+      expect(tauriLib.invoke).toHaveBeenCalledWith("flight_chat_nonstream", { input: req });
+      expect(result.finish_reason).toBe("tool_calls");
+      expect(result.tool_calls).toHaveLength(1);
+      expect(result.tool_calls![0].name).toBe("get_weather");
+      expect(result.tool_calls![0].arguments).toContain("Beijing");
+    });
+
+    it("supports multimodal content parts in message DTOs", async () => {
+      const req: FlightChatRequestInput = {
+        model: "gpt-4o-vision",
+        messages: [
+          {
+            role: "user",
+            content: "描述这张图",
+            content_parts: [
+              { type: "text", text: "描述这张图" },
+              { type: "image_url", image_url: { url: "https://example.com/a.png" } },
+            ],
+          },
+        ],
+        stream: false,
+      };
+      vi.mocked(tauriLib.invoke).mockResolvedValueOnce({
+        request_id: "req-mm-006",
+        model: "gpt-4o-vision",
+        text: "图中是…",
+        elapsed_ms: 100,
+      });
+      await api.flightChatNonstream(req);
+      expect(tauriLib.invoke).toHaveBeenCalledWith("flight_chat_nonstream", { input: req });
+      expect(req.messages[0].content_parts).toHaveLength(2);
+      expect(req.messages[0].content_parts![1].type).toBe("image_url");
     });
   });
 
@@ -289,6 +410,12 @@ describe("FlightPanel Static Markup & Truth Verification", () => {
     expect(html).toContain("Tool Calling");
     expect(html).toContain("长文本");
     expect(html).toContain("多模态");
+    // Multimodal stays untested and is annotated as not supported by the current backend (never faked as passed).
+    expect(html).not.toContain("未测试 · 当前后端不支持");
+    expect(html).toContain("当前后端未声明多模态能力");
+    // Long-context selector present
+    expect(html).toContain('id="longContextBytes"');
+    expect(html).toContain("长上下文");
   });
 
   it("includes all required ARIA labels and structural elements", () => {

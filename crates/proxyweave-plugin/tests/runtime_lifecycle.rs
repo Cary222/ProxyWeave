@@ -83,6 +83,7 @@ configuration: {}
         .unwrap(),
         fingerprint: "fake_fingerprint".to_string(),
         settings: Default::default(),
+        source: None,
     };
 
     // When external plugin starts, it marks as active External
@@ -133,6 +134,7 @@ configuration: {}
         .unwrap(),
         fingerprint: "fingerprint".to_string(),
         settings: Default::default(),
+        source: None,
     };
 
     // Starting external plugin with probe
@@ -265,6 +267,7 @@ configuration:
         manifest,
         fingerprint: "fingerprint_123".to_string(),
         settings: Default::default(),
+        source: None,
     };
 
     // Store credential into Keyring with isolated namespace

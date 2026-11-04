@@ -22,6 +22,8 @@
 //! | 9 | Kimi Code | `~/.kimi-code/config.toml` | OpenAI Chat |
 //! | 10 | OpenClaw | `~/.openclaw/openclaw.json` | OpenAI Chat |
 //! | 11 | Hermes Agent | `~/.hermes/config.yaml` | OpenAI Chat |
+//! | 12 | Cursor | `%APPDATA%\Cursor\User\settings.json` | OpenAI Chat |
+//! | 13 | Windsurf | `%APPDATA%\Windsurf\User\settings.json` | OpenAI Chat |
 //!
 //! 安全约定：
 //!   - 写入前一律备份原文件到 `<profile_dir>/agent-backups/<target>/<时间戳>/`；
@@ -38,8 +40,8 @@ use serde_json::{json, Map, Value};
 
 use quotio_platform::home_dir;
 
-/// 受支持的全部 11 类客户端标识（与 UI 列表顺序严格对齐）。
-pub const TARGETS: [&str; 11] = [
+/// 受支持的全部 13 类客户端标识（与 UI 列表顺序严格对齐）。
+pub const TARGETS: [&str; 13] = [
     "claude-code",
     "claude-desktop",
     "codex",
@@ -51,6 +53,8 @@ pub const TARGETS: [&str; 11] = [
     "kimi-code",
     "openclaw",
     "hermes",
+    "cursor",
+    "windsurf",
 ];
 
 /// 托管配置在客户端侧使用的提供方名称。
@@ -138,6 +142,25 @@ fn local_app_data() -> PathBuf {
 #[cfg(not(windows))]
 fn local_app_data() -> PathBuf {
     home_dir().join(".local").join("share")
+}
+
+/// Windows 的 Roaming AppData 目录。
+#[cfg(windows)]
+fn roaming_app_data() -> PathBuf {
+    std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| home_dir().join("AppData").join("Roaming"))
+}
+
+#[cfg(target_os = "macos")]
+fn roaming_app_data() -> PathBuf {
+    home_dir().join("Library").join("Application Support")
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn roaming_app_data() -> PathBuf {
+    home_dir().join(".config")
 }
 
 /// Claude Desktop 的普通配置目录（1P/3P 切换开关所在）。
@@ -252,6 +275,34 @@ pub fn hermes_config_path() -> PathBuf {
         .unwrap_or_else(|| home_dir().join(".hermes").join("config.yaml"))
 }
 
+/// Cursor 配置文件路径：`CURSOR_CONFIG` 或 `%APPDATA%\Cursor\User\settings.json`。
+pub fn cursor_config_path() -> PathBuf {
+    if let Some(p) = std::env::var_os("CURSOR_CONFIG")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        return p;
+    }
+    roaming_app_data()
+        .join("Cursor")
+        .join("User")
+        .join("settings.json")
+}
+
+/// Windsurf 配置文件路径：`WINDSURF_CONFIG` 或 `%APPDATA%\Windsurf\User\settings.json`。
+pub fn windsurf_config_path() -> PathBuf {
+    if let Some(p) = std::env::var_os("WINDSURF_CONFIG")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        return p;
+    }
+    roaming_app_data()
+        .join("Windsurf")
+        .join("User")
+        .join("settings.json")
+}
+
 // ---------------------------------------------------------------------------
 // DTO 与检测
 // ---------------------------------------------------------------------------
@@ -300,6 +351,41 @@ pub struct AgentBackupItem {
     pub path: String,
 }
 
+/// 待写入文件的 Diff 对比结构。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentFileDiff {
+    pub path: String,
+    #[serde(alias = "original")]
+    pub existing_content: Option<String>,
+    #[serde(alias = "updated")]
+    pub proposed_content: String,
+}
+
+impl AgentFileDiff {
+    pub fn original(&self) -> Option<&str> {
+        self.existing_content.as_deref()
+    }
+
+    pub fn updated(&self) -> &str {
+        &self.proposed_content
+    }
+}
+
+/// 客户端接入前的 Diff 预览信息。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentDiffPreview {
+    pub target: String,
+    #[serde(alias = "files")]
+    pub diffs: Vec<AgentFileDiff>,
+    pub models: Vec<String>,
+}
+
+impl AgentDiffPreview {
+    pub fn files(&self) -> &[AgentFileDiff] {
+        &self.diffs
+    }
+}
+
 fn probe_cmd_version(exe: &str, args: &[&str]) -> Option<String> {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
@@ -332,6 +418,8 @@ pub fn detect_all(gateway_base: &str, api_key: &str) -> Vec<AgentTargetStatus> {
         detect_kimi_code(origin, api_key),
         detect_openclaw(origin, api_key),
         detect_hermes(origin, api_key),
+        detect_cursor(origin, api_key),
+        detect_windsurf(origin, api_key),
         detect_claude_desktop(origin, api_key),
     ]
 }
@@ -771,6 +859,109 @@ fn detect_hermes(gateway_base: &str, api_key: &str) -> AgentTargetStatus {
     }
 }
 
+fn detect_cursor(gateway_base: &str, api_key: &str) -> AgentTargetStatus {
+    let path = cursor_config_path();
+    let user_dir = roaming_app_data().join("Cursor");
+    let desktop_exe = local_app_data()
+        .join("Programs")
+        .join("cursor")
+        .join("Cursor.exe");
+    let version = probe_cmd_version("cursor.cmd", &["--version"])
+        .or_else(|| probe_cmd_version("cursor", &["--version"]));
+    let installed =
+        path.is_file() || user_dir.is_dir() || desktop_exe.is_file() || version.is_some();
+
+    let mut configured = false;
+    if let Some(v) = read_json(&path) {
+        let opt_base = v
+            .get("cursor.cpp.overrideBaseUrl")
+            .or_else(|| v.get("openai.baseUrl"))
+            .or_else(|| v.get("cursor.openai.baseUrl"))
+            .and_then(Value::as_str);
+        let opt_override = v
+            .get("cursor.openai.overrideBaseUrl")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        let opt_key = v
+            .get("cursor.cpp.overrideApiKey")
+            .or_else(|| v.get("openai.apiKey"))
+            .or_else(|| v.get("cursor.openai.apiKey"))
+            .and_then(Value::as_str);
+        configured = !gateway_base.is_empty()
+            && opt_override
+            && opt_base.map(|b| b.contains(gateway_base)).unwrap_or(false)
+            && (api_key.is_empty() || opt_key == Some(api_key));
+    }
+
+    AgentTargetStatus {
+        id: "cursor".to_string(),
+        label: "Cursor".to_string(),
+        protocol: "OpenAI Chat".to_string(),
+        supported: true,
+        installed,
+        configured,
+        config_path: path.to_string_lossy().to_string(),
+        note: if installed {
+            String::new()
+        } else {
+            "未检测到 Cursor（settings.json 不存在）".to_string()
+        },
+        version,
+    }
+}
+
+fn detect_windsurf(gateway_base: &str, api_key: &str) -> AgentTargetStatus {
+    let path = windsurf_config_path();
+    let user_dir = roaming_app_data().join("Windsurf");
+    let codeium_dir = home_dir().join(".codeium").join("windsurf");
+    let desktop_exe = local_app_data()
+        .join("Programs")
+        .join("windsurf")
+        .join("Windsurf.exe");
+    let version = probe_cmd_version("windsurf.cmd", &["--version"])
+        .or_else(|| probe_cmd_version("windsurf", &["--version"]));
+    let installed = path.is_file()
+        || user_dir.is_dir()
+        || codeium_dir.is_dir()
+        || desktop_exe.is_file()
+        || version.is_some();
+
+    let mut configured = false;
+    if let Some(v) = read_json(&path) {
+        let opt_base = v
+            .get("cascade.customEndpoint")
+            .or_else(|| v.get("cascade.openaiBaseUrl"))
+            .or_else(|| v.get("openai.baseUrl"))
+            .or_else(|| v.get("windsurf.customOpenAiBaseUrl"))
+            .and_then(Value::as_str);
+        let opt_key = v
+            .get("cascade.apiKey")
+            .or_else(|| v.get("cascade.openaiApiKey"))
+            .or_else(|| v.get("openai.apiKey"))
+            .or_else(|| v.get("windsurf.customOpenAiApiKey"))
+            .and_then(Value::as_str);
+        configured = !gateway_base.is_empty()
+            && opt_base.map(|b| b.contains(gateway_base)).unwrap_or(false)
+            && (api_key.is_empty() || opt_key == Some(api_key));
+    }
+
+    AgentTargetStatus {
+        id: "windsurf".to_string(),
+        label: "Windsurf".to_string(),
+        protocol: "OpenAI Chat".to_string(),
+        supported: true,
+        installed,
+        configured,
+        config_path: path.to_string_lossy().to_string(),
+        note: if installed {
+            String::new()
+        } else {
+            "未检测到 Windsurf（settings.json 不存在）".to_string()
+        },
+        version,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 备份与恢复
 // ---------------------------------------------------------------------------
@@ -929,8 +1120,228 @@ pub fn import_target_in(
         "kimi-code" => import_kimi_code(root_dir, base, api_key, &safe_models),
         "openclaw" => import_openclaw(root_dir, base, api_key, &safe_models),
         "hermes" => import_hermes(root_dir, base, api_key, &safe_models),
+        "cursor" => import_cursor(root_dir, base, api_key, &safe_models),
+        "windsurf" => import_windsurf(root_dir, base, api_key, &safe_models),
         other => Err(format!("不支持的客户端: {other}")),
     }
+}
+
+/// 生成指定客户端接入前的配置 Diff 预览（只读，不写文件也不产生备份）。
+pub fn preview_target(
+    target: &str,
+    gateway_base: &str,
+    api_key: &str,
+    models: &[String],
+) -> Result<AgentDiffPreview, String> {
+    if api_key.trim().is_empty() {
+        return Err("请先确保统一网关 Master Key 可用（客户端必须携带凭据）".to_string());
+    }
+    let base = normalize_base_origin(gateway_base);
+    if base.is_empty() {
+        return Err("网关地址无效，无法生成客户端配置".to_string());
+    }
+    if models.is_empty() || models.iter().any(|model| model.trim().is_empty()) {
+        return Err("请选择网关实际可用模型，禁止空模型或默认模型写入".to_string());
+    }
+    let safe_models = models.to_vec();
+
+    let diffs = match target {
+        "cursor" => {
+            let path = cursor_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_cursor_settings(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "windsurf" => {
+            let path = windsurf_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated =
+                build_windsurf_settings(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "claude-code" => {
+            let path = claude_code_home().join("settings.json");
+            let slot_models: Vec<String> = safe_models
+                .iter()
+                .take(CLAUDE_SLOT_LIMIT)
+                .cloned()
+                .collect();
+            let original = read_claude_existing(&path)?;
+            let updated =
+                build_claude_code_settings(original.as_deref(), base, api_key, &slot_models)
+                    .map_err(|_| "Claude Code 配置无效，无法生成预览".to_string())?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "claude-desktop" => {
+            let dir = claude_desktop_3p_dir();
+            let library = dir.join("configLibrary");
+            let profile_path = library.join(format!("{CLAUDE_DESKTOP_PROFILE_ID}.json"));
+            let mode_path = claude_desktop_dir().join("claude_desktop_config.json");
+            let meta_path = claude_desktop_dir().join("config_meta.json");
+
+            let orig_profile = std::fs::read_to_string(&profile_path).ok();
+            let slot_models: Vec<String> = safe_models
+                .iter()
+                .take(CLAUDE_SLOT_LIMIT)
+                .cloned()
+                .collect();
+            let upd_profile =
+                build_claude_desktop_profile(orig_profile.as_deref(), base, api_key, &slot_models)?;
+
+            let orig_mode = std::fs::read_to_string(&mode_path).ok();
+            let upd_mode = build_claude_desktop_mode(orig_mode.as_deref())?;
+
+            let orig_meta = std::fs::read_to_string(&meta_path).ok();
+            let upd_meta = build_claude_desktop_meta(orig_meta.as_deref())?;
+
+            vec![
+                AgentFileDiff {
+                    path: profile_path.to_string_lossy().to_string(),
+                    existing_content: orig_profile,
+                    proposed_content: upd_profile,
+                },
+                AgentFileDiff {
+                    path: mode_path.to_string_lossy().to_string(),
+                    existing_content: orig_mode,
+                    proposed_content: upd_mode,
+                },
+                AgentFileDiff {
+                    path: meta_path.to_string_lossy().to_string(),
+                    existing_content: orig_meta,
+                    proposed_content: upd_meta,
+                },
+            ]
+        }
+        "codex" => {
+            let config_path = codex_home().join("config.toml");
+            let auth_path = codex_home().join("auth.json");
+            let orig_cfg = std::fs::read_to_string(&config_path).ok();
+            let upd_cfg = build_codex_config(orig_cfg.as_deref(), base, &safe_models)?;
+            let orig_auth = std::fs::read_to_string(&auth_path).ok();
+            let upd_auth = build_codex_auth(orig_auth.as_deref(), api_key)?;
+            vec![
+                AgentFileDiff {
+                    path: config_path.to_string_lossy().to_string(),
+                    existing_content: orig_cfg,
+                    proposed_content: upd_cfg,
+                },
+                AgentFileDiff {
+                    path: auth_path.to_string_lossy().to_string(),
+                    existing_content: orig_auth,
+                    proposed_content: upd_auth,
+                },
+            ]
+        }
+        "dsh" => {
+            let settings_path = dsh_home().join("settings.yaml");
+            let cred_path = dsh_home().join("credentials.yaml");
+            let orig_set = std::fs::read_to_string(&settings_path).ok();
+            let upd_set = build_dsh_settings(orig_set.as_deref(), base, &safe_models)?;
+            let orig_cred = std::fs::read_to_string(&cred_path).ok();
+            let upd_cred = build_dsh_credentials(orig_cred.as_deref(), api_key)?;
+            vec![
+                AgentFileDiff {
+                    path: settings_path.to_string_lossy().to_string(),
+                    existing_content: orig_set,
+                    proposed_content: upd_set,
+                },
+                AgentFileDiff {
+                    path: cred_path.to_string_lossy().to_string(),
+                    existing_content: orig_cred,
+                    proposed_content: upd_cred,
+                },
+            ]
+        }
+        "opencode" => {
+            let path = opencode_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_opencode_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "pi" => {
+            let path = pi_models_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_pi_models(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "grok-build" => {
+            let path = grok_home().join("config.toml");
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_grok_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "zcode" => {
+            let path = zcode_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_zcode_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "kimi-code" => {
+            let path = kimi_code_home().join("config.toml");
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_kimi_code_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "openclaw" => {
+            let path = openclaw_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_openclaw_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        "hermes" => {
+            let path = hermes_config_path();
+            let original = std::fs::read_to_string(&path).ok();
+            let updated = build_hermes_config(original.as_deref(), base, api_key, &safe_models)?;
+            vec![AgentFileDiff {
+                path: path.to_string_lossy().to_string(),
+                existing_content: original,
+                proposed_content: updated,
+            }]
+        }
+        other => return Err(format!("不支持的客户端: {other}")),
+    };
+
+    Ok(AgentDiffPreview {
+        target: target.to_string(),
+        diffs,
+        models: safe_models,
+    })
 }
 
 // Never treat an unreadable existing config as a missing file.
@@ -1269,6 +1680,52 @@ fn import_hermes(
 
     Ok(AgentImportOutcome {
         target: "hermes".to_string(),
+        backup_dir: backup.to_string_lossy().to_string(),
+        files: vec![path.to_string_lossy().to_string()],
+        models: models.to_vec(),
+    })
+}
+
+fn import_cursor(
+    root_dir: &Path,
+    base: &str,
+    api_key: &str,
+    models: &[String],
+) -> Result<AgentImportOutcome, String> {
+    let path = cursor_config_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建 Cursor 目录失败: {e}"))?;
+    }
+    let backup = backup_files_in(root_dir, "cursor", std::slice::from_ref(&path))?;
+    let existing = std::fs::read_to_string(&path).ok();
+    let text = build_cursor_settings(existing.as_deref(), base, api_key, models)?;
+    atomic_write(&path, &text).map_err(|e| format!("写入 Cursor 配置失败: {e}"))?;
+
+    Ok(AgentImportOutcome {
+        target: "cursor".to_string(),
+        backup_dir: backup.to_string_lossy().to_string(),
+        files: vec![path.to_string_lossy().to_string()],
+        models: models.to_vec(),
+    })
+}
+
+fn import_windsurf(
+    root_dir: &Path,
+    base: &str,
+    api_key: &str,
+    models: &[String],
+) -> Result<AgentImportOutcome, String> {
+    let path = windsurf_config_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建 Windsurf 目录失败: {e}"))?;
+    }
+    let backup = backup_files_in(root_dir, "windsurf", std::slice::from_ref(&path))?;
+    let existing = std::fs::read_to_string(&path).ok();
+    let text = build_windsurf_settings(existing.as_deref(), base, api_key, models)?;
+    atomic_write(&path, &text).map_err(|e| format!("写入 Windsurf 配置失败: {e}"))?;
+
+    Ok(AgentImportOutcome {
+        target: "windsurf".to_string(),
         backup_dir: backup.to_string_lossy().to_string(),
         files: vec![path.to_string_lossy().to_string()],
         models: models.to_vec(),
@@ -1867,6 +2324,81 @@ pub fn build_hermes_config(
     Ok(text)
 }
 
+/// 生成 Cursor settings.json：写入 OpenAI 兼容 Base URL、Key、覆盖开关与自定义模型列表。
+pub fn build_cursor_settings(
+    existing: Option<&str>,
+    base: &str,
+    api_key: &str,
+    models: &[String],
+) -> Result<String, String> {
+    let base = normalize_base_origin(base);
+    let mut root = parse_json_object(existing)?;
+    let endpoint = format!("{base}/v1");
+
+    root.insert("cursor.cpp.overrideBaseUrl".into(), json!(endpoint));
+    root.insert("cursor.cpp.overrideApiKey".into(), json!(api_key));
+    root.insert("openai.baseUrl".into(), json!(endpoint));
+    root.insert("openai.apiKey".into(), json!(api_key));
+    root.insert("cursor.openai.baseUrl".into(), json!(endpoint));
+    root.insert("cursor.openai.overrideBaseUrl".into(), json!(true));
+    root.insert("cursor.openai.apiKey".into(), json!(api_key));
+
+    if let Some(primary) = models.first() {
+        root.insert("cursor.general.model".into(), json!(primary));
+        root.insert("cursor.model".into(), json!(primary));
+    }
+
+    let mut custom_list = root
+        .get("cursor.models.custom")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    for m in models {
+        if !custom_list
+            .iter()
+            .any(|item| item.get("id").and_then(Value::as_str) == Some(m))
+        {
+            custom_list.push(json!({
+                "id": m,
+                "name": m,
+                "provider": "openai"
+            }));
+        }
+    }
+    root.insert("cursor.models.custom".into(), Value::Array(custom_list));
+    render_json(Value::Object(root))
+}
+
+/// 生成 Windsurf settings.json：写入 Cascade OpenAI Base URL、Key 与主模型配置。
+pub fn build_windsurf_settings(
+    existing: Option<&str>,
+    base: &str,
+    api_key: &str,
+    models: &[String],
+) -> Result<String, String> {
+    let base = normalize_base_origin(base);
+    let mut root = parse_json_object(existing)?;
+    let endpoint = format!("{base}/v1");
+    let primary = models
+        .first()
+        .map(String::as_str)
+        .unwrap_or("claude-sonnet-4-6");
+
+    root.insert("cascade.customEndpoint".into(), json!(endpoint));
+    root.insert("cascade.apiKey".into(), json!(api_key));
+    root.insert("openai.baseUrl".into(), json!(endpoint));
+    root.insert("openai.apiKey".into(), json!(api_key));
+    root.insert("cascade.modelProvider".into(), json!("openai"));
+    root.insert("cascade.openaiBaseUrl".into(), json!(endpoint));
+    root.insert("cascade.openaiApiKey".into(), json!(api_key));
+    root.insert("cascade.model".into(), json!(primary));
+    root.insert("windsurf.customOpenAiBaseUrl".into(), json!(endpoint));
+    root.insert("windsurf.customOpenAiApiKey".into(), json!(api_key));
+
+    render_json(Value::Object(root))
+}
+
 // ---------------------------------------------------------------------------
 // 内部工具
 // ---------------------------------------------------------------------------
@@ -1923,11 +2455,24 @@ fn parse_json_or_json5(text: &str) -> Result<Map<String, Value>, String> {
             continue;
         }
 
-        if c == '/' && i + 1 < n && chars[i + 1] == '/' {
-            while i < n && chars[i] != '\n' {
-                i += 1;
+        if c == '/' && i + 1 < n {
+            if chars[i + 1] == '/' {
+                while i < n && chars[i] != '\n' {
+                    i += 1;
+                }
+                continue;
+            } else if chars[i + 1] == '*' {
+                i += 2;
+                while i + 1 < n && !(chars[i] == '*' && chars[i + 1] == '/') {
+                    i += 1;
+                }
+                if i + 1 < n {
+                    i += 2;
+                } else {
+                    i = n;
+                }
+                continue;
             }
-            continue;
         }
 
         if c == '"' || c == '\'' {
@@ -2637,5 +3182,261 @@ mod tests {
         let restored_text = std::fs::read_to_string(&target_file).unwrap();
         assert!(restored_text.contains("existing"));
         assert!(!restored_text.contains("proxyweave"));
+    }
+
+    #[test]
+    fn cursor_config_build_and_preserve() {
+        let existing = r#"{
+            "editor.fontSize": 14,
+            "cursor.models.custom": [
+                { "id": "my-local-model", "name": "Local Model", "provider": "openai" }
+            ]
+        }"#;
+        let out = build_cursor_settings(
+            Some(existing),
+            "http://127.0.0.1:28319",
+            "sk-test-key",
+            &["claude-sonnet-4-6".into(), "deepseek-chat".into()],
+        )
+        .unwrap();
+
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["editor.fontSize"], 14, "保留用户已有设置");
+        assert_eq!(v["cursor.cpp.overrideBaseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cursor.cpp.overrideApiKey"], "sk-test-key");
+        assert_eq!(v["openai.baseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["openai.apiKey"], "sk-test-key");
+        assert_eq!(v["cursor.openai.baseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cursor.openai.overrideBaseUrl"], true);
+        assert_eq!(v["cursor.openai.apiKey"], "sk-test-key");
+        assert_eq!(v["cursor.general.model"], "claude-sonnet-4-6");
+
+        let custom = v["cursor.models.custom"].as_array().unwrap();
+        assert_eq!(custom.len(), 3, "保留已有模型并追加 2 个新模型");
+        assert!(custom.iter().any(|m| m["id"] == "my-local-model"));
+        assert!(custom.iter().any(|m| m["id"] == "claude-sonnet-4-6"));
+        assert!(custom.iter().any(|m| m["id"] == "deepseek-chat"));
+    }
+
+    #[test]
+    fn cursor_config_with_jsonc_tolerates_comments_and_trailing_commas() {
+        let jsonc = r#"{
+            // Cursor line comment
+            "editor.formatOnSave": true,
+            /* Multi-line
+               block comment */
+            "window.zoomLevel": 1,
+        }"#;
+
+        let out = build_cursor_settings(
+            Some(jsonc),
+            "http://127.0.0.1:28319",
+            "sk-jsonc-key",
+            &["gpt-4o".into()],
+        )
+        .expect("JSONC with comments and trailing commas must parse cleanly");
+
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["editor.formatOnSave"], true);
+        assert_eq!(v["window.zoomLevel"], 1);
+        assert_eq!(v["cursor.cpp.overrideBaseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cursor.cpp.overrideApiKey"], "sk-jsonc-key");
+        assert_eq!(v["openai.baseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["openai.apiKey"], "sk-jsonc-key");
+    }
+
+    #[test]
+    fn windsurf_config_build_and_preserve() {
+        let existing = r#"{
+            "editor.tabSize": 2,
+            "cascade.model": "old-model"
+        }"#;
+        let out = build_windsurf_settings(
+            Some(existing),
+            "http://127.0.0.1:28319/v1",
+            "sk-windsurf-key",
+            &["claude-sonnet-4-6".into()],
+        )
+        .unwrap();
+
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["editor.tabSize"], 2, "保留用户现有编辑器设置");
+        assert_eq!(v["cascade.customEndpoint"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cascade.apiKey"], "sk-windsurf-key");
+        assert_eq!(v["openai.baseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["openai.apiKey"], "sk-windsurf-key");
+        assert_eq!(v["cascade.modelProvider"], "openai");
+        assert_eq!(v["cascade.openaiBaseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cascade.openaiApiKey"], "sk-windsurf-key");
+        assert_eq!(v["cascade.model"], "claude-sonnet-4-6");
+        assert_eq!(
+            v["windsurf.customOpenAiBaseUrl"],
+            "http://127.0.0.1:28319/v1"
+        );
+        assert_eq!(v["windsurf.customOpenAiApiKey"], "sk-windsurf-key");
+    }
+
+    #[test]
+    fn windsurf_config_with_jsonc_tolerates_comments_and_trailing_commas() {
+        let jsonc = r#"{
+            // Windsurf line comment
+            "workbench.colorTheme": "Default Dark Modern",
+            /* Cascade block
+               comment */
+            "files.autoSave": "afterDelay",
+        }"#;
+
+        let out = build_windsurf_settings(
+            Some(jsonc),
+            "http://127.0.0.1:28319",
+            "sk-jsonc-windsurf",
+            &["claude-sonnet-4-6".into()],
+        )
+        .expect("JSONC for windsurf must parse cleanly");
+
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["workbench.colorTheme"], "Default Dark Modern");
+        assert_eq!(v["files.autoSave"], "afterDelay");
+        assert_eq!(v["cascade.customEndpoint"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["cascade.apiKey"], "sk-jsonc-windsurf");
+        assert_eq!(v["openai.baseUrl"], "http://127.0.0.1:28319/v1");
+        assert_eq!(v["openai.apiKey"], "sk-jsonc-windsurf");
+    }
+
+    #[test]
+    fn targets_and_detect_all_contain_13_clients() {
+        assert_eq!(TARGETS.len(), 13);
+        assert!(TARGETS.contains(&"cursor"));
+        assert!(TARGETS.contains(&"windsurf"));
+
+        let list = detect_all("http://127.0.0.1:28319", "sk-test");
+        assert_eq!(list.len(), 13);
+        assert!(list.iter().any(|t| t.id == "cursor"));
+        assert!(list.iter().any(|t| t.id == "windsurf"));
+    }
+
+    #[test]
+    fn preview_target_generates_diff_without_writing() {
+        let preview = preview_target(
+            "cursor",
+            "http://127.0.0.1:28319",
+            "sk-diff-key",
+            &["claude-sonnet-4-6".into()],
+        )
+        .unwrap();
+
+        assert_eq!(preview.target, "cursor");
+        assert_eq!(preview.diffs.len(), 1);
+        assert_eq!(preview.files().len(), 1);
+        assert!(preview.diffs[0].path.contains("Cursor"));
+        assert!(preview.diffs[0]
+            .proposed_content
+            .contains("cursor.cpp.overrideBaseUrl"));
+        assert!(preview.diffs[0]
+            .proposed_content
+            .contains("http://127.0.0.1:28319/v1"));
+        assert!(preview.diffs[0].proposed_content.contains("sk-diff-key"));
+        assert_eq!(preview.models, vec!["claude-sonnet-4-6".to_string()]);
+    }
+
+    #[test]
+    fn preview_target_cursor_and_windsurf_zero_writes_and_correct_diff() {
+        let temp_dir = std::env::temp_dir().join(format!("pw-test-preview-{}", now_ms()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let cursor_path = temp_dir.join("cursor_settings.json");
+        let windsurf_path = temp_dir.join("windsurf_settings.json");
+
+        // Set env overrides for isolated testing
+        std::env::set_var("CURSOR_CONFIG", &cursor_path);
+        std::env::set_var("WINDSURF_CONFIG", &windsurf_path);
+
+        assert!(!cursor_path.exists(), "Cursor 目标测试文件初始必须不存在");
+        assert!(
+            !windsurf_path.exists(),
+            "Windsurf 目标测试文件初始必须不存在"
+        );
+
+        // 1. Preview on non-existing cursor file (should produce new file diff without writing)
+        let cur_preview = preview_target(
+            "cursor",
+            "http://127.0.0.1:28319",
+            "sk-cur-key",
+            &["claude-sonnet-4-6".into(), "gpt-4o".into()],
+        )
+        .expect("Cursor preview must succeed");
+
+        assert_eq!(cur_preview.target, "cursor");
+        assert_eq!(cur_preview.diffs.len(), 1);
+        assert_eq!(cur_preview.diffs[0].existing_content, None);
+        assert!(cur_preview.diffs[0]
+            .proposed_content
+            .contains("cursor.cpp.overrideBaseUrl"));
+        assert!(cur_preview.diffs[0]
+            .proposed_content
+            .contains("http://127.0.0.1:28319/v1"));
+        assert!(cur_preview.diffs[0].proposed_content.contains("sk-cur-key"));
+        assert_eq!(cur_preview.models.len(), 2);
+        // CRITICAL: Ensure zero disk mutations
+        assert!(
+            !cursor_path.exists(),
+            "preview_target 必须零写入，目标文件不得被创建"
+        );
+
+        // 2. Preview on non-existing windsurf file
+        let wind_preview = preview_target(
+            "windsurf",
+            "http://127.0.0.1:28319",
+            "sk-wind-key",
+            &["claude-sonnet-4-6".into()],
+        )
+        .expect("Windsurf preview must succeed");
+
+        assert_eq!(wind_preview.target, "windsurf");
+        assert_eq!(wind_preview.diffs.len(), 1);
+        assert_eq!(wind_preview.diffs[0].existing_content, None);
+        assert!(wind_preview.diffs[0]
+            .proposed_content
+            .contains("cascade.customEndpoint"));
+        assert!(wind_preview.diffs[0]
+            .proposed_content
+            .contains("http://127.0.0.1:28319/v1"));
+        assert!(wind_preview.diffs[0]
+            .proposed_content
+            .contains("sk-wind-key"));
+        assert!(
+            !windsurf_path.exists(),
+            "preview_target 必须零写入，Windsurf 目标文件不得被创建"
+        );
+
+        // 3. Preview with existing file
+        let initial_cursor = r#"{"editor.fontSize": 16}"#;
+        std::fs::write(&cursor_path, initial_cursor).unwrap();
+        let cur_preview_2 = preview_target(
+            "cursor",
+            "http://127.0.0.1:28319",
+            "sk-cur-key-2",
+            &["claude-sonnet-4-6".into()],
+        )
+        .expect("Cursor preview with existing file must succeed");
+
+        assert_eq!(
+            cur_preview_2.diffs[0].existing_content.as_deref(),
+            Some(initial_cursor)
+        );
+        assert!(cur_preview_2.diffs[0].proposed_content.contains("16"));
+        assert!(cur_preview_2.diffs[0]
+            .proposed_content
+            .contains("sk-cur-key-2"));
+        // File on disk must remain strictly identical
+        let disk_content = std::fs::read_to_string(&cursor_path).unwrap();
+        assert_eq!(
+            disk_content, initial_cursor,
+            "preview_target 绝不能修改已有磁盘文件"
+        );
+
+        // Clean up
+        std::env::remove_var("CURSOR_CONFIG");
+        std::env::remove_var("WINDSURF_CONFIG");
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

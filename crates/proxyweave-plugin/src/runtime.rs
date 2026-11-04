@@ -12,10 +12,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU64, AtomicUsize, Ordering},
     Arc,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::job::JobObject;
@@ -39,6 +39,15 @@ pub enum RuntimeError {
     ProbeTimeout(String),
     HealthCheckFailed(String),
     Io(String),
+    ServiceUnderMaintenance,
+    ActiveRequestsTimeout {
+        active_requests: usize,
+        timeout_ms: u64,
+    },
+    StaleGeneration {
+        expected: u64,
+        actual: u64,
+    },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -55,6 +64,22 @@ impl std::fmt::Display for RuntimeError {
             Self::ProbeTimeout(msg) => write!(f, "Probe timeout: {}", msg),
             Self::HealthCheckFailed(msg) => write!(f, "Health check failed: {}", msg),
             Self::Io(msg) => write!(f, "IO error: {}", msg),
+            Self::ServiceUnderMaintenance => {
+                write!(f, "Plugin service is currently under maintenance")
+            }
+            Self::ActiveRequestsTimeout {
+                active_requests,
+                timeout_ms,
+            } => write!(
+                f,
+                "Timed out waiting for {} active requests to drain after {}ms",
+                active_requests, timeout_ms
+            ),
+            Self::StaleGeneration { expected, actual } => write!(
+                f,
+                "Stale instance generation: expected {}, actual {}",
+                expected, actual
+            ),
         }
     }
 }
@@ -105,10 +130,20 @@ pub enum ActivePlugin {
     },
 }
 
+/// Opaque authority for one maintenance transaction, retained across instance generations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaintenanceToken {
+    plugin_id: String,
+    token: u64,
+    generation: u64,
+}
+
 pub struct RuntimeEntry {
     pub status: RuntimeStatus,
     pub active: Option<ActivePlugin>,
     pub active_requests: Arc<AtomicUsize>,
+    pub instance_generation: u64,
+    maintenance: Option<MaintenanceToken>,
 }
 
 /// An admitted request owns this guard through response EOF or cancellation.
@@ -116,11 +151,20 @@ pub struct RuntimeEntry {
 pub struct RequestLease {
     active_requests: Arc<AtomicUsize>,
     endpoint: String,
+    generation: u64,
 }
 
 impl RequestLease {
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn instance_generation(&self) -> u64 {
+        self.generation
     }
 }
 
@@ -188,19 +232,132 @@ impl RuntimeManager {
         }
         entry.status.clone()
     }
-    /// Admit without racing stop. The RAII lease extends beyond response headers.
-    pub async fn acquire_request(&self, plugin_id: &str) -> Result<RequestLease, RuntimeError> {
-        let lifecycle_lock = self.get_start_lock(plugin_id).await;
-        let _guard = lifecycle_lock.lock().await;
-        let status = self.get_status(plugin_id).await;
-        if !matches!(
-            status,
-            RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
-        ) {
-            return Err(RuntimeError::HealthCheckFailed(
-                "Plugin is not available".into(),
-            ));
+    /// Checks if a plugin is currently marked under maintenance.
+    pub async fn is_maintenance(&self, plugin_id: &str) -> bool {
+        let entry_lock = self.runtimes.read().await.get(plugin_id).cloned();
+        match entry_lock {
+            Some(entry_lock) => entry_lock.lock().await.maintenance.is_some(),
+            None => false,
         }
+    }
+
+    /// Close admission under the lifecycle lock, then drain existing leases.
+    /// Aborting this future deliberately leaves admission closed (fail-closed).
+    pub async fn enter_maintenance_barrier(
+        &self,
+        plugin_id: &str,
+        drain_timeout: Duration,
+    ) -> Result<MaintenanceToken, RuntimeError> {
+        let lifecycle_lock = self.get_start_lock(plugin_id).await;
+        let guard = lifecycle_lock.lock().await;
+        let entry_lock = self
+            .runtimes
+            .read()
+            .await
+            .get(plugin_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::PluginNotFound(plugin_id.into()))?;
+        let token = {
+            let mut entry = entry_lock.lock().await;
+            if entry.maintenance.is_some() {
+                return Err(RuntimeError::ServiceUnderMaintenance);
+            }
+            if matches!(entry.active, Some(ActivePlugin::External { .. })) {
+                return Err(RuntimeError::ExternalServiceProtected(plugin_id.into()));
+            }
+            static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
+            let serial = NEXT_TOKEN
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .map_err(|_| RuntimeError::Io("maintenance token exhausted".into()))?;
+            let token = MaintenanceToken {
+                plugin_id: plugin_id.into(),
+                token: serial,
+                generation: entry.instance_generation,
+            };
+            entry.maintenance = Some(token.clone());
+            token
+        };
+        drop(guard);
+        let start = Instant::now();
+        loop {
+            let mut entry = entry_lock.lock().await;
+            let active = entry.active_requests.load(Ordering::Acquire);
+            if active == 0 {
+                return Ok(token);
+            }
+            if start.elapsed() >= drain_timeout {
+                entry.maintenance = None;
+                return Err(RuntimeError::ActiveRequestsTimeout {
+                    active_requests: active,
+                    timeout_ms: drain_timeout.as_millis() as u64,
+                });
+            }
+            drop(entry);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    fn check_maintenance(
+        entry: &RuntimeEntry,
+        plugin_id: &str,
+        token: Option<&MaintenanceToken>,
+    ) -> Result<(), RuntimeError> {
+        match (entry.maintenance.as_ref(), token) {
+            (None, None) => Ok(()),
+            (Some(owner), Some(token)) if owner == token && token.plugin_id == plugin_id => Ok(()),
+            _ => Err(RuntimeError::ServiceUnderMaintenance),
+        }
+    }
+
+    pub async fn exit_maintenance(&self, token: &MaintenanceToken) -> Result<(), RuntimeError> {
+        let lifecycle_lock = self.get_start_lock(&token.plugin_id).await;
+        let _guard = lifecycle_lock.lock().await;
+        let entry_lock = self
+            .runtimes
+            .read()
+            .await
+            .get(&token.plugin_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::PluginNotFound(token.plugin_id.clone()))?;
+        let mut entry = entry_lock.lock().await;
+        Self::check_maintenance(&entry, &token.plugin_id, Some(token))?;
+        entry.maintenance = None;
+        Ok(())
+    }
+    /// Returns current instance generation for an active plugin runtime.
+    pub async fn current_generation(&self, plugin_id: &str) -> Option<u64> {
+        let entry_lock = self.runtimes.read().await.get(plugin_id).cloned()?;
+        let entry = entry_lock.lock().await;
+        if entry.active.is_some() {
+            Some(entry.instance_generation)
+        } else {
+            None
+        }
+    }
+
+    pub async fn cancel_maintenance_barrier(
+        &self,
+        token: &MaintenanceToken,
+    ) -> Result<(), RuntimeError> {
+        self.exit_maintenance(token).await
+    }
+
+    pub async fn instance_generation(&self, plugin_id: &str) -> Option<u64> {
+        self.current_generation(plugin_id).await
+    }
+
+    /// Admit without racing stop or maintenance. The RAII lease extends beyond response headers.
+    pub async fn acquire_request(&self, plugin_id: &str) -> Result<RequestLease, RuntimeError> {
+        self.acquire_request_for(plugin_id, None).await
+    }
+
+    /// Admit with generation verification.
+    /// Fails closed if the plugin is in maintenance or if the generation does not match.
+    pub async fn acquire_request_for(
+        &self,
+        plugin_id: &str,
+        expected_generation: Option<u64>,
+    ) -> Result<RequestLease, RuntimeError> {
         let entry_lock = self
             .runtimes
             .read()
@@ -208,7 +365,43 @@ impl RuntimeManager {
             .get(plugin_id)
             .cloned()
             .ok_or_else(|| RuntimeError::PluginNotFound("Plugin is not registered".into()))?;
-        let entry = entry_lock.lock().await;
+
+        let mut entry = entry_lock.lock().await;
+        if entry.maintenance.is_some() {
+            return Err(RuntimeError::ServiceUnderMaintenance);
+        }
+
+        let actual_gen = entry.instance_generation;
+        if let Some(expected) = expected_generation {
+            if actual_gen != expected {
+                return Err(RuntimeError::StaleGeneration {
+                    expected,
+                    actual: actual_gen,
+                });
+            }
+        }
+
+        if let Some(ActivePlugin::Managed(managed)) = entry.active.as_mut() {
+            if let Ok(Some(exit)) = managed.child.try_wait() {
+                entry.status = RuntimeStatus::Failed {
+                    error: format!("Managed process exited: {exit}"),
+                };
+                entry.active = None;
+                return Err(RuntimeError::HealthCheckFailed(
+                    "Plugin process has exited".into(),
+                ));
+            }
+        }
+
+        if !matches!(
+            entry.status,
+            RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
+        ) {
+            return Err(RuntimeError::HealthCheckFailed(
+                "Plugin is not available".into(),
+            ));
+        }
+
         let endpoint = match entry.active.as_ref() {
             Some(ActivePlugin::Managed(managed)) => format!("http://127.0.0.1:{}", managed.port),
             Some(ActivePlugin::External { base_url, .. }) => base_url.clone(),
@@ -218,10 +411,12 @@ impl RuntimeManager {
                 ))
             }
         };
+
         entry.active_requests.fetch_add(1, Ordering::AcqRel);
         Ok(RequestLease {
             active_requests: entry.active_requests.clone(),
             endpoint,
+            generation: actual_gen,
         })
     }
 
@@ -243,10 +438,48 @@ impl RuntimeManager {
         data_dir: &Path,
         api_key: Option<&str>,
     ) -> Result<RuntimeStatus, RuntimeError> {
+        self.start_plugin_impl(record, package_dir, allocated_port, data_dir, api_key, None)
+            .await
+    }
+
+    pub async fn start_plugin_under_maintenance(
+        &self,
+        record: &PluginRecord,
+        package_dir: &Path,
+        allocated_port: Option<u16>,
+        data_dir: &Path,
+        api_key: Option<&str>,
+        token: &MaintenanceToken,
+    ) -> Result<RuntimeStatus, RuntimeError> {
+        self.start_plugin_impl(
+            record,
+            package_dir,
+            allocated_port,
+            data_dir,
+            api_key,
+            Some(token),
+        )
+        .await
+    }
+
+    async fn start_plugin_impl(
+        &self,
+        record: &PluginRecord,
+        package_dir: &Path,
+        allocated_port: Option<u16>,
+        data_dir: &Path,
+        api_key: Option<&str>,
+        token: Option<&MaintenanceToken>,
+    ) -> Result<RuntimeStatus, RuntimeError> {
         let plugin_id = &record.manifest.metadata.id;
         let start_lock = self.get_start_lock(plugin_id).await;
         let _guard = start_lock.lock().await;
 
+        if let Some(entry) = self.runtimes.read().await.get(plugin_id).cloned() {
+            Self::check_maintenance(&*entry.lock().await, plugin_id, token)?;
+        } else if token.is_some() {
+            return Err(RuntimeError::ServiceUnderMaintenance);
+        }
         // Check if already running / ready
         let current_status = self.get_status(plugin_id).await;
         if matches!(
@@ -265,6 +498,8 @@ impl RuntimeManager {
                         status: RuntimeStatus::Stopped,
                         active_requests: Arc::new(AtomicUsize::new(0)),
                         active: None,
+                        instance_generation: 0,
+                        maintenance: None,
                     }))
                 })
                 .clone()
@@ -351,11 +586,19 @@ impl RuntimeManager {
                     status: RuntimeStatus::Stopped,
                     active_requests: Arc::new(AtomicUsize::new(0)),
                     active: None,
+                    instance_generation: 0,
+                    maintenance: None,
                 }))
             })
             .clone();
 
         let mut entry = entry_lock.lock().await;
+        if matches!(
+            status,
+            RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
+        ) {
+            entry.instance_generation = entry.instance_generation.wrapping_add(1);
+        }
         entry.status = status.clone();
         entry.active = Some(ActivePlugin::External {
             plugin_id: plugin_id.clone(),
@@ -552,21 +795,57 @@ impl RuntimeManager {
                     status: RuntimeStatus::Stopped,
                     active_requests: Arc::new(AtomicUsize::new(0)),
                     active: None,
+                    instance_generation: 0,
+                    maintenance: None,
                 }))
             })
             .clone();
 
         let mut entry = entry_lock.lock().await;
+        if matches!(
+            final_status,
+            RuntimeStatus::Ready { .. } | RuntimeStatus::Busy { .. }
+        ) {
+            entry.instance_generation = entry.instance_generation.wrapping_add(1);
+        }
         entry.status = final_status.clone();
         entry.active = Some(ActivePlugin::Managed(Box::new(instance)));
 
         Ok(final_status)
     }
 
+    pub async fn restart_plugin(
+        &self,
+        record: &PluginRecord,
+        package_dir: &Path,
+        allocated_port: Option<u16>,
+        data_dir: &Path,
+        api_key: Option<&str>,
+    ) -> Result<RuntimeStatus, RuntimeError> {
+        self.stop_plugin(&record.manifest.metadata.id).await?;
+        self.start_plugin(record, package_dir, allocated_port, data_dir, api_key)
+            .await
+    }
     /// Stops a plugin.
     /// CRITICAL IRON LAW: If the plugin is External, this explicitly rejects with
     /// `RuntimeError::ExternalServiceProtected` and sends ZERO kill signals!
     pub async fn stop_plugin(&self, plugin_id: &str) -> Result<(), RuntimeError> {
+        self.stop_plugin_impl(plugin_id, None).await
+    }
+
+    pub async fn stop_plugin_under_maintenance(
+        &self,
+        plugin_id: &str,
+        token: &MaintenanceToken,
+    ) -> Result<(), RuntimeError> {
+        self.stop_plugin_impl(plugin_id, Some(token)).await
+    }
+
+    async fn stop_plugin_impl(
+        &self,
+        plugin_id: &str,
+        token: Option<&MaintenanceToken>,
+    ) -> Result<(), RuntimeError> {
         // FIFO with start: stop settles after the in-flight attempt and cleans its owned child.
         let lifecycle_lock = self.get_start_lock(plugin_id).await;
         let _guard = lifecycle_lock.lock().await;
@@ -578,6 +857,7 @@ impl RuntimeManager {
         drop(runtimes);
 
         let mut entry = entry_lock.lock().await;
+        Self::check_maintenance(&entry, plugin_id, token)?;
         // External ownership rejection takes precedence and never touches its process.
         if matches!(entry.active, Some(ActivePlugin::Managed(_)))
             && entry.active_requests.load(Ordering::Acquire) != 0
@@ -603,11 +883,13 @@ impl RuntimeManager {
                         let _ = std::fs::remove_file(cfg);
                     }
                     entry.status = RuntimeStatus::Stopped;
+                    entry.instance_generation = entry.instance_generation.wrapping_add(1);
                     Ok(())
                 }
             }
         } else {
             entry.status = RuntimeStatus::Stopped;
+            entry.instance_generation = entry.instance_generation.wrapping_add(1);
             Ok(())
         }
     }
@@ -628,6 +910,8 @@ mod tests {
                 "ext_provider".to_string(),
                 Arc::new(Mutex::new(RuntimeEntry {
                     active_requests: Arc::new(AtomicUsize::new(0)),
+                    instance_generation: 1,
+                    maintenance: None,
                     status: RuntimeStatus::Ready {
                         port: 9999,
                         pid: None,

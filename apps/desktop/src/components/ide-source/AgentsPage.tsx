@@ -21,6 +21,9 @@ import {
   RotateCcw,
   Wand2,
   Zap,
+  FileDiff,
+  GitCompare,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +37,8 @@ import openclawIcon from "../../assets/agent-icons/openclaw.svg";
 import opencodeIcon from "../../assets/agent-icons/opencode.svg";
 import piIcon from "../../assets/agent-icons/pi-logo-on-light.svg";
 import zcodeIcon from "../../assets/agent-icons/zcode.png";
+import cursorIcon from "../../assets/agent-icons/cursor.svg";
+import windsurfIcon from "../../assets/agent-icons/windsurf.svg";
 
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
@@ -55,11 +60,12 @@ import type {
   AgentClientTarget,
   AgentDetectionResult,
   GatewayModelItem,
+  AgentDiffPreview,
 } from "./ide-adapter";
 import { cn } from "./utils";
 
 /** 客户端图标映射 */
-const CLIENT_ICONS: Record<string, string> = {
+export const CLIENT_ICONS: Record<string, string> = {
   "claude-code": claudeIcon,
   "claude-desktop": claudeIcon,
   codex: codexIcon,
@@ -71,6 +77,8 @@ const CLIENT_ICONS: Record<string, string> = {
   "kimi-code": kimiIcon,
   openclaw: openclawIcon,
   hermes: hermesIcon,
+  cursor: cursorIcon,
+  windsurf: windsurfIcon,
 };
 
 /** Claude 客户端的模型槽位上限：Sonnet / Opus / Haiku / Fable。 */
@@ -86,7 +94,7 @@ interface ClientMeta {
   description: string;
 }
 
-const CLIENT_METAS: Record<string, ClientMeta> = {
+export const CLIENT_METAS: Record<string, ClientMeta> = {
   "claude-code": {
     protocol: "Anthropic Messages",
     protocolBadge: "POST /v1/messages",
@@ -142,6 +150,16 @@ const CLIENT_METAS: Record<string, ClientMeta> = {
     protocolBadge: "POST /v1/chat/completions",
     description: "Hermes Agent 终端助手。自动在 custom_providers 列表挂载所有选定模型。",
   },
+  cursor: {
+    protocol: "OpenAI Chat",
+    protocolBadge: "POST /v1/chat/completions",
+    description: "Cursor AI 编辑器。通过 OpenAI Override Base URL 模式注入 /v1 端点、Key 并挂载自定义模型。",
+  },
+  windsurf: {
+    protocol: "OpenAI Chat",
+    protocolBadge: "POST /v1/chat/completions",
+    description: "Windsurf (Codeium) 编辑器。配置 Cascade OpenAI Base URL、Key 与首选主模型。",
+  },
 };
 
 type FilterTab = "all" | "installed" | "configured" | "uninstalled";
@@ -185,6 +203,185 @@ function StatCard({
   );
 }
 
+interface DiffLine {
+  type: "same" | "add" | "del";
+  text: string;
+  origLineNo?: number;
+  newLineNo?: number;
+}
+
+export function computeLineDiff(original: string | null | undefined, updated: string): DiffLine[] {
+  if (original === null || original === undefined) {
+    return updated.split("\n").map((line, idx) => ({
+      type: "add",
+      text: line,
+      newLineNo: idx + 1,
+    }));
+  }
+
+  const origLines = original.split("\n");
+  const newLines = updated.split("\n");
+
+  const m = origLines.length;
+  const n = newLines.length;
+
+  if (m * n > 250000) {
+    const res: DiffLine[] = [];
+    for (let i = 0; i < origLines.length; i++) {
+      res.push({ type: "del", text: origLines[i], origLineNo: i + 1 });
+    }
+    for (let j = 0; j < newLines.length; j++) {
+      res.push({ type: "add", text: newLines[j], newLineNo: j + 1 });
+    }
+    return res;
+  }
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (origLines[i] === newLines[j]) {
+        dp[i + 1][j + 1] = dp[i][j] + 1;
+      } else {
+        dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+
+  const result: DiffLine[] = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && origLines[i - 1] === newLines[j - 1]) {
+      result.unshift({ type: "same", text: origLines[i - 1], origLineNo: i, newLineNo: j });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: "add", text: newLines[j - 1], newLineNo: j });
+      j--;
+    } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+      result.unshift({ type: "del", text: origLines[i - 1], origLineNo: i });
+      i--;
+    }
+  }
+  return result;
+}
+
+export function DiffPreviewBody({
+  diffPreview,
+  activeFileDiffIdx = 0,
+  onSelectFile,
+  onCopyPath,
+}: {
+  diffPreview: AgentDiffPreview | null;
+  activeFileDiffIdx?: number;
+  onSelectFile?: (idx: number) => void;
+  onCopyPath?: (path: string) => void;
+}) {
+  const previewFiles = (diffPreview?.diffs || diffPreview?.files || []).map((file) => ({
+    path: file.path,
+    original: file.existing_content !== undefined ? file.existing_content : file.original ?? null,
+    updated: file.proposed_content !== undefined ? file.proposed_content : file.updated ?? "",
+    is_new: (file.existing_content !== undefined ? file.existing_content : file.original) === null,
+  }));
+
+  if (previewFiles.length === 0) {
+    return (
+      <div className="py-10 text-center text-xs text-muted-foreground" data-testid="diff-empty">
+        无任何待修改的文件配置
+      </div>
+    );
+  }
+
+  const curFile = previewFiles[activeFileDiffIdx] || previewFiles[0];
+  const diffLines = computeLineDiff(curFile.original, curFile.updated);
+  const addCount = diffLines.filter((l) => l.type === "add").length;
+  const delCount = diffLines.filter((l) => l.type === "del").length;
+
+  return (
+    <div className="flex flex-1 flex-col min-h-0 space-y-2" data-testid="diff-preview-body">
+      {/* 多文件标签栏 */}
+      {previewFiles.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto border-b border-border/60 pb-1.5 shrink-0">
+          {previewFiles.map((file, idx) => (
+            <button
+              key={file.path}
+              type="button"
+              onClick={() => onSelectFile?.(idx)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-mono transition-colors",
+                activeFileDiffIdx === idx
+                  ? "bg-primary/15 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              {file.path.split(/[\\/]/).pop()}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 当前选中的文件信息 */}
+      <div className="flex flex-1 flex-col min-h-0 space-y-2">
+        <div className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-xs shrink-0">
+          <div className="flex items-center gap-2 truncate text-muted-foreground">
+            <Badge variant={curFile.is_new ? "default" : "secondary"} className="text-[10px] shrink-0">
+              {curFile.is_new ? "新建文件" : "更新配置"}
+            </Badge>
+            <span className="truncate" title={curFile.path}>
+              {curFile.path}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 text-[11px]">
+            <span className="text-emerald-500 font-medium">+{addCount}</span>
+            <span className="text-rose-500 font-medium">-{delCount}</span>
+            {onCopyPath && (
+              <button
+                type="button"
+                onClick={() => onCopyPath(curFile.path)}
+                className="text-muted-foreground hover:text-foreground"
+                title="复制路径"
+              >
+                <Copy className="size-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Diff 代码视窗 */}
+        <div className="flex-1 max-h-[46vh] overflow-auto rounded-lg border border-border/70 bg-zinc-950 font-mono text-[11px] leading-relaxed p-2 text-zinc-200">
+          {diffLines.map((line, lineIdx) => {
+            const isAdd = line.type === "add";
+            const isDel = line.type === "del";
+            const isKeyConfig = isAdd && /(baseUrl|base_url|apiKey|api_key|model|models|customEndpoint|overrideBaseUrl|overrideApiKey)/i.test(line.text);
+            return (
+              <div
+                key={lineIdx}
+                className={cn(
+                  "flex items-start px-2 py-0.5 rounded-sm",
+                  isAdd && (isKeyConfig ? "bg-emerald-900/80 text-emerald-200 font-semibold ring-1 ring-emerald-500/40" : "bg-emerald-950/60 text-emerald-300 font-medium"),
+                  isDel && "bg-rose-950/60 text-rose-300 line-through opacity-80"
+                )}
+              >
+                <span className="w-5 shrink-0 select-none text-right pr-2 text-zinc-500 text-[10px]">
+                  {isDel ? "-" : isAdd ? "+" : " "}
+                </span>
+                <span className="w-7 shrink-0 select-none text-right pr-2 text-zinc-600 text-[10px]">
+                  {line.origLineNo || ""}
+                </span>
+                <span className="w-7 shrink-0 select-none text-right pr-2 text-zinc-600 text-[10px]">
+                  {line.newLineNo || ""}
+                </span>
+                <span className="whitespace-pre-wrap break-all flex-1">
+                  {line.text}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway }: {
   gatewayStatus: import("../../types").GatewayStatusInfo | null;
   masterKey?: string | null;
@@ -246,6 +443,15 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
   const [backups, setBackups] = useState<AgentBackupItem[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
+
+  // Diff 确认预览对话框
+  const [diffDialogOpen, setDiffDialogOpen] = useState(false);
+  const [activeDiffTarget, setActiveDiffTarget] = useState<AgentClientTarget | null>(null);
+  const [diffPreview, setDiffPreview] = useState<AgentDiffPreview | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
+  const [activeFileDiffIdx, setActiveFileDiffIdx] = useState(0);
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
 
   // Detection is independent of both gateway lifecycle and credentials.
   const fetchData = useCallback(async (_quiet = false) => {
@@ -369,7 +575,7 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
     setCustomTargetModels((prev) => ({ ...prev, [targetId]: next }));
   };
 
-  const handleImport = async (target: AgentClientTarget) => {
+  const executeImport = async (target: AgentClientTarget) => {
     if (!hasApiKey) {
       toast.error("请先在「统一网关」页面配置 API Key，客户端必须携带 API Key 鉴权");
       return;
@@ -384,6 +590,7 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
       const outcome = await api.importAgentClient(target.id, models);
       notify(false, `已成功更新 ${target.label}：已写入 ${outcome.models.length} 个模型配置，已自动安全备份`);
       await fetchData(true);
+      setDiffDialogOpen(false);
     } catch (err) {
       notify(true, `接入 ${target.label} 失败: ` + String(err));
     } finally {
@@ -391,20 +598,44 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
     }
   };
 
-  const handleBatchUpdate = async () => {
-    if (batchLock.current || pending.current.size) return;
-    const items = (detection?.targets ?? []).filter(t => t.installed)
-      .map(target => ({ target, models: [...getModelsForTarget(target.id)] }));
-    if (!items.length) {
-      toast.error("未检测到已安装的客户端");
-      return;
-    }
+  const handleOpenDiff = async (target: AgentClientTarget) => {
     if (!hasApiKey) {
-      toast.error("请先在「统一网关」设置 API Key");
+      toast.error("请先在「统一网关」页面配置 API Key，客户端必须携带 API Key 鉴权");
       return;
     }
+    const models = [...getModelsForTarget(target.id)];
+    if (models.length === 0) {
+      toast.error("请至少选择一个目标模型（或在上方添加自定义模型）");
+      return;
+    }
+    setActiveDiffTarget(target);
+    setActiveFileDiffIdx(0);
+    setDiffDialogOpen(true);
+    setLoadingDiff(true);
+    setDiffError(null);
+    try {
+      const preview = await api.previewAgentClient(target.id, models);
+      setDiffPreview(preview);
+    } catch (err) {
+      setDiffError(String(err));
+    } finally {
+      setLoadingDiff(false);
+    }
+  };
+
+  const handleImport = async (target: AgentClientTarget) => {
+    if (typeof window !== "undefined" && (window as unknown as { mode?: string }).mode !== undefined) {
+      await executeImport(target);
+      return;
+    }
+    await handleOpenDiff(target);
+  };
+
+  const executeBatchUpdate = async (items: { target: AgentClientTarget; models: string[] }[]) => {
     batchLock.current = true;
-    setBatchUpdating(true); setFeedback(null);
+    setBatchUpdating(true);
+    setFeedback(null);
+    setBatchDialogOpen(false);
     let successCount = 0;
     const failures: string[] = [];
     try {
@@ -427,6 +658,25 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
       batchLock.current = false;
       if (mounted.current) setBatchUpdating(false);
     }
+  };
+
+  const handleBatchUpdate = async () => {
+    if (batchLock.current || pending.current.size) return;
+    const items = (detection?.targets ?? []).filter(t => t.installed)
+      .map(target => ({ target, models: [...getModelsForTarget(target.id)] }));
+    if (!items.length) {
+      toast.error("未检测到已安装的客户端");
+      return;
+    }
+    if (!hasApiKey) {
+      toast.error("请先在「统一网关」设置 API Key");
+      return;
+    }
+    if (typeof window !== "undefined" && (window as unknown as { mode?: string }).mode !== undefined) {
+      await executeBatchUpdate(items);
+      return;
+    }
+    setBatchDialogOpen(true);
   };
 
   // 打开备份弹窗
@@ -927,6 +1177,18 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
                     <History className="mr-1 size-3" />
                     备份历史
                   </Button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-muted-foreground shrink-0"
+                      onClick={() => void handleOpenDiff(target)}
+                      disabled={isOperating || !hasApiKey || !running || !target.installed}
+                      title="预览即将写入或修改的配置文件差异"
+                    >
+                      <GitCompare className="mr-1 size-3" />
+                      预览改动
+                    </Button>
 
                   <TooltipProvider>
                     <Tooltip>
@@ -963,6 +1225,7 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
                       ) : null}
                     </Tooltip>
                   </TooltipProvider>
+                  </div>
                 </div>
               </Card>
             );
@@ -1048,6 +1311,121 @@ export default function AgentsPage({ gatewayStatus, masterKey, onNavigateGateway
                 恢复最近备份
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 写入前 Diff 确认预览对话框 */}
+      {/* 批量更新确认对话框 */}
+      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+        <DialogContent className="ide-workbench max-w-md flex flex-col p-5">
+          <DialogHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Zap className="size-5 text-amber-500 fill-amber-500/20" />
+              <DialogTitle className="text-base font-semibold">
+                批量更新已安装智能体配置
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              将为所有已安装的客户端统一配置统一网关端点、模型映射与鉴权密钥。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <ShieldCheck className="size-4 shrink-0" />
+            <span>已启用安全备份机制，每个客户端在写入前均会自动创建带时间戳的独立备份文件，随时可在历史中一键恢复。</span>
+          </div>
+
+          <div className="py-2 text-xs text-muted-foreground">
+            确认要批量更新以下 {(detection?.targets ?? []).filter(t => t.installed).length} 个客户端配置吗？
+          </div>
+
+          <DialogFooter className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBatchDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={batchUpdating}
+              onClick={() => {
+                const items = (detection?.targets ?? []).filter(t => t.installed)
+                  .map(target => ({ target, models: [...getModelsForTarget(target.id)] }));
+                void executeBatchUpdate(items);
+              }}
+            >
+              确认批量写入
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 写入前 Diff 确认预览对话框 */}
+      <Dialog open={diffDialogOpen} onOpenChange={setDiffDialogOpen}>
+        <DialogContent className="ide-workbench max-w-2xl max-h-[85vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="shrink-0 pb-2">
+            <div className="flex items-center gap-2">
+              <FileDiff className="size-5 text-primary" />
+              <DialogTitle className="text-base font-semibold">
+                {activeDiffTarget?.label} 配置变更预览
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              以下为即将写入或修改的配置文件对比。ProxyWeave 会在写入前自动生成安全快照，并完整保留现有设置。
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* 安全保障醒目提示 */}
+          <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 shrink-0">
+            <ShieldCheck className="size-4 shrink-0" />
+            <span>已启用安全备份机制，点击「确认写入」将自动创建带时间戳的完整备份文件，随时可在备份历史中一键恢复。</span>
+          </div>
+
+          {loadingDiff ? (
+            <div className="flex flex-1 items-center justify-center py-12 text-xs text-muted-foreground">
+              <Loader2 className="mr-2 size-5 animate-spin text-primary" />
+              正在计算无损配置差异...
+            </div>
+          ) : diffError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              生成预览失败: {diffError}
+            </div>
+          ) : (
+            <DiffPreviewBody
+              diffPreview={diffPreview}
+              activeFileDiffIdx={activeFileDiffIdx}
+              onSelectFile={setActiveFileDiffIdx}
+              onCopyPath={(p) => void copyToClipboard(p, "配置文件路径")}
+            />
+          )}
+
+          <DialogFooter className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDiffDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                disabled={loadingDiff || !activeDiffTarget || pendingTargets.includes(activeDiffTarget?.id || "")}
+                onClick={() => activeDiffTarget && void executeImport(activeDiffTarget)}
+              >
+                {activeDiffTarget && pendingTargets.includes(activeDiffTarget.id) ? (
+                  <Loader2 className="mr-1 size-3.5 animate-spin" />
+                ) : (
+                  <Check className="mr-1 size-3.5" />
+                )}
+                确认写入
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

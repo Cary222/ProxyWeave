@@ -1030,6 +1030,16 @@ impl EndpointCodec for MessagesCodec {
 
 // --- Stream Encoder (Anthropic SSE) ---
 
+/// A tool call buffered until the stream boundary, so parallel interleaved
+/// fragments can be reassembled into a single contiguous Anthropic
+/// `tool_use` content block (`start → one input_json_delta → stop`) without
+/// violating the serial block-nesting contract.
+#[derive(Debug, Clone)]
+struct BufferedToolCall {
+    id: String,
+    name: String,
+    arguments: String,
+}
 pub struct MessagesStreamEncoder {
     message_started: bool,
     /// Index of the currently-open content block, if any.
@@ -1048,6 +1058,22 @@ pub struct MessagesStreamEncoder {
     /// still carries real cache/read token counts.
     last_usage: Option<Usage>,
     pending_stop_reason: Option<&'static str>,
+    /// Buffered tool calls, keyed by call id, in opener order.
+    ///
+    /// Chat and Responses upstreams stream parallel tool calls *interleaved*:
+    /// an argument fragment for call A can arrive after the opener for call B.
+    /// Anthropic's streaming contract requires content blocks to nest
+    /// serially (a block must be `content_block_stop`-ed before the next
+    /// `content_block_start`), and a closed block can never be reopened — so
+    /// fragments cannot legally be routed back into an earlier block while a
+    /// later one is open. Instead of emitting tool blocks as they arrive, each
+    /// call accumulates its full argument string here and is emitted as one
+    /// contiguous `start → input_json_delta → stop` block at the stream
+    /// boundary (`Finish` / `ResponseCompleted` / `encode_done`), after any
+    /// streamed text/thinking blocks.
+    buffered_tools: Vec<BufferedToolCall>,
+    /// Identity errors latch the encoder shut, including explicit completion calls.
+    failed: bool,
 }
 
 impl Default for MessagesStreamEncoder {
@@ -1065,13 +1091,20 @@ impl MessagesStreamEncoder {
             next_index: 0,
             last_usage: None,
             pending_stop_reason: None,
+            buffered_tools: Vec::new(),
+            failed: false,
         }
     }
 
-    /// Emit a `content_block_stop` for the open block, if any.
+    /// Emit a `content_block_stop` for the open text/thinking block, if any.
+    /// Tool blocks are never open here: they are buffered until
+    /// [`Self::emit_tool_blocks`].
     fn close_block(&mut self) -> String {
         if let Some(idx) = self.current_index.take() {
-            self.current_kind = None;
+            let kind = self.current_kind.take();
+            if kind == Some("tool_use") {
+                return String::new();
+            }
             let data = json!({"type": "content_block_stop", "index": idx});
             format!(
                 "event: content_block_stop\ndata: {}\n\n",
@@ -1080,6 +1113,111 @@ impl MessagesStreamEncoder {
         } else {
             String::new()
         }
+    }
+
+    /// Emit every buffered tool call as a contiguous serial block
+    /// (`content_block_start → input_json_delta → content_block_stop`) in
+    /// opener order, after any streamed text/thinking blocks. This keeps the
+    /// Anthropic contract (blocks nest serially, never reopen) while still
+    /// reassembling interleaved parallel fragments by call id.
+    fn emit_tool_blocks(&mut self) -> String {
+        let mut out = String::new();
+        let tools = std::mem::take(&mut self.buffered_tools);
+        // Reserve real IDs before assigning anonymous IDs, regardless of opener order.
+        let mut used_ids = tools
+            .iter()
+            .filter(|call| !call.id.is_empty())
+            .map(|call| call.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        for call in tools {
+            let idx = self.next_index;
+            self.next_index += 1;
+            let id = if call.id.is_empty() {
+                crate::responses::unique_responses_call_id("", idx, &mut used_ids)
+            } else {
+                call.id
+            };
+            let start = json!({
+                "type": "content_block_start",
+                "index": idx,
+                "content_block": {
+                    "type": "tool_use",
+                    "id": id,
+                    "name": call.name,
+                    "input": {},
+                },
+            });
+            out.push_str(&format!(
+                "event: content_block_start\ndata: {}\n\n",
+                serde_json::to_string(&start).unwrap_or_default()
+            ));
+            if !call.arguments.is_empty() {
+                let delta = json!({
+                    "type": "content_block_delta",
+                    "index": idx,
+                    "delta": {"type": "input_json_delta", "partial_json": call.arguments},
+                });
+                out.push_str(&format!(
+                    "event: content_block_delta\ndata: {}\n\n",
+                    serde_json::to_string(&delta).unwrap_or_default()
+                ));
+            }
+            let stop = json!({"type": "content_block_stop", "index": idx});
+            out.push_str(&format!(
+                "event: content_block_stop\ndata: {}\n\n",
+                serde_json::to_string(&stop).unwrap_or_default()
+            ));
+        }
+        if self.current_kind == Some("tool_use") {
+            self.current_index = None;
+            self.current_kind = None;
+        }
+        out
+    }
+
+    /// Buffer (or extend) a tool call by `id`. Openers carry `name`; fragment
+    /// parts (`name == None`) append their arguments to the existing call so
+    /// interleaved fragments from parallel calls never cross-contaminate.
+    fn buffer_tool_call(
+        &mut self,
+        id: &str,
+        name: Option<&str>,
+        arguments: &str,
+    ) -> Result<(), tiygate_core::Error> {
+        let name = name.filter(|name| !name.is_empty());
+        let position = if id.is_empty() {
+            if name.is_some() {
+                // Each anonymous opener is distinct, even for the same tool name.
+                None
+            } else if self.buffered_tools.len() == 1 && self.buffered_tools[0].id.is_empty() {
+                Some(0)
+            } else {
+                self.failed = true;
+                self.buffered_tools.clear();
+                self.pending_stop_reason = None;
+                return Err(tiygate_core::Error::Codec(
+                    "Ambiguous anonymous tool-call fragment".to_string(),
+                ));
+            }
+        } else {
+            self.buffered_tools.iter().position(|call| call.id == id)
+        };
+        if let Some(position) = position {
+            let call = &mut self.buffered_tools[position];
+            if let Some(name) = name {
+                if call.name.is_empty() {
+                    call.name = name.to_string();
+                }
+            }
+            call.arguments.push_str(arguments);
+        } else {
+            self.buffered_tools.push(BufferedToolCall {
+                id: id.to_string(),
+                name: name.unwrap_or("").to_string(),
+                arguments: arguments.to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Ensure a block of `kind` is open, closing a mismatched block and
@@ -1095,9 +1233,8 @@ impl MessagesStreamEncoder {
     }
 
     /// Unconditionally open a new content block of `kind` at the next index,
-    /// emitting its `content_block_start`. The caller is responsible for
-    /// closing any previously-open block first. Used by the tool_use opener so
-    /// two consecutive parallel tool calls each get their own block.
+    /// emitting its `content_block_start`. Only text/thinking blocks stream
+    /// this way; tool blocks are buffered (see [`Self::emit_tool_blocks`]).
     fn open_block(&mut self, kind: &'static str, content_block: Value) -> String {
         let idx = self.next_index;
         self.next_index += 1;
@@ -1138,6 +1275,11 @@ impl MessagesStreamEncoder {
 
 impl StreamEncoder for MessagesStreamEncoder {
     fn encode_part(&mut self, part: &StreamPart) -> Result<Vec<u8>, tiygate_core::Error> {
+        if self.failed {
+            return Err(tiygate_core::Error::Codec(
+                "Messages stream already failed".to_string(),
+            ));
+        }
         let event = match part {
             StreamPart::ResponseStarted { id } => {
                 let data = json!({
@@ -1187,44 +1329,15 @@ impl StreamEncoder for MessagesStreamEncoder {
                 arguments,
                 ..
             } => {
-                // The opener carries `name`: always close any prior block and
-                // open a FRESH tool_use block. Two consecutive openers (e.g.
-                // parallel tool calls) both have kind "tool_use", so we cannot
-                // rely on `ensure_block`'s same-kind short-circuit — that would
-                // merge two distinct calls into one block. Force the
-                // close+open here. Argument-only fragments (`name == None`)
-                // append to the currently-open tool_use block.
-                if let Some(n) = name {
-                    let mut out = self.close_block();
-                    out.push_str(&self.open_block(
-                        "tool_use",
-                        json!({"type": "tool_use", "id": id, "name": n, "input": {}}),
-                    ));
-                    if !arguments.is_empty() {
-                        let idx = self.current_index.unwrap_or(0);
-                        let data = json!({
-                            "type": "content_block_delta",
-                            "index": idx,
-                            "delta": {"type": "input_json_delta", "partial_json": arguments},
-                        });
-                        out.push_str(&format!(
-                            "event: content_block_delta\ndata: {}\n\n",
-                            serde_json::to_string(&data).unwrap_or_default()
-                        ));
-                    }
-                    out
-                } else {
-                    let idx = self.current_index.unwrap_or(0);
-                    let data = json!({
-                        "type": "content_block_delta",
-                        "index": idx,
-                        "delta": {"type": "input_json_delta", "partial_json": arguments},
-                    });
-                    format!(
-                        "event: content_block_delta\ndata: {}\n\n",
-                        serde_json::to_string(&data).unwrap_or_default()
-                    )
-                }
+                // Anthropic content blocks must nest serially and a closed
+                // block can never be reopened, so tool blocks cannot stream
+                // interleaved with text or with each other. Buffer by call id
+                // (parallel upstreams interleave argument fragments; routing
+                // fragments through a positional cursor corrupts both calls)
+                // and emit contiguous blocks at the stream boundary via
+                // [`Self::emit_tool_blocks`].
+                self.buffer_tool_call(id, name.as_deref(), arguments)?;
+                String::new()
             }
             // PTC is Responses-only; no Anthropic wire carrier.
             StreamPart::ProgramDelta { .. } | StreamPart::ProgramOutputDelta { .. } => {
@@ -1245,6 +1358,7 @@ impl StreamEncoder for MessagesStreamEncoder {
                 // Close any open content block before signalling the stop
                 // reason, per the Anthropic streaming contract.
                 let mut out = self.close_block();
+                out.push_str(&self.emit_tool_blocks());
                 if let Some(u) = &self.last_usage {
                     out.push_str(&self.usage_delta(u, Some(stop_reason)));
                 } else {
@@ -1257,6 +1371,7 @@ impl StreamEncoder for MessagesStreamEncoder {
             }
             StreamPart::ResponseCompleted { .. } => {
                 let mut out = self.close_block();
+                out.push_str(&self.emit_tool_blocks());
                 if let Some(stop_reason) = self.pending_stop_reason.take() {
                     let data = json!({
                         "type": "message_delta",
@@ -1280,6 +1395,9 @@ impl StreamEncoder for MessagesStreamEncoder {
                 class,
                 upstream_code: _,
             } => {
+                self.failed = true;
+                self.buffered_tools.clear();
+                self.pending_stop_reason = None;
                 let err = json!({"type": error_type_for_class(*class), "message": message});
                 format!(
                     "event: error\ndata: {}\n\n",
@@ -1297,6 +1415,9 @@ impl StreamEncoder for MessagesStreamEncoder {
         class: ErrorClass,
         _upstream_code: Option<&str>,
     ) -> Vec<u8> {
+        self.failed = true;
+        self.buffered_tools.clear();
+        self.pending_stop_reason = None;
         let err = json!({"type": error_type_for_class(class), "message": message});
         format!(
             "event: error\ndata: {}\n\n",
@@ -1306,9 +1427,16 @@ impl StreamEncoder for MessagesStreamEncoder {
     }
 
     fn encode_done(&mut self) -> Vec<u8> {
-        "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
-            .to_string()
-            .into_bytes()
+        if self.failed {
+            return Vec::new();
+        }
+        // Any tool block still open here reached EOF without a terminal part;
+        // stop it before `message_stop` so the frame sequence stays valid. The
+        // gateway decides separately whether EOF is a normal completion.
+        let mut out = self.close_block();
+        out.push_str(&self.emit_tool_blocks());
+        out.push_str("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+        out.into_bytes()
     }
 }
 
@@ -1670,6 +1798,292 @@ inventory::submit! {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn anonymous_openers_are_distinct_even_with_the_same_name() {
+        let mut enc = MessagesStreamEncoder::new();
+        for part in [
+            tool_opener("", "same_tool", r#"{"a":1}"#),
+            tool_opener("", "same_tool", r#"{"b":2}"#),
+        ] {
+            assert!(enc.encode_part(&part).unwrap().is_empty());
+        }
+        let out = String::from_utf8(enc.encode_done()).unwrap();
+        assert_serial_nesting(&out, "anonymous openers");
+        let events: Vec<_> = out.data_events().collect();
+        let starts: Vec<_> = events
+            .iter()
+            .filter(|e| e["type"] == "content_block_start")
+            .collect();
+        assert_eq!(starts.len(), 2);
+        assert_ne!(
+            starts[0]["content_block"]["id"],
+            starts[1]["content_block"]["id"]
+        );
+        let args: Vec<Value> = events
+            .iter()
+            .filter(|e| e["delta"]["type"] == "input_json_delta")
+            .map(|e| serde_json::from_str(e["delta"]["partial_json"].as_str().unwrap()).unwrap())
+            .collect();
+        assert_eq!(args, vec![json!({"a":1}), json!({"b":2})]);
+    }
+
+    #[test]
+    fn anonymous_id_allocation_reserves_all_real_ids() {
+        for real_first in [true, false] {
+            let mut enc = MessagesStreamEncoder::new();
+            let anonymous = tool_opener("", "anonymous", r#"{"a":1}"#);
+            let real = tool_opener(
+                if real_first {
+                    "call_tiygate_1"
+                } else {
+                    "call_tiygate_0"
+                },
+                "real",
+                r#"{"b":2}"#,
+            );
+            let parts = if real_first {
+                [real, anonymous]
+            } else {
+                [anonymous, real]
+            };
+            for part in parts {
+                enc.encode_part(&part).unwrap();
+            }
+            let out = String::from_utf8(enc.encode_done()).unwrap();
+            let events: Vec<_> = out.data_events().collect();
+            let starts: Vec<_> = events
+                .iter()
+                .filter(|e| e["type"] == "content_block_start")
+                .collect();
+            assert_eq!(starts.len(), 2);
+            assert_ne!(
+                starts[0]["content_block"]["id"],
+                starts[1]["content_block"]["id"]
+            );
+            let real = starts
+                .iter()
+                .find(|e| e["content_block"]["name"] == "real")
+                .unwrap();
+            assert_eq!(
+                real["content_block"]["id"],
+                if real_first {
+                    "call_tiygate_1"
+                } else {
+                    "call_tiygate_0"
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn anonymous_fragment_with_only_one_call_is_attributable() {
+        let mut enc = MessagesStreamEncoder::new();
+        enc.encode_part(&tool_opener("", "one", r#"{"a""#)).unwrap();
+        enc.encode_part(&tool_fragment("", ":1}")).unwrap();
+        let out = String::from_utf8(enc.encode_done()).unwrap();
+        let event = out
+            .data_events()
+            .find(|e| e["delta"]["type"] == "input_json_delta")
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(event["delta"]["partial_json"].as_str().unwrap())
+                .unwrap(),
+            json!({"a":1})
+        );
+    }
+
+    #[test]
+    fn ambiguous_anonymous_fragments_fail_closed_and_cannot_complete() {
+        // Missing opener, two anonymous calls, or mixed known/unknown calls:
+        // none supplies enough information to pick a target for an empty ID.
+        for count in [0, 1, 2, 3] {
+            let mut enc = MessagesStreamEncoder::new();
+            if count > 0 {
+                enc.encode_part(&tool_opener("", "same", r#"{"a""#))
+                    .unwrap();
+            }
+            if count > 1 {
+                enc.encode_part(&tool_opener("", "same", r#"{"b""#))
+                    .unwrap();
+            }
+            if count == 3 {
+                enc.encode_part(&tool_opener("real", "same", "{}")).unwrap();
+            }
+            if count == 1 {
+                enc.encode_part(&tool_opener("real", "same", "{}")).unwrap();
+            }
+            let error = enc.encode_part(&tool_fragment("", ":1}")).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                tiygate_core::Error::Codec("Ambiguous anonymous tool-call fragment".to_string())
+                    .to_string()
+            );
+            assert!(enc
+                .encode_part(&StreamPart::Finish {
+                    reason: FinishReason::ToolCalls
+                })
+                .is_err());
+            assert!(enc
+                .encode_part(&StreamPart::ResponseCompleted {
+                    id: "r".into(),
+                    status: "completed".into(),
+                    usage: None,
+                    extensions: Default::default()
+                })
+                .is_err());
+            let error_frame = String::from_utf8(enc.encode_error(
+                "invalid tool identity",
+                ErrorClass::BadRequest,
+                None,
+            ))
+            .unwrap();
+            assert!(error_frame.contains("event: error"));
+            assert!(!error_frame.contains("message_stop"));
+            assert!(enc.encode_done().is_empty());
+        }
+    }
+
+    #[test]
+    fn error_part_discards_tools_and_blocks_all_success_terminators() {
+        let mut enc = MessagesStreamEncoder::new();
+        enc.encode_part(&tool_opener("a", "f", "{}")).unwrap();
+        let bytes = enc
+            .encode_part(&StreamPart::Error {
+                message: "owned error".into(),
+                class: ErrorClass::Transient,
+                upstream_code: None,
+            })
+            .unwrap();
+        let out = String::from_utf8(bytes).unwrap();
+        assert!(out.contains("event: error"));
+        assert!(!out.contains("tool_use"));
+        assert!(enc.encode_done().is_empty());
+        assert!(enc
+            .encode_part(&StreamPart::Finish {
+                reason: FinishReason::Stop
+            })
+            .is_err());
+    }
+
+    // --- DEF-025 stream-ordering test helpers ---
+
+    /// A tool-call opener part (carries the call `name`).
+    fn tool_opener(id: &str, name: &str, arguments: &str) -> StreamPart {
+        StreamPart::ToolCallDelta {
+            id: id.to_string(),
+            name: Some(name.to_string()),
+            arguments: arguments.to_string(),
+            wire_type: None,
+            item_id: None,
+            caller: None,
+        }
+    }
+
+    /// A fragment part (`name == None`): continuation of an open call.
+    fn tool_fragment(id: &str, arguments: &str) -> StreamPart {
+        StreamPart::ToolCallDelta {
+            id: id.to_string(),
+            name: None,
+            arguments: arguments.to_string(),
+            wire_type: None,
+            item_id: None,
+            caller: None,
+        }
+    }
+
+    fn usage_35() -> Usage {
+        Usage {
+            prompt_tokens: 3,
+            completion_tokens: 5,
+            total_tokens: 8,
+            reasoning_tokens: None,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+        }
+    }
+
+    /// Parse the `data:` payloads of a concatenated SSE byte stream.
+    trait DataEvents {
+        fn data_events(&self) -> impl Iterator<Item = Value>;
+    }
+
+    impl DataEvents for str {
+        fn data_events(&self) -> impl Iterator<Item = Value> {
+            self.lines()
+                .filter_map(|line| line.strip_prefix("data: "))
+                .filter_map(|data| serde_json::from_str::<Value>(data).ok())
+        }
+    }
+
+    /// Assert the Anthropic serial block-nesting contract over an SSE stream:
+    /// at most one content block open at a time, every block is stopped before
+    /// the next starts, no block re-opens after its stop, and every
+    /// `content_block_stop` precedes the terminal `message_delta`/`message_stop`.
+    fn assert_serial_nesting(all: &str, label: &str) {
+        let events: Vec<Value> = all.data_events().collect();
+        let mut open: Option<u64> = None;
+        let mut closed: Vec<u64> = Vec::new();
+        for event in &events {
+            match event["type"].as_str().unwrap_or_default() {
+                "content_block_start" => {
+                    let idx = event["index"].as_u64().expect("start index");
+                    assert!(
+                        open.is_none(),
+                        "{label}: block {idx} started while {open:?} still open\n{all}"
+                    );
+                    assert!(
+                        !closed.contains(&idx),
+                        "{label}: block {idx} re-opened after its stop\n{all}"
+                    );
+                    open = Some(idx);
+                }
+                "content_block_stop" => {
+                    let idx = event["index"].as_u64().expect("stop index");
+                    assert_eq!(
+                        open,
+                        Some(idx),
+                        "{label}: stop for block {idx} while {open:?} is open\n{all}"
+                    );
+                    closed.push(idx);
+                    open = None;
+                }
+                "message_delta" => {
+                    // Only the terminal message_delta (with a stop_reason)
+                    // must come after every content_block_stop. Intermediate
+                    // usage-only deltas (stop_reason: null) are legal at any
+                    // point; they were emitted this way before DEF-025 too.
+                    if event["delta"]["stop_reason"].is_string() {
+                        assert!(
+                            open.is_none(),
+                            "{label}: terminal message_delta while block {open:?} still open\n{all}"
+                        );
+                    }
+                }
+                "message_stop" => {
+                    assert!(
+                        open.is_none(),
+                        "{label}: message_stop while block {open:?} still open\n{all}"
+                    );
+                }
+                _ => {}
+            }
+        }
+        assert!(
+            open.is_none(),
+            "{label}: stream ended with block {open:?} open\n{all}"
+        );
+        // No stray starts without stops.
+        let starts = events
+            .iter()
+            .filter(|e| e["type"] == "content_block_start")
+            .count();
+        assert_eq!(
+            starts,
+            closed.len(),
+            "{label}: unbalanced start/stop\n{all}"
+        );
+    }
 
     fn make_basic_request() -> Value {
         json!({
@@ -2116,7 +2530,14 @@ mod tests {
             },
         ];
         for variant in variants {
-            assert!(encoder.encode_part(variant).is_ok());
+            if matches!(variant, StreamPart::ResponseCompleted { .. }) {
+                assert!(
+                    encoder.encode_part(variant).is_err(),
+                    "error must latch the stream shut"
+                );
+            } else {
+                assert!(encoder.encode_part(variant).is_ok());
+            }
         }
     }
 
@@ -2341,15 +2762,311 @@ mod tests {
         ] {
             all.push_str(&String::from_utf8(enc.encode_part(&part).unwrap()).unwrap());
         }
-        // Two distinct content_block_start with index 0 and 1, and a
-        // content_block_stop between them.
-        assert!(all.contains("\"index\":0"));
-        assert!(all.contains("\"index\":1"));
-        assert!(all.contains("content_block_stop"));
+        // Buffered emission (DEF-025): openers emit nothing inline; the
+        // terminal part flushes each call as a contiguous serial block.
+        assert!(!all.contains("content_block_start"));
+        assert!(!all.contains("content_block_stop"));
+        let terminal = String::from_utf8(
+            enc.encode_part(&StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let block_events: Vec<Value> = terminal
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .filter_map(|data| serde_json::from_str::<Value>(data).ok())
+            .filter(|event| {
+                event["type"] == "content_block_start"
+                    || event["type"] == "content_block_stop"
+                    || event["delta"]["type"] == "input_json_delta"
+            })
+            .collect();
+        let kinds: Vec<&str> = block_events
+            .iter()
+            .map(|e| {
+                if e["type"] == "content_block_start" {
+                    "start"
+                } else if e["type"] == "content_block_stop" {
+                    "stop"
+                } else {
+                    "delta"
+                }
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec!["start", "stop", "start", "stop"],
+            "each tool block must be contiguous and serially nested: {terminal}"
+        );
+        let stops: Vec<u64> = block_events
+            .iter()
+            .filter(|e| e["type"] == "content_block_stop")
+            .map(|e| e["index"].as_u64().unwrap())
+            .collect();
+        assert_eq!(stops, vec![0, 1], "one stop per tool block: {terminal}");
+    }
+
+    #[test]
+    fn test_stream_encoder_interleaved_tool_fragments_bind_by_id() {
+        // Regression for the protocol-matrix messages<-chat/responses failures:
+        // upstream chat/responses streams emit a fragment for call `a` AFTER the
+        // opener for call `b`. Routing fragments through the positional cursor
+        // appended a's late fragment to b's block and produced invalid JSON
+        // (`{"n":7}:"杭州🧵"}`), which broke both tool association and the
+        // downstream usage read.
+        let mut enc = MessagesStreamEncoder::new();
+        let mut all = String::new();
+        let parts = [
+            StreamPart::ToolCallDelta {
+                id: "a".to_string(),
+                name: Some("fa".to_string()),
+                arguments: "{\"city\"".to_string(),
+                wire_type: None,
+                item_id: None,
+                caller: None,
+            },
+            StreamPart::ToolCallDelta {
+                id: "b".to_string(),
+                name: Some("fb".to_string()),
+                arguments: "{\"n".to_string(),
+                wire_type: None,
+                item_id: None,
+                caller: None,
+            },
+            StreamPart::ToolCallDelta {
+                id: "b".to_string(),
+                name: None,
+                arguments: "\":7}".to_string(),
+                wire_type: None,
+                item_id: None,
+                caller: None,
+            },
+            StreamPart::ToolCallDelta {
+                id: "a".to_string(),
+                name: None,
+                arguments: ":\"杭州🧵\"}".to_string(),
+                wire_type: None,
+                item_id: None,
+                caller: None,
+            },
+            StreamPart::Usage {
+                usage: Usage {
+                    prompt_tokens: 3,
+                    completion_tokens: 5,
+                    total_tokens: 8,
+                    reasoning_tokens: None,
+                    cache_read_tokens: None,
+                    cache_write_tokens: None,
+                },
+            },
+            StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            },
+        ];
+        for part in &parts {
+            all.push_str(&String::from_utf8(enc.encode_part(part).unwrap()).unwrap());
+        }
+        let events: Vec<Value> = all
+            .lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .filter_map(|data| serde_json::from_str::<Value>(data).ok())
+            .collect();
+
+        // Opener order fixes block indices: a -> 0, b -> 1.
+        let starts: Vec<(u64, String, String)> = events
+            .iter()
+            .filter(|e| e["type"] == "content_block_start")
+            .map(|e| {
+                (
+                    e["index"].as_u64().unwrap(),
+                    e["content_block"]["id"].as_str().unwrap().to_string(),
+                    e["content_block"]["name"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            starts,
+            vec![
+                (0, "a".to_string(), "fa".to_string()),
+                (1, "b".to_string(), "fb".to_string()),
+            ]
+        );
+
+        // Every fragment lands on its own call's index, in arrival order.
+        let fragments: Vec<(u64, String)> = events
+            .iter()
+            .filter(|e| e["delta"]["type"] == "input_json_delta")
+            .map(|e| {
+                (
+                    e["index"].as_u64().unwrap(),
+                    e["delta"]["partial_json"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            fragments,
+            vec![
+                (0, "{\"city\":\"杭州🧵\"}".to_string()),
+                (1, "{\"n\":7}".to_string()),
+            ]
+        );
+
+        // Reassembling per index yields valid JSON for both calls.
+        let mut buffers: Vec<String> = vec![String::new(), String::new()];
+        for (idx, json_text) in &fragments {
+            buffers[*idx as usize].push_str(json_text);
+        }
+        let a: Value = serde_json::from_str(&buffers[0]).expect("call a arguments");
+        let b: Value = serde_json::from_str(&buffers[1]).expect("call b arguments");
+        assert_eq!(a, json!({"city": "杭州🧵"}));
+        assert_eq!(b, json!({"n": 7}));
+
+        // Usage survives on the terminal message_delta, after both stops.
+        let terminal = String::from_utf8(
+            enc.encode_part(&StreamPart::ResponseCompleted {
+                id: "owned-chunk".to_string(),
+                status: "completed".to_string(),
+                usage: None,
+                extensions: Default::default(),
+            })
+            .unwrap(),
+        )
+        .unwrap_or_default();
+        assert!(terminal.contains("message_stop"));
+        let stops: Vec<u64> = events
+            .iter()
+            .filter(|e| e["type"] == "content_block_stop")
+            .map(|e| e["index"].as_u64().unwrap())
+            .collect();
+        assert_eq!(stops, vec![0, 1]);
+        // The intermediate Usage part emits a message_delta with null
+        // stop_reason; the terminal delta (after Finish) carries the real
+        // stop_reason plus the same usage. Assert on the LAST message_delta.
+        let delta = events
+            .iter()
+            .rev()
+            .find(|e| e["type"] == "message_delta")
+            .expect("message_delta");
+        assert_eq!(delta["delta"]["stop_reason"], "tool_use");
+        assert_eq!(delta["usage"]["input_tokens"], 3);
+        assert_eq!(delta["usage"]["output_tokens"], 5);
+    }
+
+    #[test]
+    fn test_stream_encoder_serial_nesting_tool_text_tool() {
+        // DEF-025 case A: tool a → text → tool b → text → Usage → Finish.
+        // Content blocks must nest serially: no start while any block is open.
+        let mut enc = MessagesStreamEncoder::new();
+        let mut all = String::new();
+        let parts = [
+            tool_opener("a", "fa", ""),
+            StreamPart::TextDelta {
+                text: "first text".to_string(),
+            },
+            tool_opener("b", "fb", ""),
+            StreamPart::TextDelta {
+                text: "second text".to_string(),
+            },
+            StreamPart::Usage { usage: usage_35() },
+            StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            },
+        ];
+        for part in &parts {
+            all.push_str(&String::from_utf8(enc.encode_part(part).unwrap()).unwrap());
+        }
+        assert_serial_nesting(&all, "tool→text→tool→text");
+        // Two text blocks stream inline (indices 0, 1); the two buffered tool
+        // calls follow at indices 2, 3, after the last streamed text block.
+        let text_stops = all
+            .data_events()
+            .filter(|e| e["type"] == "content_block_stop" && e["index"].as_u64().unwrap() < 2)
+            .count();
+        assert_eq!(text_stops, 2);
+    }
+
+    #[test]
+    fn test_stream_encoder_serial_nesting_tool_tool_text() {
+        // DEF-025 case B: tool a → tool b → text → Finish.
+        let mut enc = MessagesStreamEncoder::new();
+        let mut all = String::new();
+        let parts = [
+            tool_opener("a", "fa", ""),
+            tool_opener("b", "fb", ""),
+            StreamPart::TextDelta {
+                text: "tail text".to_string(),
+            },
+            StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            },
+        ];
+        for part in &parts {
+            all.push_str(&String::from_utf8(enc.encode_part(part).unwrap()).unwrap());
+        }
+        assert_serial_nesting(&all, "tool→tool→text");
+        // Text streams first (index 0); buffered tools follow at 1 and 2.
+        let starts: Vec<(u64, String)> = all
+            .data_events()
+            .filter(|e| e["type"] == "content_block_start")
+            .map(|e| {
+                (
+                    e["index"].as_u64().unwrap(),
+                    e["content_block"]["type"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            starts,
+            vec![
+                (0, "text".to_string()),
+                (1, "tool_use".to_string()),
+                (2, "tool_use".to_string()),
+            ],
+            "text first, then buffered tools in opener order"
+        );
+    }
+
+    #[test]
+    fn test_stream_encoder_serial_nesting_pure_parallel_tools() {
+        // DEF-025 case C: pure parallel tools with interleaved fragments, no
+        // text. Every block must still be contiguous and serially nested.
+        let mut enc = MessagesStreamEncoder::new();
+        let mut all = String::new();
+        let parts = [
+            tool_opener("a", "fa", "{\"city\""),
+            tool_opener("b", "fb", "{\"n"),
+            tool_fragment("b", "\":7}"),
+            tool_fragment("a", ":\"杭州🧵\"}"),
+            StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            },
+        ];
+        for part in &parts {
+            all.push_str(&String::from_utf8(enc.encode_part(part).unwrap()).unwrap());
+        }
+        assert_serial_nesting(&all, "pure parallel tools");
+        // Interleaved fragments reassemble per call id.
+        let args: Vec<(u64, String)> = all
+            .data_events()
+            .filter(|e| e["delta"]["type"] == "input_json_delta")
+            .map(|e| {
+                (
+                    e["index"].as_u64().unwrap(),
+                    e["delta"]["partial_json"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(args[0], (0, "{\"city\":\"杭州🧵\"}".to_string()));
+        assert_eq!(args[1], (1, "{\"n\":7}".to_string()));
     }
 
     #[test]
     fn test_stream_encoder_tool_call_opener_preserves_arguments() {
+        // Tool blocks are buffered (DEF-025 serial-nesting fix) and emitted at
+        // the stream boundary; a single opener+arguments must reappear as one
+        // contiguous start → input_json_delta → stop block.
         let mut enc = MessagesStreamEncoder::new();
         let part = StreamPart::ToolCallDelta {
             id: "gemini_call_shell".to_string(),
@@ -2359,12 +3076,24 @@ mod tests {
             item_id: None,
             caller: None,
         };
-        let out = String::from_utf8(enc.encode_part(&part).unwrap()).unwrap();
+        let buffered = String::from_utf8(enc.encode_part(&part).unwrap()).unwrap();
+        assert!(
+            buffered.is_empty(),
+            "tool opener must not stream before the boundary: {buffered}"
+        );
+        let out = String::from_utf8(
+            enc.encode_part(&StreamPart::Finish {
+                reason: FinishReason::ToolCalls,
+            })
+            .unwrap(),
+        )
+        .unwrap();
         assert!(out.contains("content_block_start"));
         assert!(out.contains("\"type\":\"tool_use\""));
         assert!(out.contains("\"name\":\"shell\""));
         assert!(out.contains("content_block_delta"));
         assert!(out.contains("input_json_delta"));
+        assert!(out.contains("content_block_stop"));
         let delta = out
             .lines()
             .filter_map(|line| line.strip_prefix("data: "))
@@ -2379,6 +3108,7 @@ mod tests {
 
     #[test]
     fn test_stream_encoder_parallel_tool_use_preserves_opener_arguments() {
+        // Buffered emission must preserve each call's own argument payload.
         let mut enc = MessagesStreamEncoder::new();
         let mut all = String::new();
         for part in [
@@ -2401,6 +3131,15 @@ mod tests {
         ] {
             all.push_str(&String::from_utf8(enc.encode_part(&part).unwrap()).unwrap());
         }
+        all.push_str(
+            &String::from_utf8(
+                enc.encode_part(&StreamPart::Finish {
+                    reason: FinishReason::ToolCalls,
+                })
+                .unwrap(),
+            )
+            .unwrap(),
+        );
         let deltas: Vec<Value> = all
             .lines()
             .filter_map(|line| line.strip_prefix("data: "))

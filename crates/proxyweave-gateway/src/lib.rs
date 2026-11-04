@@ -14,19 +14,21 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
-use proxyweave_plugin::{Manifest, RequestLease, RuntimeManager};
+use proxyweave_plugin::{Manifest, RequestLease, RuntimeError, RuntimeManager};
 use proxyweave_protocols::{
     chat_completions::ChatCompletionsCodec, error_body::encode_error_body_for_suite,
     messages::MessagesCodec, protocol::lossy::check_lossy_conversion, responses::ResponsesCodec,
     EndpointCodec, ErrorClass, ProtocolSuite, RawEnvelope, StreamPart,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
     net::TcpListener,
@@ -44,6 +46,10 @@ pub const INGRESS_PROTOCOL_ENDPOINTS: &[(&str, &[&str])] = &[
     ("anthropic_messages", &["/v1/messages"]),
 ];
 pub use proxyweave_plugin::manifest::SUPPORTED_BACKEND_PROTOCOLS;
+pub mod routing;
+pub use routing::{
+    extract_session_key, Backend, BackendMetrics, RoutePool, RouteStrategy, SessionStickiness,
+};
 // Thin custom validator on the official Tower HTTP validation layer, following
 // its Bearer implementation. Unlike that type's Debug, this holds a sensitive
 // HeaderValue without Debug, and rejects duplicate Authorization fields.
@@ -82,22 +88,89 @@ impl ValidateRequest<Body> for LocalAuth {
     }
 }
 
-#[derive(Clone)]
-struct Backend {
-    plugin_id: String,
-    protocol: String,
-    models_path: String,
-    inference_path: String,
-    credential: HeaderValue,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestTrace {
+    pub id: String,
+    pub timestamp_ms: u64,
+    pub client: String,
+    pub client_ip: Option<String>,
+    pub method: String,
+    pub path: String,
+    pub model: Option<String>,
+    pub ingress_protocol: String,
+    pub route_strategy: String,
+    pub target_plugin: String,
+    pub status_code: u16,
+    pub duration_ms: u64,
+    pub first_token_ms: Option<u64>,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_hit: Option<bool>,
+    pub fallback_trail: Vec<String>,
+    pub error: Option<String>,
+}
+
+pub fn detect_client_name(headers: &axum::http::HeaderMap) -> String {
+    if let Some(ua) = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+    {
+        let ua_lower = ua.to_ascii_lowercase();
+        if ua_lower.contains("cursor") {
+            return "Cursor".to_string();
+        }
+        if ua_lower.contains("windsurf") {
+            return "Windsurf".to_string();
+        }
+        if ua_lower.contains("claude") || ua_lower.contains("anthropic") {
+            return "Claude Code".to_string();
+        }
+        if ua_lower.contains("aider") {
+            return "Aider".to_string();
+        }
+        if ua_lower.contains("cline") {
+            return "Cline".to_string();
+        }
+        if ua_lower.contains("roo") {
+            return "Roo Code".to_string();
+        }
+        if ua_lower.contains("opencode") {
+            return "OpenCode".to_string();
+        }
+        if ua_lower.contains("continue") {
+            return "Continue".to_string();
+        }
+        if ua_lower.contains("python") {
+            return "Python SDK".to_string();
+        }
+        if ua_lower.contains("curl") {
+            return "cURL".to_string();
+        }
+        let trimmed = ua.trim();
+        if !trimmed.is_empty() && trimmed.len() <= 32 {
+            return trimmed.to_string();
+        }
+    }
+    "HTTP Client".to_string()
+}
+
+pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
 }
 
 #[derive(Clone)]
 pub struct Gateway {
     runtime: RuntimeManager,
     backend: Arc<RwLock<Option<Backend>>>,
+    route_pool: Arc<RoutePool>,
     auth: LocalAuth,
     client: Client<hyper_tls::HttpsConnector<HttpConnector>, Body>,
     header_timeout: Duration,
+    traces: Arc<tokio::sync::Mutex<VecDeque<RequestTrace>>>,
 }
 
 impl Gateway {
@@ -125,9 +198,11 @@ impl Gateway {
         Ok(Self {
             runtime,
             backend: Arc::new(RwLock::new(None)),
+            route_pool: Arc::new(RoutePool::new()),
             auth: LocalAuth(Arc::new(std::sync::RwLock::new(auth))),
             client,
             header_timeout,
+            traces: Arc::new(tokio::sync::Mutex::new(VecDeque::with_capacity(100))),
         })
     }
 
@@ -164,18 +239,74 @@ impl Gateway {
         } else {
             sensitive_bearer(upstream_key)?
         };
-        *self.backend.write().await = Some(Backend {
+        let generation = self.runtime.current_generation(&manifest.metadata.id).await;
+        let backend = Backend {
             plugin_id: manifest.metadata.id.clone(),
             protocol: manifest.capabilities.protocol.clone(),
             models_path: manifest.capabilities.models_path.clone(),
             inference_path: manifest.capabilities.inference_path.clone(),
             credential,
-        });
+            instance_generation: generation,
+        };
+        *self.backend.write().await = Some(backend.clone());
+        self.route_pool.set_single_backend(backend).await;
         Ok(())
     }
 
     pub async fn clear_backend(&self) {
         *self.backend.write().await = None;
+        self.route_pool.clear_backends().await;
+    }
+
+    pub async fn set_route_strategy(&self, strategy: RouteStrategy) {
+        self.route_pool.set_strategy(strategy).await;
+    }
+
+    pub async fn get_route_strategy(&self) -> RouteStrategy {
+        self.route_pool.get_strategy().await
+    }
+
+    pub async fn add_backend_target(
+        &self,
+        manifest: &Manifest,
+        upstream_key: &str,
+    ) -> Result<(), &'static str> {
+        manifest
+            .validate()
+            .map_err(|_| "Invalid backend manifest")?;
+        let protocol = IngressProtocol::from_backend(&manifest.capabilities.protocol)
+            .ok_or("Unsupported protocol")?;
+        let credential = if protocol == IngressProtocol::Messages {
+            sensitive_api_key(upstream_key)?
+        } else {
+            sensitive_bearer(upstream_key)?
+        };
+        let generation = self.runtime.current_generation(&manifest.metadata.id).await;
+        let backend = Backend {
+            plugin_id: manifest.metadata.id.clone(),
+            protocol: manifest.capabilities.protocol.clone(),
+            models_path: manifest.capabilities.models_path.clone(),
+            inference_path: manifest.capabilities.inference_path.clone(),
+            credential,
+            instance_generation: generation,
+        };
+        self.route_pool.add_backend(backend.clone()).await;
+        if self.backend.read().await.is_none() {
+            *self.backend.write().await = Some(backend);
+        }
+        Ok(())
+    }
+
+    pub async fn remove_backend_target(&self, plugin_id: &str) {
+        self.route_pool.remove_backend(plugin_id).await;
+        let mut guard = self.backend.write().await;
+        if guard.as_ref().map(|b| b.plugin_id.as_str()) == Some(plugin_id) {
+            *guard = self.route_pool.get_primary_backend().await;
+        }
+    }
+
+    pub fn route_pool(&self) -> Arc<RoutePool> {
+        self.route_pool.clone()
     }
 
     /// Actual successful attachment, not the desktop's persisted preference.
@@ -185,6 +316,33 @@ impl Gateway {
             .await
             .as_ref()
             .map(|backend| backend.plugin_id.clone())
+    }
+
+    #[cfg(test)]
+    pub async fn set_backend_for_test(&self, backend: Option<Backend>) {
+        *self.backend.write().await = backend.clone();
+        if let Some(b) = backend {
+            self.route_pool.set_single_backend(b).await;
+        }
+    }
+
+    pub async fn record_trace(&self, trace: RequestTrace) {
+        let mut list = self.traces.lock().await;
+        list.push_front(trace);
+        while list.len() > 100 {
+            list.pop_back();
+        }
+    }
+
+    pub async fn get_traces(&self, limit: Option<usize>) -> Vec<RequestTrace> {
+        let list = self.traces.lock().await;
+        let cap = limit.unwrap_or(50).min(list.len());
+        list.iter().rev().take(cap).cloned().collect()
+    }
+
+    pub async fn clear_traces(&self) {
+        let mut list = self.traces.lock().await;
+        list.clear();
     }
 
     fn router(&self) -> Router {
@@ -251,28 +409,198 @@ impl Gateway {
         req: Request<Body>,
         ingress: IngressProtocol,
     ) -> Response<Body> {
-        let backend = {
+        let client_ip = extract_client_ip(req.headers());
+        let session_key = extract_session_key(req.headers(), client_ip.as_deref(), None);
+        let (candidates, strategy, is_sticky) = self
+            .route_pool
+            .select_candidates(session_key.as_deref())
+            .await;
+
+        let (backend, route_strategy) = if let Some(first) = candidates.first() {
+            let label = if is_sticky {
+                format!("{} (Sticky)", strategy.as_str())
+            } else {
+                strategy.as_str().to_string()
+            };
+            (first.clone(), label)
+        } else {
             let guard = self.backend.read().await;
             match guard.as_ref() {
-                Some(b) => b.clone(),
+                Some(b) => (b.clone(), "Direct".to_string()),
                 None => return error(StatusCode::SERVICE_UNAVAILABLE, "no_backend"),
             }
         };
 
         if ingress.matches_backend_protocol(&backend.protocol) {
-            self.forward(req, false).await
+            self.forward_with_backend(req, false, backend, route_strategy, session_key)
+                .await
         } else {
-            self.transcode(req, ingress, backend).await
+            self.transcode(req, ingress, backend, route_strategy, session_key)
+                .await
         }
     }
 
-    async fn forward(&self, mut req: Request<Body>, models: bool) -> Response<Body> {
-        let Some(backend) = self.backend.read().await.clone() else {
-            return error(StatusCode::SERVICE_UNAVAILABLE, "no_backend");
+    async fn forward(&self, req: Request<Body>, models: bool) -> Response<Body> {
+        let backend = {
+            let (candidates, _, _) = self.route_pool.select_candidates(None).await;
+            if let Some(first) = candidates.first() {
+                first.clone()
+            } else if let Some(b) = self.backend.read().await.clone() {
+                b
+            } else {
+                let timestamp_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let client_name = detect_client_name(req.headers());
+                let client_ip = extract_client_ip(req.headers());
+                let method = req.method().to_string();
+                let original_path = req.uri().path().to_string();
+                let ingress_protocol = if models {
+                    "models".to_string()
+                } else {
+                    "passthrough".to_string()
+                };
+                self.record_trace(RequestTrace {
+                    id: format!("trc_{}", timestamp_ms),
+                    timestamp_ms,
+                    client: client_name,
+                    client_ip,
+                    method,
+                    path: original_path,
+                    model: None,
+                    ingress_protocol,
+                    route_strategy: "Direct".to_string(),
+                    target_plugin: "none".to_string(),
+                    status_code: 503,
+                    duration_ms: 0,
+                    first_token_ms: None,
+                    input_tokens: None,
+                    output_tokens: None,
+                    cache_hit: None,
+                    fallback_trail: Vec::new(),
+                    error: Some("no_backend".to_string()),
+                })
+                .await;
+                return error(StatusCode::SERVICE_UNAVAILABLE, "no_backend");
+            }
         };
-        let lease = match self.runtime.acquire_request(&backend.plugin_id).await {
-            Ok(lease) => lease,
-            Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "backend_unavailable"),
+        let strategy_str = if models {
+            "Direct (Models)".to_string()
+        } else {
+            "Direct (Passthrough)".to_string()
+        };
+        self.forward_with_backend(req, models, backend, strategy_str, None)
+            .await
+    }
+
+    async fn forward_with_backend(
+        &self,
+        mut req: Request<Body>,
+        models: bool,
+        backend: Backend,
+        route_strategy: String,
+        session_key: Option<String>,
+    ) -> Response<Body> {
+        let start_time = Instant::now();
+        let timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let client_name = detect_client_name(req.headers());
+        let client_ip = extract_client_ip(req.headers());
+        let method = req.method().to_string();
+        let original_path = req.uri().path().to_string();
+        let ingress_protocol = if models {
+            "models".to_string()
+        } else {
+            "passthrough".to_string()
+        };
+
+        let lease = match self
+            .runtime
+            .acquire_request_for(&backend.plugin_id, backend.instance_generation)
+            .await
+        {
+            Ok(lease) => {
+                if let Some(expected_gen) = backend.instance_generation {
+                    if lease.instance_generation() != expected_gen {
+                        let duration_ms = start_time.elapsed().as_millis() as u64;
+                        self.record_trace(RequestTrace {
+                            id: format!("trc_{}", timestamp_ms),
+                            timestamp_ms,
+                            client: client_name,
+                            client_ip,
+                            method,
+                            path: original_path,
+                            model: None,
+                            ingress_protocol,
+                            route_strategy: route_strategy.clone(),
+                            target_plugin: backend.plugin_id.clone(),
+                            status_code: 503,
+                            duration_ms,
+                            first_token_ms: None,
+                            input_tokens: None,
+                            output_tokens: None,
+                            cache_hit: None,
+                            fallback_trail: vec![format!(
+                                "Stale generation for {}: expected {}, got {}",
+                                backend.plugin_id,
+                                expected_gen,
+                                lease.instance_generation()
+                            )],
+                            error: Some("stale_backend_generation".to_string()),
+                        })
+                        .await;
+                        self.route_pool
+                            .record_outcome(
+                                &backend.plugin_id,
+                                duration_ms,
+                                503,
+                                session_key.as_deref(),
+                            )
+                            .await;
+                        return error(StatusCode::SERVICE_UNAVAILABLE, "stale_backend_generation");
+                    }
+                }
+                lease
+            }
+            Err(e) => {
+                let err_str = match &e {
+                    RuntimeError::StaleGeneration { .. } => "stale_backend_generation",
+                    RuntimeError::ServiceUnderMaintenance => "service_under_maintenance",
+                    _ => "backend_unavailable",
+                };
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                self.record_trace(RequestTrace {
+                    id: format!("trc_{}", timestamp_ms),
+                    timestamp_ms,
+                    client: client_name,
+                    client_ip,
+                    method,
+                    path: original_path,
+                    model: None,
+                    ingress_protocol,
+                    route_strategy: route_strategy.clone(),
+                    target_plugin: backend.plugin_id.clone(),
+                    status_code: 503,
+                    duration_ms,
+                    first_token_ms: None,
+                    input_tokens: None,
+                    output_tokens: None,
+                    cache_hit: None,
+                    fallback_trail: vec![format!(
+                        "Failed to acquire lease for {}: {}",
+                        backend.plugin_id, e
+                    )],
+                    error: Some(err_str.to_string()),
+                })
+                .await;
+                self.route_pool
+                    .record_outcome(&backend.plugin_id, duration_ms, 503, session_key.as_deref())
+                    .await;
+                return error(StatusCode::SERVICE_UNAVAILABLE, err_str);
+            }
         };
         // No secrets/userinfo in target constructors or their panic messages.
         let endpoint = match url::Url::parse(lease.endpoint()) {
@@ -319,6 +647,41 @@ impl Gateway {
             Ok(r) => r,
             Err(e) => match e {},
         };
+        let status_code = response.status().as_u16();
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+        self.record_trace(RequestTrace {
+            id: format!("trc_{}", timestamp_ms),
+            timestamp_ms,
+            client: client_name,
+            client_ip,
+            method,
+            path: original_path,
+            model: None,
+            ingress_protocol,
+            route_strategy,
+            target_plugin: backend.plugin_id.clone(),
+            status_code,
+            duration_ms,
+            first_token_ms: None,
+            input_tokens: None,
+            output_tokens: None,
+            cache_hit: None,
+            fallback_trail: Vec::new(),
+            error: if status_code >= 400 {
+                Some(format!("HTTP {}", status_code))
+            } else {
+                None
+            },
+        })
+        .await;
+        self.route_pool
+            .record_outcome(
+                &backend.plugin_id,
+                duration_ms,
+                status_code,
+                session_key.as_deref(),
+            )
+            .await;
         let (mut parts, body) = response.into_parts();
         parts.extensions.clear(); // do not expose/log raw ProxyError chains through other middleware
                                   // Hold admission through connect, header wait, every body frame and body Drop.
@@ -330,10 +693,104 @@ impl Gateway {
         req: Request<Body>,
         ingress: IngressProtocol,
         backend: Backend,
+        route_strategy: String,
+        session_key: Option<String>,
     ) -> Response<Body> {
-        let lease = match self.runtime.acquire_request(&backend.plugin_id).await {
-            Ok(lease) => lease,
-            Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "backend_unavailable"),
+        let start_time = Instant::now();
+        let timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let client_name = detect_client_name(req.headers());
+        let client_ip = extract_client_ip(req.headers());
+        let method = req.method().to_string();
+        let original_path = req.uri().path().to_string();
+        let ingress_protocol_str = format!("{:?}", ingress);
+
+        let lease = match self
+            .runtime
+            .acquire_request_for(&backend.plugin_id, backend.instance_generation)
+            .await
+        {
+            Ok(lease) => {
+                if let Some(expected_gen) = backend.instance_generation {
+                    if lease.instance_generation() != expected_gen {
+                        let duration_ms = start_time.elapsed().as_millis() as u64;
+                        self.record_trace(RequestTrace {
+                            id: format!("trc_{}", timestamp_ms),
+                            timestamp_ms,
+                            client: client_name,
+                            client_ip,
+                            method,
+                            path: original_path,
+                            model: None,
+                            ingress_protocol: ingress_protocol_str,
+                            route_strategy: route_strategy.clone(),
+                            target_plugin: backend.plugin_id.clone(),
+                            status_code: 503,
+                            duration_ms,
+                            first_token_ms: None,
+                            input_tokens: None,
+                            output_tokens: None,
+                            cache_hit: None,
+                            fallback_trail: vec![format!(
+                                "Stale generation for {}: expected {}, got {}",
+                                backend.plugin_id,
+                                expected_gen,
+                                lease.instance_generation()
+                            )],
+                            error: Some("stale_backend_generation".to_string()),
+                        })
+                        .await;
+                        self.route_pool
+                            .record_outcome(
+                                &backend.plugin_id,
+                                duration_ms,
+                                503,
+                                session_key.as_deref(),
+                            )
+                            .await;
+                        return error(StatusCode::SERVICE_UNAVAILABLE, "stale_backend_generation");
+                    }
+                }
+                lease
+            }
+            Err(e) => {
+                let err_str = match &e {
+                    RuntimeError::StaleGeneration { .. } => "stale_backend_generation",
+                    RuntimeError::ServiceUnderMaintenance => "service_under_maintenance",
+                    _ => "backend_unavailable",
+                };
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                self.record_trace(RequestTrace {
+                    id: format!("trc_{}", timestamp_ms),
+                    timestamp_ms,
+                    client: client_name,
+                    client_ip,
+                    method,
+                    path: original_path,
+                    model: None,
+                    ingress_protocol: ingress_protocol_str,
+                    route_strategy: route_strategy.clone(),
+                    target_plugin: backend.plugin_id.clone(),
+                    status_code: 503,
+                    duration_ms,
+                    first_token_ms: None,
+                    input_tokens: None,
+                    output_tokens: None,
+                    cache_hit: None,
+                    fallback_trail: vec![format!(
+                        "Failed to acquire lease for {}: {}",
+                        backend.plugin_id, e
+                    )],
+                    error: Some(err_str.to_string()),
+                })
+                .await;
+                self.route_pool
+                    .record_outcome(&backend.plugin_id, duration_ms, 503, session_key.as_deref())
+                    .await;
+                return error(StatusCode::SERVICE_UNAVAILABLE, err_str);
+            }
         };
 
         let endpoint = match url::Url::parse(lease.endpoint()) {
@@ -574,6 +1031,45 @@ impl Gateway {
                 status.as_u16(),
                 err_code,
             );
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            self.record_trace(RequestTrace {
+                id: format!("trc_{}", timestamp_ms),
+                timestamp_ms,
+                client: client_name.clone(),
+                client_ip: client_ip.clone(),
+                method: method.clone(),
+                path: original_path.clone(),
+                model: Some(requested_model.clone()),
+                ingress_protocol: ingress_protocol_str.clone(),
+                route_strategy: route_strategy.clone(),
+                target_plugin: backend.plugin_id.clone(),
+                status_code: status.as_u16(),
+                duration_ms,
+                first_token_ms: None,
+                input_tokens: None,
+                output_tokens: None,
+                cache_hit: None,
+                fallback_trail: if status.as_u16() == 429 || status.as_u16() >= 500 {
+                    vec![format!(
+                        "Upstream {} returned {}: {}",
+                        backend.plugin_id,
+                        status.as_u16(),
+                        err_msg
+                    )]
+                } else {
+                    Vec::new()
+                },
+                error: Some(err_msg.to_string()),
+            })
+            .await;
+            self.route_pool
+                .record_outcome(
+                    &backend.plugin_id,
+                    duration_ms,
+                    status.as_u16(),
+                    session_key.as_deref(),
+                )
+                .await;
             return Response::builder()
                 .status(status)
                 .header(header::CONTENT_TYPE, "application/json")
@@ -633,7 +1129,7 @@ impl Gateway {
             if client_json.is_object() {
                 if let Some(m) = client_json.get_mut("model") {
                     if m.as_str().is_some_and(|s| s.is_empty()) && !requested_model.is_empty() {
-                        *m = serde_json::Value::String(requested_model);
+                        *m = serde_json::Value::String(requested_model.clone());
                     }
                 }
             }
@@ -641,6 +1137,37 @@ impl Gateway {
                 Ok(b) => b,
                 Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "serialization_error"),
             };
+            let input_tokens = ir_resp.usage.as_ref().map(|u| u.prompt_tokens);
+            let output_tokens = ir_resp.usage.as_ref().map(|u| u.completion_tokens);
+            let cache_hit = ir_resp
+                .usage
+                .as_ref()
+                .and_then(|u| u.cache_read_tokens.map(|c| c > 0));
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            self.record_trace(RequestTrace {
+                id: format!("trc_{}", timestamp_ms),
+                timestamp_ms,
+                client: client_name.clone(),
+                client_ip: client_ip.clone(),
+                method: method.clone(),
+                path: original_path.clone(),
+                model: Some(requested_model.clone()),
+                ingress_protocol: ingress_protocol_str.clone(),
+                route_strategy: route_strategy.clone(),
+                target_plugin: backend.plugin_id.clone(),
+                status_code: 200,
+                duration_ms,
+                first_token_ms: None,
+                input_tokens,
+                output_tokens,
+                cache_hit,
+                fallback_trail: Vec::new(),
+                error: None,
+            })
+            .await;
+            self.route_pool
+                .record_outcome(&backend.plugin_id, duration_ms, 200, session_key.as_deref())
+                .await;
             let mut resp_builder = Response::builder().status(StatusCode::OK);
             resp_builder = resp_builder.header(header::CONTENT_TYPE, "application/json");
             resp_builder
@@ -653,45 +1180,132 @@ impl Gateway {
             let mut decoder = egress_codec.stream_decoder();
             let mut encoder = ingress_codec.stream_encoder();
             let mut events = upstream_resp.into_body().into_data_stream().eventsource();
+            let traces_ref = self.traces.clone();
+            let stream_client_name = client_name.clone();
+            let stream_client_ip = client_ip.clone();
+            let stream_method = method.clone();
+            let stream_path = original_path.clone();
+            let stream_model = requested_model.clone();
+            let stream_ingress = ingress_protocol_str.clone();
+            let stream_plugin = backend.plugin_id.clone();
+            let stream_route_strategy = route_strategy.clone();
+            let stream_session_key = session_key.clone();
+            let route_pool_ref = self.route_pool.clone();
             let stream = async_stream::stream! {
                 let _lease = lease;
                 let mut saw_terminal = false;
+                let mut first_token_ms: Option<u64> = None;
+                let mut stream_input_tokens: Option<u64> = None;
+                let mut stream_output_tokens: Option<u64> = None;
+                let mut stream_cache_hit: Option<bool> = None;
+                let mut stream_error: Option<String> = None;
+                let mut stream_status: u16 = 200;
+
                 while let Some(event) = events.next().await {
                     let event = match event {
                         Ok(event) => event,
                         Err(_) => {
+                            stream_status = 502;
+                            stream_error = Some("invalid upstream SSE transport or UTF-8".to_string());
                             yield Err::<Bytes, io::Error>(io::Error::other("invalid upstream SSE transport or UTF-8"));
-                            return;
+                            break;
                         }
                     };
                     let parts = match decoder.feed(&format!("data: {}", event.data)) {
                         Ok(parts) => parts,
                         Err(_) => {
+                            stream_status = 502;
+                            stream_error = Some("invalid upstream protocol event".to_string());
                             yield Err::<Bytes, io::Error>(io::Error::other("invalid upstream protocol event"));
-                            return;
+                            break;
                         }
                     };
                     for part in &parts {
-                        saw_terminal |= matches!(part, StreamPart::Finish { .. } | StreamPart::ResponseCompleted { .. });
+                        match part {
+                            StreamPart::TextDelta { .. } | StreamPart::ReasoningDelta { .. } => {
+                                if first_token_ms.is_none() {
+                                    first_token_ms = Some(start_time.elapsed().as_millis() as u64);
+                                }
+                            }
+                            StreamPart::Usage { usage } => {
+                                stream_input_tokens = Some(usage.prompt_tokens);
+                                stream_output_tokens = Some(usage.completion_tokens);
+                                if let Some(c) = usage.cache_read_tokens {
+                                    stream_cache_hit = Some(c > 0);
+                                }
+                            }
+                            StreamPart::ResponseCompleted { usage, .. } => {
+                                saw_terminal = true;
+                                if let Some(u) = usage {
+                                    stream_input_tokens = Some(u.prompt_tokens);
+                                    stream_output_tokens = Some(u.completion_tokens);
+                                    if let Some(c) = u.cache_read_tokens {
+                                        stream_cache_hit = Some(c > 0);
+                                    }
+                                }
+                            }
+                            StreamPart::Finish { .. } => {
+                                saw_terminal = true;
+                            }
+                            StreamPart::Error { message, .. } => {
+                                stream_status = 502;
+                                stream_error = Some(message.clone());
+                            }
+                            _ => {}
+                        }
                         match encoder.encode_part(part) {
                             Ok(bytes) if !bytes.is_empty() => yield Ok(Bytes::from(bytes)),
                             Ok(_) => {},
                             Err(_) => {
+                                stream_status = 502;
+                                stream_error = Some("upstream protocol conversion failed".to_string());
                                 yield Err(io::Error::other("upstream protocol conversion failed"));
-                                return;
+                                break;
                             }
                         }
-                        // A protocol error is final failure, not a successful completion.
-                        // Ignore any later upstream DONE instead of inventing a success frame.
                         if matches!(part, StreamPart::Error { .. }) {
-                            return;
+                            break;
                         }
+                    }
+                    if stream_error.is_some() {
+                        break;
                     }
                 }
                 // HTTP EOF never proves protocol completion. Fail transport, not a synthetic DONE.
-                if !saw_terminal {
+                if !saw_terminal && stream_error.is_none() {
+                    stream_status = 502;
+                    stream_error = Some("upstream SSE ended without a protocol terminal event".to_string());
                     yield Err(io::Error::new(io::ErrorKind::UnexpectedEof, "upstream SSE ended without a protocol terminal event"));
                 }
+
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                let mut lock = traces_ref.lock().await;
+                if lock.len() >= 100 {
+                    lock.pop_front();
+                }
+                lock.push_back(RequestTrace {
+                    id: format!("trc_{}", timestamp_ms),
+                    timestamp_ms,
+                    client: stream_client_name,
+                    client_ip: stream_client_ip,
+                    method: stream_method,
+                    path: stream_path,
+                    model: Some(stream_model),
+                    ingress_protocol: stream_ingress,
+                    route_strategy: stream_route_strategy,
+                    target_plugin: stream_plugin.clone(),
+                    status_code: stream_status,
+                    duration_ms,
+                    first_token_ms,
+                    input_tokens: stream_input_tokens,
+                    output_tokens: stream_output_tokens,
+                    cache_hit: stream_cache_hit,
+                    fallback_trail: Vec::new(),
+                    error: stream_error,
+                });
+                route_pool_ref
+                    .record_outcome(&stream_plugin, duration_ms, stream_status, stream_session_key.as_deref())
+                    .await;
             };
 
             Response::builder()
@@ -1004,5 +1618,41 @@ mod tests {
             StatusCode::SERVICE_UNAVAILABLE
         );
         handle2.shutdown().await.expect("shutdown 2");
+    }
+
+    #[tokio::test]
+    async fn gateway_rejects_stale_backend_generation_and_maintenance() {
+        let key = "test-gateway-key-0123456789abcdef";
+        let runtime = RuntimeManager::new();
+        let gateway =
+            Gateway::new(runtime.clone(), key, Duration::from_secs(5)).expect("gateway init");
+
+        let handle = gateway.listen(0).await.expect("listen");
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let models_url = format!("http://{}/v1/models", handle.address());
+
+        // Configure a backend with expected instance_generation = Some(42)
+        let backend = Backend {
+            plugin_id: "test-plug".to_string(),
+            protocol: "openai_chat".to_string(),
+            models_path: "/v1/models".to_string(),
+            inference_path: "/v1/chat/completions".to_string(),
+            credential: HeaderValue::from_static("Bearer test"),
+            instance_generation: Some(42),
+        };
+        gateway.set_backend_for_test(Some(backend)).await;
+
+        // When runtime has no such plugin running, acquire_request_for fails with PluginNotRunning -> 503 backend_unavailable
+        let resp = client
+            .get(&models_url)
+            .bearer_auth(key)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = resp.text().await.unwrap();
+        assert!(body.contains("backend_unavailable"));
+
+        handle.shutdown().await.expect("shutdown");
     }
 }

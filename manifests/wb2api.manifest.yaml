@@ -66,3 +66,6 @@ configuration:
         realm: cn
       account:
         uid: '{SECRET:uid}'
+management:
+  path: /panel/
+  presentation: browser

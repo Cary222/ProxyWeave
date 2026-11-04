@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "../lib/tauri";
-import { PluginRecord, PluginStatusInfo, SecretStatusInfo, GatewayStatusInfo } from "../types";
+import { PluginRecord, PluginStatusInfo, SecretStatusInfo, GatewayStatusInfo, PluginUpdateStatusDto, UpdateResultDto } from "../types";
+import { api } from "../api";
 import { Icon } from "./Icon";
 
 type DetailTab = "overview" | "config" | "panel" | "logs";
@@ -65,6 +66,67 @@ export function PluginDetails({
   const [secretInputs, setSecretInputs] = useState<Record<string, string>>({});
   const [secretLoading, setSecretLoading] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+
+  // State for update check
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<PluginUpdateStatusDto | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateResultDto | null>(null);
+  const updateInFlight = useRef(false);
+  const currentId = useRef(id);
+  currentId.current = id;
+
+  async function handleUpdate() {
+    if (updateInFlight.current) return;
+    updateInFlight.current = true;
+    setUpdating(true);
+    setUpdateResult(null);
+    setUpdateError(null);
+    try {
+      const result = await api.updatePluginToRelease(id);
+      if (!mounted.current || currentId.current !== id) return;
+      setUpdateResult(result);
+      if (result.status === "success" || result.status === "rollback_success") {
+        setUpdateStatus(null);
+        onRefresh?.();
+      }
+    } catch (error: unknown) {
+      if (mounted.current && currentId.current === id) setUpdateError(String(error));
+    } finally {
+      updateInFlight.current = false;
+      if (mounted.current && currentId.current === id) setUpdating(false);
+    }
+  }
+
+  useEffect(() => {
+    setUpdateStatus(null);
+    setUpdateError(null);
+    setCheckingUpdate(false);
+    setUpdating(false);
+    setUpdateResult(null);
+  }, [id]);
+
+  async function handleCheckUpdate() {
+    if (checkingUpdate || updating) return;
+    setCheckingUpdate(true);
+    setUpdateError(null);
+    setUpdateResult(null);
+    try {
+      const res = await api.checkPluginUpdate(id);
+      if (mounted.current && currentId.current === id) {
+        setUpdateStatus(res);
+      }
+    } catch (err: unknown) {
+      if (mounted.current) {
+        setUpdateError(String(err));
+      }
+    } finally {
+      if (mounted.current) {
+        setCheckingUpdate(false);
+      }
+    }
+  }
 
   const mounted = useRef(false);
   useEffect(() => {
@@ -421,6 +483,136 @@ export function PluginDetails({
           </div>
         </div>
 
+
+        <div style={{ height: 16 }} />
+
+        <div className="card" id="dPluginSourceCard">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <h3 style={{ margin: 0 }}>安装来源与存证事实</h3>
+            <button
+              id="checkPluginUpdateBtn"
+              className="btn btn-soft btn-sm"
+              type="button"
+              onClick={handleCheckUpdate}
+              disabled={checkingUpdate || updating}
+            >
+              {checkingUpdate ? "正在检查更新..." : "检查更新"}
+            </button>
+          </div>
+
+          {(record.source ?? status?.source) ? (
+            (() => {
+              const src = (record.source ?? status?.source)!;
+              return (
+                <div id="dSourceEvidence" style={{ fontSize: 13 }}>
+                  <p>
+                    <strong>GitHub 仓库:</strong>{" "}
+                    <a
+                      href={`https://github.com/${src.owner}/${src.repo}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mono"
+                      style={{ color: "var(--blue)" }}
+                    >
+                      {src.owner}/{src.repo}
+                    </a>
+                  </p>
+                  <p>
+                    <strong>Release Tag:</strong>{" "}
+                    <span className="mono pill pill-gray" style={{ fontSize: 12 }}>{src.tag_name}</span>
+                  </p>
+                  <p>
+                    <strong>发布资产:</strong>{" "}
+                    <span className="mono">{src.asset_name}</span>
+                  </p>
+                  <p>
+                    <strong>SHA-256 摘要证据:</strong>{" "}
+                    <code className="mono" style={{ fontSize: 11, wordBreak: "break-all" }}>
+                      {src.archive_sha256}
+                    </code>
+                  </p>
+                  <p className="sub" style={{ fontSize: 12, marginTop: 4 }}>
+                    目标平台: {src.target_os} ({src.target_arch})
+                  </p>
+                </div>
+              );
+            })()
+          ) : (
+            <div id="dSourceEvidenceEmpty">
+              <p className="sub" style={{ margin: 0 }}>本地/未绑定市场</p>
+            </div>
+          )}
+
+          {(updateStatus || updateError) ? (
+            <div
+              id="pluginUpdateFeedback"
+              style={{
+                marginTop: 14,
+                padding: "8px 12px",
+                borderRadius: 6,
+                fontSize: 13,
+                background:
+                  updateError ||
+                  updateStatus?.status === "error" ||
+                  updateStatus?.status === "forbidden" ||
+                  updateStatus?.status === "not_found"
+                    ? "rgba(239, 68, 68, 0.12)"
+                    : updateStatus?.status === "update_available"
+                    ? "rgba(59, 130, 246, 0.12)"
+                    : "rgba(34, 197, 94, 0.12)",
+                color:
+                  updateError ||
+                  updateStatus?.status === "error" ||
+                  updateStatus?.status === "forbidden" ||
+                  updateStatus?.status === "not_found"
+                    ? "var(--red)"
+                    : updateStatus?.status === "update_available"
+                    ? "var(--blue)"
+                    : "var(--green)",
+                border: "1px solid currentColor",
+              }}
+            >
+              {updateError ? (
+                <span>检查更新失败: {updateError}</span>
+              ) : updateStatus?.status === "update_available" ? (
+                <span>发现新版本: {updateStatus.latest_tag ?? "未知"}（安全原子更新，启动失败自动回滚）</span>
+              ) : updateStatus?.status === "up_to_date" ? (
+                <span>已是最新版本 (v{meta.version || "0.1.0"})</span>
+              ) : updateStatus?.status === "release_changed" ? (
+                <span>上游 Release 内容发生变动（发布资产或摘要证据不一致）</span>
+              ) : updateStatus?.status === "installed_newer" ? (
+                <span>本地版本高于上游最新稳定 Release</span>
+              ) : updateStatus?.status === "not_checkable" ? (
+                <span>当前插件不可检查更新（未绑定市场或发布源无效）</span>
+              ) : updateStatus?.status === "forbidden" ? (
+                <span>检查失败: GitHub API 访问受限或频率超限 (403)</span>
+              ) : updateStatus?.status === "not_found" ? (
+                <span>检查失败: 未找到对应的 GitHub Release (404)</span>
+              ) : (
+                <span>检查更新失败: {updateStatus?.detail ?? "未知异常"}</span>
+              )}
+              {isManaged && updateStatus?.owned_update_allowed &&
+                (updateStatus.status === "update_available" || updateStatus.status === "release_changed") && (
+                  <button id="updatePluginBtn" className="btn btn-primary" disabled={updating}
+                    onClick={() => void handleUpdate()} style={{ marginLeft: 12 }}>
+                    {updating ? "更新中… 正在校验与安全切换" : "立即更新"}
+                  </button>
+                )}
+            </div>
+          ) : null}
+          {updateResult && (
+            <div role="status" id="pluginUpdateResult" style={{ marginTop: 14, padding: 12, borderRadius: 6,
+              border: "1px solid currentColor",
+              background: updateResult.status === "success" ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.12)",
+              color: updateResult.status === "success" ? "var(--green)" : updateResult.status === "blocked_active_requests" ? "#b7791f" : "var(--red)" }}>
+              {updateResult.status === "success" ? `更新成功：${updateResult.old_version} → ${updateResult.new_version}${updateResult.restarted ? "，已安全重启" : "，保持停止状态"}` :
+                updateResult.status === "blocked_active_requests" ? `当前有 ${updateResult.active_requests} 个活跃流正在处理，请稍后重试。` :
+                updateResult.status === "rollback_success" ? `新版本启动失败，已安全回滚至上一稳定版本 ${updateResult.rolled_back_to_version}。${updateResult.error}` :
+                updateResult.status === "rollback_failed" ? `更新与恢复失败，请手动检查插件。${updateResult.error}；${updateResult.rollback_error}` :
+                "外部服务不允许宿主更新，原进程与配置未受影响。"}
+            </div>
+          )}
+        </div>
         <div style={{ height: 16 }} />
 
         <div className="card">

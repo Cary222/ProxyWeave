@@ -1,5 +1,9 @@
 # Feature 3：统一 HTTP 网关与 Owned 请求生命周期
 
+> **历史快照/范围标注（2026-10-14 文档纠偏）**：下方原送审正文、首次失败、所有原 SHA/log 与命令保持历史记录，不表示 `3471d077d657adc7e64826bac0a9d09f91d35347` 的新复验。后来独立冻结 `60bc51566d2a7d6ec5fe4b1f323f86135c80f68a` 已获 `VERIFIED_STANDALONE`（`.pi/inspection/f3-gateway-reviewer/review-receipt.json`），仅覆盖原同协议字节/SSE透传、租约、取消与网络范围；不覆盖后来多协议 IR 转码。后续真实调用局部 PASS、未关闭协议四失败与当前完整 8 项未关闭均以 [PHASE1_REVIEW_STATUS](PHASE1_REVIEW_STATUS.md) 为唯一当前汇总；不得用下文旧“ReadyForReview”否认后续局部独立复验，也不得把 standalone 扩成当前全项 Verified。
+
+## 历史原送审正文（保留）
+
 状态：开发验证已收口，当前进入冻结送审（ReadyForReview），未 Inspector Verified；原包测试 108 passed / 1 failed 如实保留，不记全绿。F1 已独立 Verified；F2 六个具体 DEF 的关闭不等于 F2 整体验收。真实 wb2api 凭据、实际推理与最终 Windows 桌面仍未完成，fixture 不替代最终目标。
 
 ## 实施范围

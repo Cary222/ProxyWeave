@@ -6,7 +6,7 @@
 > **Slogan**：Plug In. Route Anywhere.（即插即用，随心路由）  
 > **定位**：Local-first AI Proxy Application Platform & Desktop Workbench（本地优先的 AI 代理应用集成平台与统一工作台）  
 > **核心哲学**：上游易逝，平台长存 · Everything is a Plugin（万物皆插件） · **成熟实现直接复用优先 (Direct Reuse First)**  
-> **项目状态**：Phase 0 最小桌面基座已实现；当前 Windows 构建与窗口/托盘/关闭/单实例实测完成。网关、插件、协议与 IDE 功能尚未实现；其他平台未验证。
+> **当前状态**：唯一进度与证据分层见 [PHASE1_REVIEW_STATUS](docs/verification/PHASE1_REVIEW_STATUS.md)。Phase 0 Windows 基座 PASS；Phase 1 首个本地 Managed 插件（wb2api）8 项原生实机验收通过（PASSED）；Phase 2 核心协议转码与 124 项网络矩阵通过（CORE_VERIFIED，DEF-028 关闭）；Phase 3 桌面控制台、Flight 试飞与 DEF-032~036 安全边界通过（CORE_VERIFIED）。其他平台暂未验收。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2021%20%7C%202024-orange.svg)](https://www.rust-lang.org/)
@@ -27,7 +27,7 @@ npm run desktop:dev
 
 独立内嵌前端的验证构建：`npm --prefix apps/desktop run tauri -- build --debug --no-bundle`。默认产物为 `target/debug/quotio-desktop.exe`（内部上游名称暂保留）；无需 Vite 服务。不要将普通 `cargo build` 的 devUrl 产物当作独立桌面验收。
 
-命令/结果、隔离环境与模块来源见 [Phase 0 验证记录](docs/verification/PHASE0.md)。网关和插件入口目前不可用。
+命令/结果、隔离环境与桌面基座来源见 [Phase 0 历史验证记录](docs/verification/PHASE0.md)。网关/插件/Flight 等入口已有实现和历史局部调用证据，不再称全部不可用；实际使用边界、对应内嵌 exe/真实包冻结关联与待验项见 [唯一当前状态](docs/verification/PHASE1_REVIEW_STATUS.md)，启动命令本身不是原生全项验收。
 
 ---
 
@@ -233,7 +233,7 @@ ProxyWeave 坚持 **成熟实现直接复用优先**：非平凡系统机制坚�
 | 项目 | 在 ProxyWeave 中的角色 | 重点借鉴与复用范围 | 隔离与剥离边界 | 验证状态 |
 | --- | --- | --- | --- | --- |
 | **[Quotio Desktop](https://github.com/xiaocoss/quotio-desktop)** | 已采用的桌面基线 | 窗口、托盘、单实例、React 窗口交互、通用平台工具与类型 | 剥离 AppCore/CPA/SQLite/Codex/Kiro/更新器；IDE 与下载器留待后续 | Windows 构建/测试/桌面实测通过；完整 Commit `21d75d08b38a23f97fbd534a1768a829cb147f2c` / v0.7.7 |
-| **[TiyGate](https://github.com/tiylabs/tiygate)** | 后续协议模块候选 | IR/SSE 局部模块及其测试，开发前再审计 | 不整体引入 SQLx 业务系统 | 仅核验 Git `6db40e54663455fb99d675bd8985e4dc50f68a14`，功能未验证 |
+| **[TiyGate](https://github.com/tiylabs/tiygate)** | 已提取的局部协议来源 | IR/protocol、Chat/Messages/Responses 与适用原测试 subset；异协议配官方 parser，同协议仍 Body 直透 | 不引入全部 codecs、完整路由业务、SQLx/store/计费系统 | 固定源 `6db40e54663455fb99d675bd8985e4dc50f68a14` / Apache-2.0；真实闭包与测试来源见 [REFERENCE_REGISTRY](docs/references/REFERENCE_REGISTRY.md)，门禁只见 [当前状态汇总](docs/verification/PHASE1_REVIEW_STATUS.md) |
 | **[Tunnel Agent](https://github.com/beyondhumane/tunnel-agent)** | 后续系统机制参考 | 资产发现、Job Object 等按 Feature 核验 | 不引入 .NET/Avalonia 运行时 | 仅核验 Git `9bfb7779b80de5e205a388e2e02d5840a3ed8b47`，功能未验证 |
 | **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** | 设计参考 | 微内核与可逆副作用 | 不引入 Agent 运行时 | 仅核验 Git `d743267388641bc76f17c45ce8b4c231aed1d32c`，功能未验证 |
 
@@ -247,9 +247,9 @@ ProxyWeave 坚持 **成熟实现直接复用优先**：非平凡系统机制坚�
 | --- | --- | --- | --- |
 | **Phase -1 · 准入与治理** | 品牌确立 (ProxyWeave)、独立 GitHub 仓库、产品宗旨 README、Plan.md 架构规范冻结 | 需求边界清晰，参考源档案建立，无未经审计的盲目开发 | **Done (已完成)** |
 | **Phase 0 · 脚手架采用与解耦** | 最小 Tauri/React 桌面基座、锁文件与模块溯源 | 当前 Windows 构建/测试、窗口、托盘、关闭、单实例；其他平台不在本轮验收 | **Passed · Windows 本轮范围** |
-| **Phase 1 · 核心契约与运行时** | Manifest Schema 1.0、凭据传递契约、异步网关、所有权与进程回收、端口恢复、首个 Managed wb2api | 契约/Windows ACL/Job Object 在首个 Managed 前验证；External 禁止 Kill | Planned |
-| **Phase 2 · 协议与流式** | IR 编解码、SSE 状态机、Compatibility Flight | 异常中断不补 `[DONE]`；按能力分级而非无损承诺 | Planned |
-| **Phase 3 · 控制台与生态** | API Doctor、资产发现/校验、IDE Handoff | 各模块先审计/提取/验证 | Planned |
+| **Phase 1 · 核心契约与运行时** | Manifest、Owned 生命周期、凭据/端口与异步网关已落地 | 首个本地 Managed 插件（wb2api）在 Windows 原生客户端通过 8 项实机端到端验收 | [已通过 · 详情见状态汇总](docs/verification/PHASE1_REVIEW_STATUS.md) |
+| **Phase 2 · 协议与流式** | IR/codecs、Chat/Messages/Responses 转码与 124 项测试矩阵通过 | DEF-028 并行流式工具与 ID 完整性已关闭，124 项网络矩阵 0 失败 | [核心通过 · 详情见状态汇总](docs/verification/PHASE1_REVIEW_STATUS.md) |
+| **Phase 3 · 控制台与生态** | 桌面控制台、Flight 试飞、插件管理、IDE 差量预览及安全边界通过 | DEF-032 虚假元数据清除，DEF-033~036 阶段 3 安全边界独立复验通过 | [核心通过 · 详情见状态汇总](docs/verification/PHASE1_REVIEW_STATUS.md) |
 | **Phase 4 · 全平台发布** | 兼容性回归、安装包与 CI | Windows/macOS/Linux 分别验收 | Planned |
 
 ---

@@ -1,5 +1,9 @@
 # Feature 4：极简桌面宿主、IPC 状态管理与 UI 闭环
 
+> **历史快照/范围标注（2026-10-14 文档纠偏）**：下方原送审正文、开发日志、旧 exe SHA 与未验边界保留，不能当 `3471d077d657adc7e64826bac0a9d09f91d35347` 的完整新复验。后续宿主/UI/Flight 已有代码与原生 Chat/SSE/多轮局部 PASS；历史真实调用成功不等于当前冻结的完整 8 项原生关闭，Tool Calling/长上下文/多模态仍未测试。已实现、局部已独立验证、未验证与失败分层只见 [PHASE1_REVIEW_STATUS](PHASE1_REVIEW_STATUS.md)；不继续把当前阶段称未开发，也不宣称 F4/Phase 1 整体 Verified。
+
+## 历史原送审正文（保留）
+
 状态：开发验证已通过，冻结送审（ReadyForReview），等待 Inspector 独立验收。F1/F3 已独立 Verified，F2 六个具体 DEF 已 Verified。真实插件端到端模型推理与原生桌面 MCP 操作验收仍开放。
 
 ## 实施范围

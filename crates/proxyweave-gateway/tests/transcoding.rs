@@ -139,6 +139,7 @@ configuration: {{}}
             manifest: manifest.clone(),
             fingerprint: "mock".into(),
             settings: Default::default(),
+            source: None,
         };
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -499,6 +500,7 @@ configuration: {{}}
         manifest: manifest.clone(),
         fingerprint: "mock".into(),
         settings: Default::default(),
+        source: None,
     };
 
     let temp_dir = tempfile::tempdir().unwrap();
@@ -629,6 +631,7 @@ configuration: {{}}
         manifest: manifest.clone(),
         fingerprint: "mock".into(),
         settings: Default::default(),
+        source: None,
     };
 
     let temp_dir = tempfile::tempdir().unwrap();
@@ -713,6 +716,7 @@ configuration: {{}}
         manifest: manifest.clone(),
         fingerprint: "mock".into(),
         settings: Default::default(),
+        source: None,
     };
 
     let temp_dir = tempfile::tempdir().unwrap();

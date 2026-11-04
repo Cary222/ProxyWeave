@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { HostEvent } from "../types";
+import { HostEvent, RequestTrace } from "../types";
+import { invoke } from "../lib/tauri";
 
 interface AuditPanelProps {
   events?: HostEvent[];
+  traces?: RequestTrace[];
   onRefresh?: () => void | Promise<void>;
+  onClearTraces?: () => void | Promise<void>;
 }
 
 interface SanitizedHostEvent {
@@ -57,6 +60,115 @@ function sanitizeHostEvent(raw: unknown, index: number): SanitizedHostEvent {
   };
 }
 
+interface SanitizedRequestTrace {
+  id: string;
+  timestamp_ms: number;
+  client: string;
+  client_ip: string;
+  method: string;
+  path: string;
+  model: string | null;
+  ingress_protocol: string;
+  route_strategy: string;
+  target_plugin: string | null;
+  status_code: number;
+  duration_ms: number;
+  first_token_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_hit: boolean;
+  fallback_trail: string[];
+  error: string | null;
+}
+
+function sanitizeRequestTrace(raw: unknown, index: number): SanitizedRequestTrace {
+  const item = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const id =
+    typeof item.id === "string" && item.id.trim().length > 0
+      ? item.id.trim()
+      : `trace-${index}`;
+  const timestamp_ms =
+    typeof item.timestamp_ms === "number" &&
+    Number.isFinite(item.timestamp_ms) &&
+    item.timestamp_ms > 0
+      ? item.timestamp_ms
+      : Date.now();
+  const client =
+    typeof item.client === "string" && item.client.trim().length > 0
+      ? item.client.trim()
+      : "Unknown";
+  const client_ip = typeof item.client_ip === "string" ? item.client_ip : "";
+  const method =
+    typeof item.method === "string" && item.method.trim().length > 0
+      ? item.method.trim().toUpperCase()
+      : "POST";
+  const path =
+    typeof item.path === "string" && item.path.trim().length > 0
+      ? item.path.trim()
+      : "/v1/chat/completions";
+  const model =
+    typeof item.model === "string" && item.model.trim().length > 0
+      ? item.model.trim()
+      : null;
+  const ingress_protocol =
+    typeof item.ingress_protocol === "string" ? item.ingress_protocol : "openai";
+  const route_strategy =
+    typeof item.route_strategy === "string" ? item.route_strategy : "direct";
+  const target_plugin =
+    typeof item.target_plugin === "string" && item.target_plugin.trim().length > 0
+      ? item.target_plugin.trim()
+      : null;
+  const status_code =
+    typeof item.status_code === "number" && Number.isFinite(item.status_code)
+      ? item.status_code
+      : 200;
+  const duration_ms =
+    typeof item.duration_ms === "number" && Number.isFinite(item.duration_ms)
+      ? item.duration_ms
+      : 0;
+  const first_token_ms =
+    typeof item.first_token_ms === "number" && Number.isFinite(item.first_token_ms)
+      ? item.first_token_ms
+      : null;
+  const input_tokens =
+    typeof item.input_tokens === "number" && Number.isFinite(item.input_tokens)
+      ? item.input_tokens
+      : null;
+  const output_tokens =
+    typeof item.output_tokens === "number" && Number.isFinite(item.output_tokens)
+      ? item.output_tokens
+      : null;
+  const cache_hit = item.cache_hit === true;
+  const fallback_trail = Array.isArray(item.fallback_trail)
+    ? item.fallback_trail.map(String)
+    : [];
+  const error =
+    typeof item.error === "string" && item.error.trim().length > 0
+      ? item.error.trim()
+      : null;
+
+  return {
+    id,
+    timestamp_ms,
+    client,
+    client_ip,
+    method,
+    path,
+    model,
+    ingress_protocol,
+    route_strategy,
+    target_plugin,
+    status_code,
+    duration_ms,
+    first_token_ms,
+    input_tokens,
+    output_tokens,
+    cache_hit,
+    fallback_trail,
+    error,
+  };
+}
+
 function formatTimestamp(ts: number | null): string {
   if (ts === null) return "时间未知";
   const d = new Date(ts);
@@ -64,7 +176,12 @@ function formatTimestamp(ts: number | null): string {
   return d.toISOString().replace("T", " ").slice(0, 19);
 }
 
-export const AuditPanel: React.FC<AuditPanelProps> = ({ events, onRefresh }) => {
+export const AuditPanel: React.FC<AuditPanelProps> = ({
+  events,
+  traces,
+  onRefresh,
+  onClearTraces,
+}) => {
   const isEventsUnknown = events === undefined || events === null;
   const safeEvents = useMemo(() => {
     if (!Array.isArray(events)) return [];
@@ -124,6 +241,73 @@ export const AuditPanel: React.FC<AuditPanelProps> = ({ events, onRefresh }) => 
   useEffect(() => {
     setSelectedKey(activeEvent ? activeEvent.key : null);
   }, [activeEvent]);
+  const [internalTraces, setInternalTraces] = useState<RequestTrace[]>([]);
+
+  const loadTraces = async () => {
+    try {
+      const list = await invoke<RequestTrace[]>("get_gateway_traces", { limit: 50 });
+      setInternalTraces(list);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (traces === undefined) {
+      void loadTraces();
+    }
+  }, [traces]);
+
+  const safeTraces = useMemo(() => {
+    const list = traces !== undefined ? traces : internalTraces;
+    if (!Array.isArray(list)) return [];
+    return list.map((tr, idx) => sanitizeRequestTrace(tr, idx));
+  }, [traces, internalTraces]);
+
+  const [traceClientFilter, setTraceClientFilter] = useState<string>("all");
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+
+  const availableTraceClients = useMemo(() => {
+    const set = new Set<string>();
+    for (const tr of safeTraces) {
+      set.add(tr.client);
+    }
+    return Array.from(set);
+  }, [safeTraces]);
+
+  const filteredTraces = useMemo(() => {
+    if (traceClientFilter === "all") return safeTraces;
+    return safeTraces.filter((tr) => tr.client === traceClientFilter);
+  }, [safeTraces, traceClientFilter]);
+
+  const activeTrace = useMemo(() => {
+    if (filteredTraces.length === 0) return null;
+    if (selectedTraceId !== null) {
+      const found = filteredTraces.find((tr) => tr.id === selectedTraceId);
+      if (found) return found;
+    }
+    return filteredTraces[0];
+  }, [filteredTraces, selectedTraceId]);
+
+  function renderStatusCodePill(status: number) {
+    if (status >= 200 && status < 300) {
+      return <span className="pill pill-green">{status} OK</span>;
+    }
+    if (status >= 400 && status < 500) {
+      return <span className="pill pill-amber">{status}</span>;
+    }
+    return <span className="pill pill-red">{status}</span>;
+  }
+
+  function renderClientPill(client: string) {
+    const c = client.toLowerCase();
+    if (c.includes("cursor")) return <span className="pill pill-blue">Cursor</span>;
+    if (c.includes("windsurf")) return <span className="pill pill-teal">Windsurf</span>;
+    if (c.includes("claude")) return <span className="pill pill-amber">Claude Code</span>;
+    if (c.includes("aider") || c.includes("cline") || c.includes("roo"))
+      return <span className="pill pill-violet">{client}</span>;
+    return <span className="pill pill-gray">{client}</span>;
+  }
 
   function renderResultPill(success: boolean | null) {
     if (success === true) {
@@ -204,9 +388,34 @@ export const AuditPanel: React.FC<AuditPanelProps> = ({ events, onRefresh }) => 
               className="btn btn-soft btn-sm"
               id="refreshAuditBtn"
               type="button"
-              onClick={() => void onRefresh()}
+              onClick={async () => {
+                if (onRefresh) await onRefresh();
+                if (traces === undefined) await loadTraces();
+              }}
             >
               刷新事件
+            </button>
+          ) : null}
+          {safeTraces.length > 0 ? (
+            <button
+              className="btn btn-soft btn-sm"
+              id="clearTracesBtn"
+              type="button"
+              onClick={async () => {
+                if (onClearTraces) {
+                  await onClearTraces();
+                } else {
+                  try {
+                    await invoke<void>("clear_gateway_traces");
+                    setInternalTraces([]);
+                  } catch {
+                    // ignore
+                  }
+                }
+              }}
+              style={{ color: "var(--red)" }}
+            >
+              清空调用轨迹
             </button>
           ) : null}
           <button
@@ -246,6 +455,186 @@ export const AuditPanel: React.FC<AuditPanelProps> = ({ events, onRefresh }) => 
         </div>
       ) : null}
 
+      {/* 实时网关调用与路由链路看板 (DEF-Phase F2: Live Request Traces) */}
+      <div className="card" style={{ marginBottom: 16 }} id="gatewayTracesCard">
+        <div className="section-head">
+          <div>
+            <h3>网关调用链路与选路观测 (Live Request Traces)</h3>
+            <span className="sub">
+              实时捕获经由统一网关发起的客户端请求，透明呈现真实耗时、首字时间(TTFT)、状态码、Token消耗与插件路由
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select
+              className="input"
+              id="traceClientFilter"
+              aria-label="按客户端筛选调用轨迹"
+              value={traceClientFilter}
+              onChange={(e) => setTraceClientFilter(e.target.value)}
+              style={{ width: "auto", minWidth: 130 }}
+            >
+              <option value="all">全部客户端 ({safeTraces.length})</option>
+              {availableTraceClients.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {safeTraces.length === 0 ? (
+          <div
+            id="tracesEmptyState"
+            className="sub"
+            style={{ padding: "18px 4px", lineHeight: 1.7 }}
+          >
+            暂无网关实时调用轨迹（等待客户端如 Cursor、Windsurf、Claude Code 或试飞面板发起请求后自动实时记录）。
+          </div>
+        ) : filteredTraces.length === 0 ? (
+          <div
+            id="tracesEmptyFilteredState"
+            className="sub"
+            style={{ padding: "18px 4px", lineHeight: 1.7 }}
+          >
+            当前筛选条件下暂无调用轨迹记录（0 条）。
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "140px 100px 180px 1fr 90px 90px 100px",
+                padding: "8px 12px",
+                fontWeight: 600,
+                fontSize: 12,
+                color: "var(--text2)",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <div>时间</div>
+              <div>客户端</div>
+              <div>模型</div>
+              <div>目标插件 / 选路</div>
+              <div>状态</div>
+              <div>耗时 (TTFT)</div>
+              <div>Token (入/出)</div>
+            </div>
+
+            {filteredTraces.map((tr) => {
+              const isSelected = activeTrace?.id === tr.id;
+              return (
+                <div
+                  key={tr.id}
+                  data-trace-id={tr.id}
+                  onClick={() => setSelectedTraceId(tr.id)}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "140px 100px 180px 1fr 90px 90px 100px",
+                    padding: "10px 12px",
+                    borderRadius: 6,
+                    fontSize: 13,
+                    alignItems: "center",
+                    cursor: "pointer",
+                    background: isSelected
+                      ? "rgba(47, 107, 255, 0.08)"
+                      : "var(--bg-subtle, rgba(255, 255, 255, 0.02))",
+                    border: isSelected
+                      ? "1px solid rgba(47, 107, 255, 0.3)"
+                      : "1px solid var(--border)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div className="mono" style={{ fontSize: 12, color: "var(--text2)" }}>
+                    {formatTimestamp(tr.timestamp_ms)}
+                  </div>
+                  <div>{renderClientPill(tr.client)}</div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontWeight: 500,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tr.model || "默认模型"}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                    <span className="mono" style={{ color: "var(--text)" }}>
+                      {tr.target_plugin ? `→ ${tr.target_plugin}` : "未路由"}
+                    </span>
+                    <span className="pill pill-gray" style={{ fontSize: 11 }}>
+                      {tr.route_strategy}
+                    </span>
+                    {tr.cache_hit && (
+                      <span className="pill pill-violet" style={{ fontSize: 11 }}>
+                        Cache
+                      </span>
+                    )}
+                  </div>
+                  <div>{renderStatusCodePill(tr.status_code)}</div>
+                  <div className="mono" style={{ fontSize: 12 }}>
+                    <b>{tr.duration_ms}ms</b>
+                    {tr.first_token_ms !== null && (
+                      <span style={{ color: "var(--text2)", marginLeft: 4 }}>
+                        ({tr.first_token_ms}ms)
+                      </span>
+                    )}
+                  </div>
+                  <div className="mono sub" style={{ fontSize: 12 }}>
+                    {tr.input_tokens !== null || tr.output_tokens !== null
+                      ? `${tr.input_tokens ?? 0} / ${tr.output_tokens ?? 0}`
+                      : "—"}
+                  </div>
+                </div>
+              );
+            })}
+
+            {activeTrace && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: "12px 14px",
+                  borderRadius: 6,
+                  background: "var(--card-bg, rgba(0, 0, 0, 0.2))",
+                  border: "1px dashed var(--border)",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <b>Trace 链路详情: <span className="mono">{activeTrace.id}</span></b>
+                  <span className="sub mono">
+                    {activeTrace.method} {activeTrace.path}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 16,
+                    flexWrap: "wrap",
+                    marginBottom: 8,
+                    color: "var(--text2)",
+                  }}
+                >
+                  <div>客户端 IP: <span className="mono">{activeTrace.client_ip || "127.0.0.1"}</span></div>
+                  <div>协议: <span className="mono">{activeTrace.ingress_protocol}</span></div>
+                  <div>选路模式: <span className="mono">{activeTrace.route_strategy}</span></div>
+                  <div>目标插件: <span className="mono">{activeTrace.target_plugin || "none"}</span></div>
+                  {activeTrace.fallback_trail.length > 0 && (
+                    <div>
+                      Fallback 链: <span className="mono">{activeTrace.fallback_trail.join(" → ")}</span>
+                    </div>
+                  )}
+                  {activeTrace.error && (
+                    <div style={{ color: "var(--red)" }}>错误: {activeTrace.error}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-head">
           <div>

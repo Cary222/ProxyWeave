@@ -32,9 +32,48 @@ pub struct FlightModelListResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlightContentPart {
+    #[serde(rename = "type")]
+    pub part_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<FlightImageUrl>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlightImageUrl {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlightMessageInput {
     pub role: String,
     pub content: String,
+    /// Optional multimodal content parts (only forwarded when supplied by the caller;
+    /// the desktop UI only enables this when the backend declares multimodal support).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_parts: Option<Vec<FlightContentPart>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlightToolCallFragment {
+    pub index: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments_delta: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlightToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub name: String,
+    pub arguments: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +83,12 @@ pub struct FlightChatRequestInput {
     pub messages: Vec<FlightMessageInput>,
     pub temperature: Option<f32>,
     pub stream: Option<bool>,
+    /// OpenAI-compatible tool definitions, forwarded verbatim after bounded validation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<serde_json::Value>>,
+    /// "none" | "auto" | "required" or an object; forwarded verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +118,11 @@ pub enum FlightStreamEvent {
         first_content_ms: Option<u64>,
         elapsed_ms: u64,
     },
+    ToolCallDelta {
+        request_id: String,
+        fragments: Vec<FlightToolCallFragment>,
+        elapsed_ms: u64,
+    },
     Completed {
         request_id: String,
         total_text: String,
@@ -82,6 +132,7 @@ pub enum FlightStreamEvent {
         usage: Option<FlightUsage>,
         finish_reason: Option<String>,
         saw_done: bool,
+        total_tool_calls: Option<Vec<FlightToolCall>>,
     },
     Cancelled {
         request_id: String,
@@ -104,6 +155,7 @@ pub struct FlightChatNonstreamResult {
     pub elapsed_ms: u64,
     pub usage: Option<FlightUsage>,
     pub finish_reason: Option<String>,
+    pub tool_calls: Option<Vec<FlightToolCall>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -294,12 +346,78 @@ fn validate_chat_input(input: &FlightChatRequestInput) -> Result<(), String> {
     let mut total_chars = 0usize;
     for m in &input.messages {
         let role = m.role.trim();
-        if !matches!(role, "user" | "assistant" | "system") {
+        if !matches!(role, "user" | "assistant" | "system" | "tool") {
             return Err(format!("不支持的消息角色: {role}"));
         }
         total_chars += m.content.len();
         if total_chars > 256 * 1024 {
             return Err("消息总长度超出上限 (256KB)".to_string());
+        }
+        if let Some(parts) = m.content_parts.as_ref() {
+            let mut images = 0usize;
+            for part in parts {
+                match part.part_type.as_str() {
+                    "text" => {
+                        let text = part.text.as_deref().unwrap_or_default();
+                        total_chars += text.len();
+                        if total_chars > 256 * 1024 {
+                            return Err("消息总长度超出上限 (256KB)".to_string());
+                        }
+                    }
+                    "image_url" => {
+                        if role != "user" {
+                            return Err("仅 user 消息可携带图片内容".to_string());
+                        }
+                        images += 1;
+                        if images > 4 {
+                            return Err("单条消息图片数量超出上限 (4)".to_string());
+                        }
+                        let url = part
+                            .image_url
+                            .as_ref()
+                            .map(|i| i.url.as_str())
+                            .unwrap_or_default();
+                        if url.is_empty() {
+                            return Err("图片内容缺少 URL".to_string());
+                        }
+                        if url.len() > 512 * 1024 {
+                            return Err("单张图片数据超出上限 (512KB)".to_string());
+                        }
+                    }
+                    other => return Err(format!("不支持的内容类型: {other}")),
+                }
+            }
+        }
+    }
+    if let Some(tools) = input.tools.as_ref() {
+        if tools.is_empty() {
+            return Err("工具定义列表不能为空".to_string());
+        }
+        if tools.len() > 32 {
+            return Err("工具定义数量超出上限 (32)".to_string());
+        }
+        for tool in tools {
+            let raw = serde_json::to_string(tool).map_err(|_| "工具定义无法序列化".to_string())?;
+            if raw.len() > 64 * 1024 {
+                return Err("工具定义总体积超出上限 (64KB)".to_string());
+            }
+        }
+    }
+    if let Some(tc) = input.tool_choice.as_ref() {
+        match tc {
+            serde_json::Value::String(v) => {
+                if !matches!(v.as_str(), "none" | "auto" | "required") {
+                    return Err("tool_choice 字符串仅支持 none/auto/required".to_string());
+                }
+            }
+            serde_json::Value::Object(_) => {
+                let raw =
+                    serde_json::to_string(tc).map_err(|_| "tool_choice 无法序列化".to_string())?;
+                if raw.len() > 1024 {
+                    return Err("tool_choice 对象体积超出上限 (1KB)".to_string());
+                }
+            }
+            _ => return Err("tool_choice 必须是字符串或对象".to_string()),
         }
     }
     if let Some(t) = input.temperature {
@@ -334,6 +452,53 @@ fn redact_pattern(mut s: String, prefix: &str) -> String {
         search_from = idx + "[REDACTED]".len();
     }
     s
+}
+
+fn build_wire_messages(input: &FlightChatRequestInput) -> Vec<serde_json::Value> {
+    input
+        .messages
+        .iter()
+        .map(|m| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("role".into(), serde_json::Value::String(m.role.clone()));
+            if let Some(parts) = m.content_parts.as_ref() {
+                let parts_json = serde_json::to_value(parts)
+                    .unwrap_or_else(|_| serde_json::Value::Array(vec![]));
+                obj.insert("content".into(), parts_json);
+            } else {
+                obj.insert(
+                    "content".into(),
+                    serde_json::Value::String(m.content.clone()),
+                );
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect()
+}
+
+fn build_chat_payload(input: &FlightChatRequestInput, stream: bool) -> serde_json::Value {
+    let mut payload = serde_json::json!({
+        "model": input.model,
+        "messages": build_wire_messages(input),
+        "temperature": input.temperature.unwrap_or(0.7),
+        "stream": stream,
+    });
+    let obj = payload.as_object_mut();
+    if let Some(obj) = obj {
+        if stream {
+            obj.insert(
+                "stream_options".to_string(),
+                serde_json::json!({ "include_usage": true }),
+            );
+        }
+        if let Some(tools) = input.tools.as_ref() {
+            obj.insert("tools".to_string(), serde_json::Value::Array(tools.clone()));
+        }
+        if let Some(tc) = input.tool_choice.as_ref() {
+            obj.insert("tool_choice".to_string(), tc.clone());
+        }
+    }
+    payload
 }
 
 fn sanitize_error_message(msg: &str, master_key: &str) -> String {
@@ -390,6 +555,22 @@ struct WireDelta {
     content: Option<String>,
     #[serde(alias = "reasoning")]
     reasoning_content: Option<String>,
+    tool_calls: Option<Vec<WireToolCallDelta>>,
+}
+
+#[derive(Deserialize)]
+struct WireToolCallFunctionDelta {
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct WireToolCallDelta {
+    index: Option<u64>,
+    id: Option<String>,
+    #[serde(rename = "type")]
+    _call_type: Option<String>,
+    function: Option<WireToolCallFunctionDelta>,
 }
 
 #[derive(Deserialize)]
@@ -419,6 +600,21 @@ struct WireNonstreamMessage {
     content: Option<String>,
     #[serde(alias = "reasoning")]
     reasoning_content: Option<String>,
+    tool_calls: Option<Vec<WireNonstreamToolCall>>,
+}
+
+#[derive(Deserialize)]
+struct WireNonstreamToolCallFunction {
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct WireNonstreamToolCall {
+    id: Option<String>,
+    #[serde(rename = "type")]
+    call_type: Option<String>,
+    function: Option<WireNonstreamToolCallFunction>,
 }
 
 #[derive(Deserialize)]
@@ -522,13 +718,7 @@ pub async fn run_flight_chat_stream_core(
         .build()
         .map_err(|_| "无法初始化网络客户端".to_string())?;
 
-    let payload = serde_json::json!({
-        "model": input.model,
-        "messages": input.messages,
-        "temperature": input.temperature.unwrap_or(0.7),
-        "stream": true,
-        "stream_options": { "include_usage": true }
-    });
+    let payload = build_chat_payload(&input, true);
 
     let start_time = Instant::now();
     if channel
@@ -616,6 +806,9 @@ pub async fn run_flight_chat_stream_core(
     let mut last_usage = None;
     let mut finish_reason = None;
     let mut saw_terminal_done = false;
+    // Accumulate streaming tool_call fragments keyed by their OpenAI index.
+    let mut tool_calls_acc: std::collections::BTreeMap<u64, (String, String, String)> =
+        std::collections::BTreeMap::new();
 
     loop {
         tokio::select! {
@@ -709,6 +902,64 @@ pub async fn run_flight_chat_stream_core(
                                             let text_delta = delta.content.filter(|s| !s.is_empty());
                                             let reasoning_delta =
                                                 delta.reasoning_content.filter(|s| !s.is_empty());
+                                            // Streaming tool_call fragments: accumulate by index
+                                            // and forward each raw fragment for real-time display.
+                                            if let Some(delta_calls) = delta.tool_calls {
+                                                if !delta_calls.is_empty() {
+                                                    let now_elapsed =
+                                                        start_time.elapsed().as_millis() as u64;
+                                                    if first_content_ms.is_none() {
+                                                        first_content_ms = Some(now_elapsed);
+                                                    }
+                                                    let mut fragments = Vec::new();
+                                                    for tc in delta_calls {
+                                                        let idx = tc.index.unwrap_or(0);
+                                                        let slot = tool_calls_acc
+                                                            .entry(idx)
+                                                            .or_insert_with(|| {
+                                                                (
+                                                                    String::new(),
+                                                                    String::new(),
+                                                                    String::new(),
+                                                                )
+                                                            });
+                                                        if let Some(id) = tc.id.as_ref() {
+                                                            if !id.is_empty() {
+                                                                slot.0 = id.clone();
+                                                            }
+                                                        }
+                                                        let mut arg_delta: Option<String> = None;
+                                                        if let Some(f) = tc.function.as_ref() {
+                                                            if let Some(name) = f.name.as_ref() {
+                                                                if !name.is_empty() {
+                                                                    slot.1 = name.clone();
+                                                                }
+                                                            }
+                                                            if let Some(args) = f.arguments.as_ref() {
+                                                                slot.2.push_str(args);
+                                                                arg_delta = Some(args.clone());
+                                                            }
+                                                        }
+                                                        fragments.push(FlightToolCallFragment {
+                                                            index: idx,
+                                                            id: tc.id.clone(),
+                                                            name: if slot.1.is_empty() {
+                                                                None
+                                                            } else {
+                                                                Some(slot.1.clone())
+                                                            },
+                                                            arguments_delta: arg_delta,
+                                                        });
+                                                    }
+                                                    let _ = channel.send(
+                                                        FlightStreamEvent::ToolCallDelta {
+                                                            request_id: request_id.clone(),
+                                                            fragments,
+                                                            elapsed_ms: now_elapsed,
+                                                        },
+                                                    );
+                                                }
+                                            }
                                             if text_delta.is_some() || reasoning_delta.is_some() {
                                                 let now_elapsed =
                                                     start_time.elapsed().as_millis() as u64;
@@ -795,6 +1046,21 @@ pub async fn run_flight_chat_stream_core(
         Some(total_reasoning)
     };
 
+    let total_tool_calls = if tool_calls_acc.is_empty() {
+        None
+    } else {
+        Some(
+            tool_calls_acc
+                .into_iter()
+                .map(|(_idx, (id, name, arguments))| FlightToolCall {
+                    id,
+                    call_type: "function".to_string(),
+                    name,
+                    arguments,
+                })
+                .collect(),
+        )
+    };
     let _ = channel.send(FlightStreamEvent::Completed {
         request_id: request_id.clone(),
         total_text,
@@ -804,6 +1070,7 @@ pub async fn run_flight_chat_stream_core(
         usage: last_usage,
         finish_reason,
         saw_done: saw_terminal_done,
+        total_tool_calls,
     });
 
     Ok(())
@@ -826,12 +1093,7 @@ pub async fn run_flight_chat_nonstream_core(
         .build()
         .map_err(|_| "无法初始化网络客户端".to_string())?;
 
-    let payload = serde_json::json!({
-        "model": input.model,
-        "messages": input.messages,
-        "temperature": input.temperature.unwrap_or(0.7),
-        "stream": false,
-    });
+    let payload = build_chat_payload(&input, false);
 
     let start_time = Instant::now();
     let req_future = client
@@ -893,6 +1155,7 @@ pub async fn run_flight_chat_nonstream_core(
     let msg = choice.message.unwrap_or(WireNonstreamMessage {
         content: None,
         reasoning_content: None,
+        tool_calls: None,
     });
 
     let text = msg.content.unwrap_or_default();
@@ -909,6 +1172,32 @@ pub async fn run_flight_chat_nonstream_core(
         total_tokens: u.total_tokens.unwrap_or(0),
     });
 
+    let tool_calls = msg.tool_calls.and_then(|calls| {
+        if calls.is_empty() {
+            None
+        } else {
+            Some(
+                calls
+                    .into_iter()
+                    .map(|c| FlightToolCall {
+                        id: c.id.unwrap_or_default(),
+                        call_type: c.call_type.unwrap_or_else(|| "function".to_string()),
+                        name: c
+                            .function
+                            .as_ref()
+                            .and_then(|f| f.name.clone())
+                            .unwrap_or_default(),
+                        arguments: c
+                            .function
+                            .as_ref()
+                            .and_then(|f| f.arguments.clone())
+                            .unwrap_or_default(),
+                    })
+                    .collect(),
+            )
+        }
+    });
+
     Ok(FlightChatNonstreamResult {
         request_id,
         model: input.model,
@@ -918,6 +1207,7 @@ pub async fn run_flight_chat_nonstream_core(
         elapsed_ms,
         usage,
         finish_reason: choice.finish_reason,
+        tool_calls,
     })
 }
 
@@ -961,9 +1251,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "hello".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
         assert!(validate_chat_input(&valid).is_ok());
 
@@ -986,6 +1279,7 @@ mod tests {
             .map(|i| FlightMessageInput {
                 role: "user".to_string(),
                 content: format!("msg {i}"),
+                content_parts: None,
             })
             .collect();
         assert_eq!(
@@ -997,6 +1291,7 @@ mod tests {
         invalid.messages = vec![FlightMessageInput {
             role: "user".to_string(),
             content: "x".repeat(300 * 1024),
+            content_parts: None,
         }];
         assert_eq!(
             validate_chat_input(&invalid).unwrap_err(),
@@ -1123,9 +1418,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "ping".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(false),
+            tools: None,
+            tool_choice: None,
         };
 
         let (_tx, cancel_rx) = oneshot::channel();
@@ -1171,9 +1469,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "wait".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(false),
+            tools: None,
+            tool_choice: None,
         };
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -1247,9 +1548,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "hi".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1336,9 +1640,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "abort".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1421,9 +1728,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "stream".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1498,9 +1808,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "error".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1561,9 +1874,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "ping".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
         let (ch, mut rx) = make_test_channel();
         let (_cancel_tx, cancel_rx) = oneshot::channel();
@@ -1652,9 +1968,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "think".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(false),
+            tools: None,
+            tool_choice: None,
         };
 
         let (_tx, cancel_rx) = oneshot::channel();
@@ -1696,9 +2015,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "go".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1769,9 +2091,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "huge".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, mut rx) = make_test_channel();
@@ -1839,9 +2164,12 @@ mod tests {
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "drop".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
 
         let (ch, rx) = make_test_channel();
@@ -1964,6 +2292,7 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             manifest,
             fingerprint: "test-fingerprint".into(),
             settings: Default::default(),
+            source: None,
         };
 
         let runtime = RuntimeManager::new();
@@ -2011,9 +2340,12 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "ping".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(false),
+            tools: None,
+            tool_choice: None,
         };
         let (_tx, cancel_rx) = oneshot::channel();
         let nonstream_res = run_flight_chat_nonstream_core(
@@ -2035,9 +2367,12 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "ping".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
         let (ch, mut rx) = make_test_channel();
         let (_tx, cancel_rx) = oneshot::channel();
@@ -2082,9 +2417,12 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "headerwait".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
         let (ch, mut rx) = make_test_channel();
         let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -2155,9 +2493,12 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             messages: vec![FlightMessageInput {
                 role: "user".to_string(),
                 content: "endless".to_string(),
+                content_parts: None,
             }],
             temperature: Some(0.7),
             stream: Some(true),
+            tools: None,
+            tool_choice: None,
         };
         let (ch, mut rx) = make_test_channel();
         let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -2266,5 +2607,243 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
             .register_session("main", "req-4", tx4)
             .await
             .unwrap();
+    }
+    #[tokio::test]
+    async fn test_chat_stream_core_tool_calls_fragments_and_completion() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                // Fragment 1: id + name + partial arguments
+                let f1 = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"\"}}]}}]}\n\n";
+                let _ = stream.write_all(f1.as_bytes());
+                std::thread::sleep(Duration::from_millis(2));
+                // Fragment 2: remaining arguments
+                let f2 = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"Beijing\\\"}\"}}]}}]}\n\n";
+                let _ = stream.write_all(f2.as_bytes());
+                std::thread::sleep(Duration::from_millis(2));
+                let fin = r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}
+
+"#;
+                let _ = stream.write_all(fin.as_bytes());
+                let _ = stream.write_all(
+                    b"data: [DONE]
+
+",
+                );
+            }
+        });
+        let input = FlightChatRequestInput {
+            request_id: None,
+            model: "gpt-4o".to_string(),
+            messages: vec![FlightMessageInput {
+                role: "user".to_string(),
+                content: "what is the weather in Beijing?".to_string(),
+                content_parts: None,
+            }],
+            temperature: Some(0.7),
+            stream: Some(true),
+            tools: Some(vec![serde_json::json!({
+                "type": "function",
+                "function": {"name": "get_weather", "parameters": {"type": "object"}}
+            })]),
+            tool_choice: Some(serde_json::Value::String("auto".to_string())),
+        };
+        let (channel, mut rx) = make_test_channel();
+        let (_tx, cancel_rx) = oneshot::channel();
+        run_flight_chat_stream_core(
+            port,
+            "master-key",
+            input,
+            "req-tools-1".to_string(),
+            channel,
+            cancel_rx,
+        )
+        .await
+        .unwrap();
+        let mut saw_delta = false;
+        let mut completed: Option<FlightStreamEvent> = None;
+        while let Some(ev) = rx.recv().await {
+            match ev {
+                FlightStreamEvent::ToolCallDelta { fragments, .. } => {
+                    assert!(!fragments.is_empty());
+                    saw_delta = true;
+                }
+                FlightStreamEvent::Completed {
+                    total_tool_calls,
+                    finish_reason,
+                    saw_done,
+                    ..
+                } => {
+                    completed = Some(FlightStreamEvent::Completed {
+                        request_id: String::new(),
+                        total_text: String::new(),
+                        total_reasoning: None,
+                        first_content_ms: None,
+                        elapsed_ms: 0,
+                        usage: None,
+                        finish_reason,
+                        saw_done,
+                        total_tool_calls,
+                    });
+                    break;
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_delta, "must emit ToolCallDelta fragments");
+        let completed = completed.expect("must complete");
+        if let FlightStreamEvent::Completed {
+            total_tool_calls,
+            finish_reason,
+            saw_done,
+            ..
+        } = completed
+        {
+            let calls = total_tool_calls.expect("must include assembled tool_calls");
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].id, "call_abc");
+            assert_eq!(calls[0].name, "get_weather");
+            assert!(calls[0].arguments.contains("Beijing"));
+            assert_eq!(finish_reason.as_deref(), Some("tool_calls"));
+            assert!(saw_done);
+        } else {
+            panic!("unreachable");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_chat_nonstream_core_tool_calls() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let body = r#"{"choices":[{"message":{"content":null,"tool_calls":[{"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Shanghai\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}"#;
+                let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+        let input = FlightChatRequestInput {
+            request_id: None,
+            model: "gpt-4o".to_string(),
+            messages: vec![FlightMessageInput {
+                role: "user".to_string(),
+                content: "weather in Shanghai?".to_string(),
+                content_parts: None,
+            }],
+            temperature: Some(0.7),
+            stream: Some(false),
+            tools: Some(vec![
+                serde_json::json!({"type":"function","function":{"name":"get_weather"}}),
+            ]),
+            tool_choice: None,
+        };
+        let (_tx, cancel_rx) = oneshot::channel();
+        let res = run_flight_chat_nonstream_core(
+            port,
+            "master-key",
+            input,
+            "req-tools-ns".to_string(),
+            cancel_rx,
+        )
+        .await
+        .unwrap();
+        let calls = res.tool_calls.expect("must parse tool_calls");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call_xyz");
+        assert_eq!(calls[0].name, "get_weather");
+        assert!(calls[0].arguments.contains("Shanghai"));
+        assert_eq!(res.finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn test_validate_chat_input_tools_bounds() {
+        let mut ok = FlightChatRequestInput {
+            request_id: None,
+            model: "m".to_string(),
+            messages: vec![FlightMessageInput {
+                role: "user".into(),
+                content: "x".into(),
+                content_parts: None,
+            }],
+            temperature: None,
+            stream: None,
+            tools: Some(vec![
+                serde_json::json!({"type":"function","function":{"name":"f"}}),
+            ]),
+            tool_choice: Some(serde_json::Value::String("auto".into())),
+        };
+        assert!(validate_chat_input(&ok).is_ok());
+        ok.tools = Some(
+            (0..33)
+                .map(|_| serde_json::json!({"type":"function"}))
+                .collect(),
+        );
+        assert_eq!(
+            validate_chat_input(&ok).unwrap_err(),
+            "工具定义数量超出上限 (32)"
+        );
+        ok.tools = Some(vec![
+            serde_json::json!({"type":"function","function":{"name":"f"}}),
+        ]);
+        ok.tool_choice = Some(serde_json::Value::String("sometimes".into()));
+        assert_eq!(
+            validate_chat_input(&ok).unwrap_err(),
+            "tool_choice 字符串仅支持 none/auto/required"
+        );
+        ok.tool_choice = Some(serde_json::json!({"type":"function","function":{"name":"f"}}));
+        assert!(validate_chat_input(&ok).is_ok());
+    }
+
+    #[test]
+    fn test_validate_chat_input_multimodal_parts_bounds() {
+        let mut ok = FlightChatRequestInput {
+            request_id: None,
+            model: "m".to_string(),
+            messages: vec![FlightMessageInput {
+                role: "user".into(),
+                content: "describe".into(),
+                content_parts: Some(vec![
+                    FlightContentPart {
+                        part_type: "text".into(),
+                        text: Some("describe".into()),
+                        image_url: None,
+                    },
+                    FlightContentPart {
+                        part_type: "image_url".into(),
+                        text: None,
+                        image_url: Some(FlightImageUrl {
+                            url: "https://example.com/i.png".into(),
+                        }),
+                    },
+                ]),
+            }],
+            temperature: None,
+            stream: None,
+            tools: None,
+            tool_choice: None,
+        };
+        assert!(validate_chat_input(&ok).is_ok());
+        ok.messages[0].content_parts = Some(
+            (0..5)
+                .map(|_| FlightContentPart {
+                    part_type: "image_url".into(),
+                    text: None,
+                    image_url: Some(FlightImageUrl {
+                        url: "https://e/x".into(),
+                    }),
+                })
+                .collect(),
+        );
+        assert_eq!(
+            validate_chat_input(&ok).unwrap_err(),
+            "单条消息图片数量超出上限 (4)"
+        );
     }
 }

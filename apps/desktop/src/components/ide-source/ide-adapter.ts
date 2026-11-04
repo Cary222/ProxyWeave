@@ -1,5 +1,7 @@
 import { api } from "../../api";
 import type { AgentTargetStatus, FlightDiscoveredModel } from "../../types";
+import type { AgentDiffPreview, AgentFileDiff } from "../../types";
+export type { AgentDiffPreview, AgentFileDiff };
 
 export type AgentClientTarget = AgentTargetStatus & { configPath: string };
 export interface AgentDetectionResult { targets: AgentClientTarget[] }
@@ -43,6 +45,8 @@ export async function getGatewayModels(): Promise<GatewayModelItem[]> {
   return (await api.flightListModels()).models;
 }
 export const importAgentClient = api.importAgentClient;
+export const previewAgentClient = api.previewAgentClient;
+export const previewAgentDiff = api.previewAgentDiff;
 export async function listAgentBackups(target: string): Promise<{ backups: AgentBackupItem[] }> {
   return { backups: (await api.listAgentBackups(target)).map(item => ({
     id: item.id, createdAt: item.created_at, path: item.path,

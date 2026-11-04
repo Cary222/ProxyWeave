@@ -34,3 +34,11 @@ UI-001 单独可选扩展：`management: { path: /public-entry, presentation: br
 ## 验证门禁
 
 Feature 1：严格 YAML/语义、包完整性、路径边界、幂等/冲突、登记重载/配置原子写入/失败保持原状态，既有 Rust/TS/桌面构建回归。Feature 2 前独立验证 Windows Job Object fixture，并等待审查门禁；首次 wb2api 启动不得先于此。后续 Windows ACL/Keyring、取消/异常、真实推理与桌面 MCP 逐项报告，不将局部 Phase 2/3 标整阶段完成。
+
+## 有界目录适配补充（ReadyForReview，非运行验收）
+
+- 目录入口先检查显式 `manifest.yaml`；存在但非法、资源缺失或 hash 错误直接拒绝，不降级猜测。没有显式 Manifest 时，只接受内嵌 `manifests/local-project-adapters.yaml` 中的资产键及有限源路径。资产键只解析到内嵌完整 Manifest，不提供脚本、构建器、依赖下载或插件 ID 的运行分支。
+- 当前唯一受审资产为 `manifests/wb2api.manifest.yaml`。根部 `wb2api.exe` 或 `bin/wb2api.exe` 映射为 canonical `bin/wb2api.exe`；两者同时存在拒绝。名称不是准入证明：必须匹配已核验 executable SHA256 `38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485`，声明的 LICENSE 必需且匹配 `49b9e27ddfc7cceab55e19eb7d405bda30a8229de3cc094e6b4d0397ab76a34b`。新 hash 不自动认可。源 `vcs.modified=true`；SHA256 仅完整性，不是身份签名、纯净可复现构建或安全沙箱。
+- 直接复用 Serde/serde_yaml_ng、`Manifest::parse` 和 Registry 的路径、大小、hash、逐文件校验复制及原子登记。只复制声明资产；不扫描 README/git/配置/账户目录，不复制 auths/data，不执行探测或自动编译。源文件及全部现存祖先在打开前拒绝 link/Windows reparse；同路径检查与打开之间仍有 TOCTOU 窗口，不声称可抵御任意并发恶意替换。
+- 完整 Manifest 保留版本、秘密声明、配置/凭据模板、auth/state 独立路径及协议/探针/生命周期；仅增加 `/panel/` browser 管理声明。不更改 fingerprint、旧记录或 settings 规则；布局归一后同契约幂等，同 ID 不同契约仍拒绝。旧记录不自动迁移，真实验收使用新的隔离 profile。
+- 合成 fixture 可以在非公开 crate 内入口注入资产字节验证映射，但生产嵌入 hash 不变。离线测试既不读取真实项目及凭据，也不执行插件；完整原生 Ready、网关、重开与管理页安全路线仍由 Inspector 按八项契约亲测，不提升历史门禁。

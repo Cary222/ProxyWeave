@@ -1,4 +1,6 @@
-use proxyweave_plugin::{Manifest, Ownership, Registry};
+use proxyweave_plugin::{
+    DigestEvidence, Immutability, InstalledSource, Manifest, Ownership, PackageContract, Registry,
+};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -258,6 +260,56 @@ capabilities: {protocol: openai_chat, models_path: /v1/models, inference_path: /
 }
 
 #[test]
+fn magpie_manifest_external_template_validates_and_imports() {
+    let manifest_bytes = include_bytes!("../../../manifests/magpie.manifest.yaml");
+    let manifest =
+        Manifest::parse(manifest_bytes).expect("magpie.manifest.yaml must parse and validate");
+    assert_eq!(manifest.metadata.id, "magpie");
+    assert_eq!(manifest.metadata.name, "Magpie AI Gateway");
+    assert_eq!(manifest.ownership(), Ownership::External);
+    assert_eq!(manifest.capabilities.protocol, "openai_chat");
+    assert_eq!(manifest.capabilities.models_path, "/v1/models");
+    assert_eq!(manifest.capabilities.inference_path, "/v1/chat/completions");
+    assert!(manifest.capabilities.streaming);
+
+    let management_link = proxyweave_plugin::management::resolve_management(
+        &manifest,
+        &proxyweave_plugin::RuntimeStatus::Stopped,
+    )
+    .expect("magpie management entry must resolve");
+    assert_eq!(management_link.state, "available");
+    assert_eq!(
+        management_link.url.as_deref(),
+        Some("http://127.0.0.1:3425/")
+    );
+
+    let tmp = tempfile::tempdir().unwrap();
+    let source = tmp.path().join("magpie.manifest.yaml");
+    fs::write(&source, manifest_bytes).unwrap();
+    let registry = Registry::open(tmp.path().join("profile")).unwrap();
+    let import_res = registry
+        .import(&source)
+        .expect("import external magpie manifest");
+    assert!(!import_res.already_registered);
+    assert_eq!(import_res.record.manifest.metadata.id, "magpie");
+    assert_eq!(import_res.record.manifest.ownership(), Ownership::External);
+
+    let reimport = registry.import(&source).unwrap();
+    assert!(reimport.already_registered);
+
+    let loaded = registry.load("magpie").expect("load magpie from registry");
+    assert_eq!(loaded.manifest.metadata.id, "magpie");
+    assert_eq!(
+        loaded.manifest.network.health_check.identity_header,
+        "Server"
+    );
+    assert_eq!(
+        loaded.manifest.network.health_check.identity_value,
+        "magpie"
+    );
+}
+
+#[test]
 fn concurrent_import_on_clones_is_idempotent() {
     let tmp = tempfile::tempdir().unwrap();
     let source = package(&tmp.path().join("source"));
@@ -461,4 +513,181 @@ fn owned_wb2api_package_import_regression() {
         assert_eq!(fs::read_dir(profile.join("packages")).unwrap().count(), 1);
         println!("real package import/duplicate/reopen succeeded: {name}");
     }
+}
+
+#[test]
+fn old_record_omitted_source_loads_and_serializes_with_none() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = package(&tmp.path().join("source"));
+    let registry = Registry::open(tmp.path().join("profile")).unwrap();
+    let res = registry.import(&src).unwrap();
+    assert_eq!(res.record.source, None);
+
+    // Overwrite record.json with legacy format omitting "source" key entirely
+    let installed_dir = registry.package_dir("test-plugin").unwrap();
+    let record_path = installed_dir.join("record.json");
+    let legacy_json = serde_json::json!({
+        "manifest": res.record.manifest,
+        "fingerprint": res.record.fingerprint,
+        "settings": res.record.settings
+    });
+    fs::write(
+        &record_path,
+        serde_json::to_vec_pretty(&legacy_json).unwrap(),
+    )
+    .unwrap();
+
+    // Reload from registry
+    let reopened = Registry::open(tmp.path().join("profile")).unwrap();
+    let loaded = reopened.load("test-plugin").unwrap();
+    assert_eq!(loaded.source, None);
+    assert_eq!(loaded.fingerprint, res.record.fingerprint);
+    assert_eq!(reopened.list().unwrap(), vec![loaded]);
+}
+
+#[test]
+fn import_with_source_persists_provenance_and_validates_on_reload() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = package(&tmp.path().join("source"));
+    let registry = Registry::open(tmp.path().join("profile")).unwrap();
+
+    let manifest_bytes = fs::read(&src).unwrap();
+    let manifest = Manifest::parse(&manifest_bytes).unwrap();
+    let fingerprint = proxyweave_plugin::manifest_fingerprint(&manifest).unwrap();
+
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let ext = if os == "windows" { "zip" } else { "tar.gz" };
+    let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    let source = InstalledSource {
+        owner: "test-owner".to_string(),
+        repo: "test-repo".to_string(),
+        release_id: 1001,
+        tag_name: "v1.0.0".to_string(),
+        asset_id: 2001,
+        asset_name: format!("test-plugin-{}-{}.{}", os, arch, ext),
+        target_os: os.to_string(),
+        target_arch: arch.to_string(),
+        archive_sha256: sha.to_string(),
+        expected_sha256: sha.to_string(),
+        digest_evidence: DigestEvidence::UserProvidedSha256,
+        package_contract: PackageContract::ManifestV1,
+        manifest_fingerprint: fingerprint.clone(),
+        immutability: Immutability::Unknown,
+    };
+
+    let result = registry
+        .import_with_source(&src, Some(source.clone()))
+        .unwrap();
+    assert!(!result.already_registered);
+    assert_eq!(result.record.source, Some(source.clone()));
+
+    // Verify on-disk record.json
+    let installed_dir = registry.package_dir("test-plugin").unwrap();
+    let record_bytes = fs::read(installed_dir.join("record.json")).unwrap();
+    let record_val: serde_json::Value = serde_json::from_slice(&record_bytes).unwrap();
+    assert!(record_val.get("source").is_some());
+    assert_eq!(record_val["source"]["owner"], "test-owner");
+
+    // Verify reload from fresh registry handle
+    let reopened = Registry::open(tmp.path().join("profile")).unwrap();
+    let loaded = reopened.load("test-plugin").unwrap();
+    assert_eq!(loaded.source, Some(source.clone()));
+
+    // Idempotent duplicate preserves existing source
+    let dup_result = reopened.import(&src).unwrap();
+    assert!(dup_result.already_registered);
+    assert_eq!(dup_result.record.source, Some(source));
+}
+
+#[test]
+fn tampered_source_rejected_on_reload() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = package(&tmp.path().join("source"));
+    let registry = Registry::open(tmp.path().join("profile")).unwrap();
+
+    let manifest_bytes = fs::read(&src).unwrap();
+    let manifest = Manifest::parse(&manifest_bytes).unwrap();
+    let fingerprint = proxyweave_plugin::manifest_fingerprint(&manifest).unwrap();
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let ext = if os == "windows" { "zip" } else { "tar.gz" };
+    let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    let source = InstalledSource {
+        owner: "test-owner".to_string(),
+        repo: "test-repo".to_string(),
+        release_id: 1001,
+        tag_name: "v1.0.0".to_string(),
+        asset_id: 2001,
+        asset_name: format!("test-plugin-{}-{}.{}", os, arch, ext),
+        target_os: os.to_string(),
+        target_arch: arch.to_string(),
+        archive_sha256: sha.to_string(),
+        expected_sha256: sha.to_string(),
+        digest_evidence: DigestEvidence::UserProvidedSha256,
+        package_contract: PackageContract::ManifestV1,
+        manifest_fingerprint: fingerprint.clone(),
+        immutability: Immutability::Unknown,
+    };
+
+    registry.import_with_source(&src, Some(source)).unwrap();
+
+    // Tamper with record.json source fingerprint
+    let installed_dir = registry.package_dir("test-plugin").unwrap();
+    let record_path = installed_dir.join("record.json");
+    let mut record_val: serde_json::Value =
+        serde_json::from_slice(&fs::read(&record_path).unwrap()).unwrap();
+    record_val["source"]["manifest_fingerprint"] =
+        serde_json::json!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    fs::write(
+        &record_path,
+        serde_json::to_vec_pretty(&record_val).unwrap(),
+    )
+    .unwrap();
+
+    // Reload fails closed!
+    let reopened = Registry::open(tmp.path().join("profile")).unwrap();
+    assert!(reopened.load("test-plugin").is_err());
+    assert!(reopened.list().is_err());
+}
+
+#[test]
+fn import_with_mismatched_source_fails_atomically() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = package(&tmp.path().join("source"));
+    let registry = Registry::open(tmp.path().join("profile")).unwrap();
+
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let ext = if os == "windows" { "zip" } else { "tar.gz" };
+    let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    // Invalid source: wrong fingerprint
+    let invalid_source = InstalledSource {
+        owner: "test-owner".to_string(),
+        repo: "test-repo".to_string(),
+        release_id: 1001,
+        tag_name: "v1.0.0".to_string(),
+        asset_id: 2001,
+        asset_name: format!("test-plugin-{}-{}.{}", os, arch, ext),
+        target_os: os.to_string(),
+        target_arch: arch.to_string(),
+        archive_sha256: sha.to_string(),
+        expected_sha256: sha.to_string(),
+        digest_evidence: DigestEvidence::UserProvidedSha256,
+        package_contract: PackageContract::ManifestV1,
+        manifest_fingerprint: "0000000000000000000000000000000000000000000000000000000000000000"
+            .to_string(),
+        immutability: Immutability::Unknown,
+    };
+
+    let err = registry
+        .import_with_source(&src, Some(invalid_source))
+        .unwrap_err();
+    assert!(err.contains("invalid installed source binding"));
+
+    // Verify registry is empty: nothing installed
+    assert!(registry.list().unwrap().is_empty());
 }

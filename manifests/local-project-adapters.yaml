@@ -1,0 +1,4 @@
+# Bounded source layouts for audited embedded manifests; no discovery/build scripts.
+# Asset keys resolve only in detector.rs. Manifest owns all metadata, hashes and runtime policy.
+- manifest_asset: wb2api
+  executable_sources: [wb2api.exe, bin/wb2api.exe]

@@ -5,6 +5,10 @@ use std::{
     io::{Read, Write},
     net::TcpListener,
     path::Path,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -18,7 +22,7 @@ fn managed_fixture_child() {
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log)
+        .open(&log)
         .unwrap()
         .write_all(format!("{}\n", std::process::id()).as_bytes())
         .unwrap();
@@ -41,36 +45,99 @@ fn managed_fixture_child() {
         )
         .unwrap();
     }
-    let mut requests = 0;
+    let requests = Arc::new(AtomicUsize::new(0));
     let private_marker = "private-peer-marker-never-publish";
+    let identity = Arc::<str>::from(identity);
+    let code = Arc::<str>::from(code);
+    let mode = Arc::<str>::from(mode);
     for connection in listener.incoming() {
-        let mut connection = connection.unwrap();
-        connection
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        let mut request = [0u8; 4096];
-        let n = connection.read(&mut request).unwrap_or(0);
-        if String::from_utf8_lossy(&request[..n]).starts_with("GET /exit ") {
-            std::process::exit(0);
-        }
-        requests += 1;
-        if mode == "timeout" {
-            // Accept HTTP but never deliver headers within the Manifest probe deadline.
-            std::thread::sleep(Duration::from_millis(250));
-            continue;
-        }
-        if mode == "malformed" {
-            let _ = write!(connection, "{private_marker}\r\n\r\n");
-            continue;
-        }
-        let identity_header = if mode == "missing" {
-            String::new()
-        } else if mode == "recover" && requests > 1 {
-            "X-Fixture: review-fixture\r\n".into()
-        } else {
-            format!("X-Fixture: {identity}\r\n")
+        let Ok(mut connection) = connection else {
+            break;
         };
-        let _ = write!(connection, "HTTP/1.1 {code} Fixture\r\n{identity_header}X-Private: {private_marker}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{private_marker}", private_marker.len());
+        let identity = identity.clone();
+        let code = code.clone();
+        let mode = mode.clone();
+        let requests = requests.clone();
+        std::thread::spawn(move || {
+            connection
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0u8; 4096];
+            let n = connection.read(&mut request).unwrap_or(0);
+            let req_str = String::from_utf8_lossy(&request[..n]);
+            if req_str.starts_with("GET /exit ") {
+                std::process::exit(0);
+            }
+            let req_count = requests.fetch_add(1, Ordering::SeqCst) + 1;
+            if &*mode == "long-stream" && req_str.starts_with("POST /v1/chat/completions ") {
+                // Hold an open SSE stream so the request stays active until the client disconnects.
+                let _ = write!(
+                    connection,
+                    "HTTP/1.1 200 OK\r\nX-Fixture: {identity}\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\ndata: {{\"chunk\":0}}\n\n"
+                );
+                let _ = connection.flush();
+                // Set short read timeout to poll for client cancellation/disconnect while keeping the stream alive.
+                // Crucial requirement: a read timeout must NOT be interpreted as client cancellation.
+                connection
+                    .set_read_timeout(Some(Duration::from_millis(50)))
+                    .unwrap();
+                let mut sink = [0u8; 256];
+                let mut chunk_index: u64 = 1;
+                loop {
+                    match connection.read(&mut sink) {
+                        Ok(0) => {
+                            // Client closed TCP connection (FIN/EOF)
+                            break;
+                        }
+                        Ok(_) => {
+                            // Data received on socket (e.g. downstream bytes)
+                        }
+                        Err(ref e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                || e.kind() == std::io::ErrorKind::TimedOut =>
+                        {
+                            // Read timeout while downstream is waiting/listening.
+                            // Crucial: read timeout is NOT client cancellation. Write periodic SSE chunk
+                            // to confirm the stream is alive and verify client socket is still open.
+                            let chunk = format!("data: {{\"chunk\":{chunk_index}}}\n\n");
+                            chunk_index += 1;
+                            if connection.write_all(chunk.as_bytes()).is_err() {
+                                // Write error: downstream client has disconnected / reset
+                                break;
+                            }
+                            let _ = connection.flush();
+                            std::thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(_) => {
+                            // Client disconnect / reset / abort
+                            break;
+                        }
+                    }
+                }
+                return;
+            }
+            if &*mode == "timeout" {
+                // Accept HTTP but never deliver headers within the Manifest probe deadline.
+                std::thread::sleep(Duration::from_millis(250));
+                return;
+            }
+            if &*mode == "malformed" {
+                let _ = write!(connection, "{private_marker}\r\n\r\n");
+                return;
+            }
+            let identity_header = if &*mode == "missing" {
+                String::new()
+            } else if &*mode == "recover" && req_count > 1 {
+                "X-Fixture: review-fixture\r\n".into()
+            } else {
+                format!("X-Fixture: {identity}\r\n")
+            };
+            let _ = write!(
+                connection,
+                "HTTP/1.1 {code} Fixture\r\n{identity_header}X-Private: {private_marker}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{private_marker}",
+                private_marker.len()
+            );
+        });
     }
 }
 
@@ -109,6 +176,7 @@ configuration: {{config_template: {{}}}}
         manifest: Manifest::parse(yaml.as_bytes()).unwrap(),
         fingerprint: "fixture".into(),
         settings: Default::default(),
+        source: None,
     }
 }
 
@@ -649,4 +717,418 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
             None
         );
     }
+}
+
+fn stream_record() -> PluginRecord {
+    let mut record = record(0, "review-fixture", 200, 0);
+    if let proxyweave_plugin::manifest::Runtime::Managed { env, .. } = &mut record.manifest.runtime
+    {
+        env.insert("FIXTURE_MODE".into(), "long-stream".into());
+    }
+    record
+}
+
+#[tokio::test]
+async fn active_stream_blocks_stop_and_cancellation_releases_lease() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let record = stream_record();
+    let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+    let (port, pid) = ready(
+        manager
+            .start_plugin(&record, temp.path(), Some(port), temp.path(), None)
+            .await
+            .unwrap(),
+    );
+    assert!(alive(pid));
+    assert_eq!(manager.active_request_count("review-fixture").await, 0);
+
+    // Architectural Boundary Note:
+    // In this plugin-isolated test boundary (crates/proxyweave-plugin), proxyweave-gateway
+    // cannot be imported due to crate dependency hierarchy (proxyweave-gateway depends on
+    // proxyweave-plugin; adding gateway here would cause a circular dependency).
+    // Automatic request-lease acquisition during gateway routing and automatic lease release
+    // upon downstream client disconnect are proven in `crates/proxyweave-gateway/tests/passthrough.rs`
+    // (`native_disconnect_during_stream_cancels_upstream_and_releases_lease`).
+    // Here we explicitly test the direct upstream Managed fixture streaming protocol:
+    // 1. Upstream fixture serves genuine text/event-stream SSE bytes.
+    // 2. Stream cannot complete prematurely on its own before explicit client cancellation.
+    // 3. The RuntimeManager request lease actively blocks stop_plugin and protects the owned PID.
+    // 4. Client cancellation terminates the upstream stream, and lease release allows clean stop.
+    let lease = manager.acquire_request("review-fixture").await.unwrap();
+    assert_eq!(manager.active_request_count("review-fixture").await, 1);
+
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let mut response = client
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    // Verify Content-Type is genuine text/event-stream
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .expect("missing content-type header")
+        .to_str()
+        .unwrap();
+    assert!(
+        content_type.contains("text/event-stream"),
+        "expected text/event-stream, got: {content_type}"
+    );
+
+    // Read the first SSE chunk to confirm stream is active and emitting bytes
+    let first_chunk = response
+        .chunk()
+        .await
+        .unwrap()
+        .expect("expected initial SSE chunk");
+    assert!(
+        String::from_utf8_lossy(&first_chunk).contains("data: {\"chunk\":0}"),
+        "unexpected first chunk: {:?}",
+        first_chunk
+    );
+
+    // Verify the stream cannot complete before explicit cancellation:
+    // read a subsequent chunk emitted by the active upstream loop.
+    let second_chunk = response
+        .chunk()
+        .await
+        .unwrap()
+        .expect("stream terminated prematurely without client cancellation");
+    assert!(
+        String::from_utf8_lossy(&second_chunk).contains("data: {\"chunk\":"),
+        "unexpected second chunk: {:?}",
+        second_chunk
+    );
+
+    // While the stream is active, stop must be refused and the owned process must stay alive.
+    let refused = manager.stop_plugin("review-fixture").await.unwrap_err();
+    assert!(matches!(refused, RuntimeError::ActiveRequests));
+    assert!(alive(pid));
+    assert_eq!(manager.active_request_count("review-fixture").await, 1);
+
+    // Explicit client cancellation: dropping the in-flight response terminates downstream TCP connection.
+    drop(response);
+
+    // Releasing the request lease clears active request count.
+    drop(lease);
+    assert_eq!(manager.active_request_count("review-fixture").await, 0);
+
+    // After cancellation and lease release, stop succeeds and terminates the owned process.
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
+    assert_eq!(
+        manager.get_status("review-fixture").await,
+        RuntimeStatus::Stopped
+    );
+}
+
+#[tokio::test]
+async fn dropped_lease_during_active_stream_releases_counter() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let record = stream_record();
+    let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+    let (port, pid) = ready(
+        manager
+            .start_plugin(&record, temp.path(), Some(port), temp.path(), None)
+            .await
+            .unwrap(),
+    );
+    assert!(alive(pid));
+
+    // Architectural Boundary Note on RAII Scope & Lifecycle:
+    // ProxyWeave has NO background idle reaper thread (as designed in ADR-003 and AGENTS.md).
+    // Lifecycle safety is governed exclusively by the RequestLease RAII guard and the
+    // active_requests atomic counter.
+    // This test verifies that:
+    // 1. A genuine long-stream request is initiated and held open against the owned Managed child.
+    // 2. An acquired RequestLease holds active_request_count at 1, which blocks stop_plugin.
+    // 3. Dropping the RequestLease guard immediately releases the active counter to 0 (RAII drop).
+    // 4. Downstream cancellation (dropping response) tears down the active stream.
+    // 5. With active_requests at 0, stop_plugin cleanly reclaims the process.
+    let lease = manager.acquire_request("review-fixture").await.unwrap();
+    assert_eq!(manager.active_request_count("review-fixture").await, 1);
+
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let mut response = client
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let first_chunk = response
+        .chunk()
+        .await
+        .unwrap()
+        .expect("expected initial SSE chunk");
+    assert!(String::from_utf8_lossy(&first_chunk).contains("data: {\"chunk\":0}"));
+
+    // Stop is refused while lease is held
+    assert!(matches!(
+        manager.stop_plugin("review-fixture").await,
+        Err(RuntimeError::ActiveRequests)
+    ));
+    assert!(alive(pid));
+
+    // Dropping the RAII lease guard alone must settle the counter back to zero
+    drop(lease);
+    assert_eq!(manager.active_request_count("review-fixture").await, 0);
+
+    // Downstream stream is cancelled
+    drop(response);
+
+    // Stop now succeeds because active_requests is 0
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
+    assert_eq!(
+        manager.get_status("review-fixture").await,
+        RuntimeStatus::Stopped
+    );
+}
+
+#[tokio::test]
+async fn test_runtime_generation_and_maintenance_barrier() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let record = record(0, "review-fixture", 200, 0);
+    let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+    let (_port1, pid1) = ready(
+        manager
+            .start_plugin(
+                &record,
+                temp.path(),
+                Some(port1_binding(&record, port)),
+                temp.path(),
+                None,
+            )
+            .await
+            .unwrap(),
+    );
+    assert!(alive(pid1));
+
+    // Generation starts at 1
+    assert_eq!(manager.instance_generation("review-fixture").await, Some(1));
+
+    // Acquire lease for generation 1
+    let lease1 = manager
+        .acquire_request_for("review-fixture", Some(1))
+        .await
+        .unwrap();
+    assert_eq!(lease1.instance_generation(), 1);
+
+    // Stale generation lease acquisition fails
+    assert!(matches!(
+        manager.acquire_request_for("review-fixture", Some(0)).await,
+        Err(RuntimeError::StaleGeneration {
+            expected: 0,
+            actual: 1
+        })
+    ));
+    assert!(matches!(
+        manager.acquire_request_for("review-fixture", Some(2)).await,
+        Err(RuntimeError::StaleGeneration {
+            expected: 2,
+            actual: 1
+        })
+    ));
+
+    // Enter maintenance barrier with active lease
+    let barrier_manager = manager.clone();
+    let barrier_task = tokio::spawn(async move {
+        barrier_manager
+            .enter_maintenance_barrier("review-fixture", Duration::from_millis(1500))
+            .await
+    });
+
+    // While waiting for drain, new lease acquisition is rejected with ServiceUnderMaintenance
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(matches!(
+        manager.acquire_request("review-fixture").await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+
+    assert!(matches!(
+        manager.stop_plugin("review-fixture").await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager
+            .start_plugin(&record, temp.path(), None, temp.path(), None)
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager
+            .restart_plugin(&record, temp.path(), None, temp.path(), None)
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    // Release active lease
+    drop(lease1);
+
+    // Barrier finishes cleanly
+    let maintenance_token = barrier_task.await.unwrap().unwrap();
+
+    // Cancel maintenance restores normal status
+    manager
+        .cancel_maintenance_barrier(&maintenance_token)
+        .await
+        .unwrap();
+    let lease_after_cancel = manager.acquire_request("review-fixture").await.unwrap();
+    assert_eq!(lease_after_cancel.instance_generation(), 1);
+    drop(lease_after_cancel);
+
+    // Stop and restart advances generation
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid1).await;
+    assert_eq!(manager.instance_generation("review-fixture").await, None);
+
+    let (_port2, pid2) = ready(
+        manager
+            .start_plugin(&record, temp.path(), None, temp.path(), None)
+            .await
+            .unwrap(),
+    );
+    assert_ne!(pid1, pid2);
+    assert_eq!(manager.instance_generation("review-fixture").await, Some(3));
+
+    let lease2 = manager
+        .acquire_request_for("review-fixture", Some(3))
+        .await
+        .unwrap();
+    assert_eq!(lease2.instance_generation(), 3);
+    drop(lease2);
+
+    // Expired owners cannot release a later transaction or authorize another plugin.
+    let next_token = manager
+        .enter_maintenance_barrier("review-fixture", Duration::from_secs(1))
+        .await
+        .unwrap();
+    assert!(matches!(
+        manager.exit_maintenance(&maintenance_token).await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager.cancel_maintenance_barrier(&maintenance_token).await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager
+            .stop_plugin_under_maintenance("review-fixture", &maintenance_token)
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager
+            .start_plugin_under_maintenance(
+                &record,
+                temp.path(),
+                None,
+                temp.path(),
+                None,
+                &maintenance_token
+            )
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager
+            .stop_plugin_under_maintenance("another-plugin", &next_token)
+            .await,
+        Err(RuntimeError::PluginNotFound(_))
+    ));
+    manager
+        .stop_plugin_under_maintenance("review-fixture", &next_token)
+        .await
+        .unwrap();
+    wait_for_exit(pid2).await;
+    assert!(manager.is_maintenance("review-fixture").await);
+    assert!(matches!(
+        manager
+            .start_plugin(&record, temp.path(), None, temp.path(), None)
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    let (_, pid3) = ready(
+        manager
+            .start_plugin_under_maintenance(
+                &record,
+                temp.path(),
+                None,
+                temp.path(),
+                None,
+                &next_token,
+            )
+            .await
+            .unwrap(),
+    );
+    assert!(manager.is_maintenance("review-fixture").await);
+    assert!(matches!(
+        manager.acquire_request("review-fixture").await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    manager.exit_maintenance(&next_token).await.unwrap();
+    drop(manager.acquire_request("review-fixture").await.unwrap());
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid3).await;
+}
+
+fn port1_binding(_record: &PluginRecord, port: u16) -> u16 {
+    port
+}
+
+#[tokio::test]
+async fn maintenance_drain_timeout_restores_admission_without_stopping_owned_process() {
+    let temp = sandbox();
+    let manager = RuntimeManager::new();
+    let record = record(0, "review-fixture", 200, 0);
+    let (_, pid) = ready(
+        manager
+            .start_plugin(&record, temp.path(), None, temp.path(), None)
+            .await
+            .unwrap(),
+    );
+    let lease = manager.acquire_request("review-fixture").await.unwrap();
+    let other = manager.clone();
+    let barrier = tokio::spawn(async move {
+        other
+            .enter_maintenance_barrier("review-fixture", Duration::from_millis(300))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !manager.is_maintenance("review-fixture").await {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(matches!(
+        manager
+            .enter_maintenance_barrier("review-fixture", Duration::ZERO)
+            .await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        manager.stop_plugin("review-fixture").await,
+        Err(RuntimeError::ServiceUnderMaintenance)
+    ));
+    assert!(matches!(
+        barrier.await.unwrap(),
+        Err(RuntimeError::ActiveRequestsTimeout {
+            active_requests: 1,
+            ..
+        })
+    ));
+    assert!(!manager.is_maintenance("review-fixture").await);
+    assert!(alive(pid));
+    drop(manager.acquire_request("review-fixture").await.unwrap());
+    drop(lease);
+    manager.stop_plugin("review-fixture").await.unwrap();
+    wait_for_exit(pid).await;
 }

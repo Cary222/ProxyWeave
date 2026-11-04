@@ -1,0 +1,36 @@
+# ==============================================================================
+# ProxyWeave Plugin Manifest: Magpie AI Gateway (External Provider)
+# Ref: M16 (yetone/magpie @ d783df46cbac9021e26a6bd71ca0b55544552eb2)
+# Protocol: 127.0.0.1:3425 AI Proxy Gateway (OpenAI Chat / Responses / Anthropic)
+# Rule: Everything is a plugin. External ownership means ProxyWeave probes and forwards
+#       traffic without owning or killing the external Magpie host process.
+# ==============================================================================
+schema_version: '1.0'
+metadata:
+  id: magpie
+  name: Magpie AI Gateway
+  version: 0.1.0
+  license: MIT
+  source_commit: d783df46cbac9021e26a6bd71ca0b55544552eb2
+runtime:
+  ownership: external
+  endpoint: 'http://127.0.0.1:3425/'
+network:
+  health_check:
+    path: /healthz
+    expected_status: 200
+    identity_header: Server
+    identity_value: magpie
+    timeout_ms: 2000
+lifecycle:
+  startup_timeout_ms: 10000
+  idle_timeout_ms: null
+  max_port_retries: 0
+capabilities:
+  protocol: openai_chat
+  models_path: /v1/models
+  inference_path: /v1/chat/completions
+  streaming: true
+management:
+  path: /
+  presentation: browser

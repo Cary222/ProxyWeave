@@ -45,6 +45,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Packaged desktop deliverable (build artifact, regenerate via build-desktop-embedded.cmd)
+/bin/
+
 # Pi agent metadata
 /.pi/tasks/
 /.pi/goals/

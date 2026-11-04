@@ -54,7 +54,7 @@ fn responses_call_id(item: &Value) -> Option<&str> {
         .or_else(|| item["id"].as_str().filter(|s| !s.is_empty()))
 }
 
-fn unique_responses_call_id(
+pub(crate) fn unique_responses_call_id(
     raw_id: &str,
     occurrence: usize,
     used_ids: &mut HashSet<String>,

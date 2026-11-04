@@ -8,6 +8,7 @@ import { FlightPanel } from "./FlightPanel";
 import { AuditPanel } from "./AuditPanel";
 import { IdePanel } from "./IdePanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { ModelSearchModal } from "./ModelSearchModal";
 import {
   PluginRecord,
   PluginStatusInfo,
@@ -46,6 +47,8 @@ export function AppShell() {
     return "sky";
   });
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
+  const [isModelSearchOpen, setIsModelSearchOpen] = useState(false);
+  const [flightInitialModel, setFlightInitialModel] = useState<string | null>(null);
 
   // Per-resource read states (DEF-019: loading / confirmed / error + stale preservation)
   const [gatewayState, setGatewayState] = useState<ResourceReadState<GatewayStatusInfo>>({
@@ -172,6 +175,7 @@ export function AppShell() {
       }));
     }
 
+
     // 4. Per-plugin runtime & secret statuses (only updated when plugin list read succeeded)
     if (confirmedPlugins !== null) {
       if (confirmedPlugins.length === 0) {
@@ -214,6 +218,18 @@ export function AppShell() {
     refreshData();
     const interval = setInterval(refreshData, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Global shortcut for model search (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsModelSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Window control actions (DEF-018: Phase 0 verified close/minimize/maximize flow)
@@ -400,6 +416,45 @@ export function AppShell() {
         <div className="brand" data-tauri-drag-region>
           <h1>ProxyWeave</h1>
           <p>AI 编织网关宿主 · 统一网关服务</p>
+        </div>
+
+        <div style={{ padding: "0 10px 10px 10px" }}>
+          <button
+            type="button"
+            id="quickModelSearchBtn"
+            onClick={() => setIsModelSearchOpen(true)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--line)",
+              background: "var(--well)",
+              color: "var(--text2)",
+              fontSize: 12,
+              cursor: "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+            title="全局模型快速检索与试飞 (Ctrl+K)"
+          >
+            <Icon name="search" style={{ width: 14, height: 14, color: "var(--muted)" }} />
+            <span style={{ flex: 1, textAlign: "left", color: "var(--muted)" }}>快速检索模型…</span>
+            <kbd
+              style={{
+                fontSize: 10,
+                fontFamily: "var(--mono)",
+                padding: "1px 5px",
+                borderRadius: 4,
+                background: "var(--card)",
+                border: "1px solid var(--line2)",
+                color: "var(--muted)",
+              }}
+            >
+              Ctrl K
+            </kbd>
+          </button>
         </div>
 
         {/* 8 大主导航 */}
@@ -677,6 +732,7 @@ export function AppShell() {
             plugins={plugins}
             pluginStatuses={pluginStatuses}
             gatewayStatus={gatewayStatus}
+            initialModel={flightInitialModel}
           />
         )}
 
@@ -691,6 +747,23 @@ export function AppShell() {
         )}
       </main>
 
+
+      {/* 全局模型搜索与快速试飞弹窗 (Phase F3: Ctrl+K) */}
+      <ModelSearchModal
+        isOpen={isModelSearchOpen}
+        onClose={() => setIsModelSearchOpen(false)}
+        gatewayStatus={gatewayStatus}
+        plugins={plugins}
+        onSelectModelFlight={(modelId) => {
+          setFlightInitialModel(modelId);
+          setIsModelSearchOpen(false);
+          setCurrentTab("flight");
+        }}
+        onNavigateGateway={() => {
+          setIsModelSearchOpen(false);
+          setCurrentTab("gateway");
+        }}
+      />
       {/* 关闭确认对话框 (DEF-018: Phase 0 Custom Close Confirmation) */}
       {closeDialog ? (
         <div
