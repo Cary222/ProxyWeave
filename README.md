@@ -31,6 +31,21 @@ npm run desktop:dev
 
 ---
 
+## 📦 跨平台打包与自动化发布 (Release Workflow)
+
+ProxyWeave 提供基于 GitHub Actions 的跨平台自动化打包与发布流水线（`.github/workflows/release.yml`）：
+
+- **触发机制**：推送版本标签（如 `git tag v0.1.0 && git push origin v0.1.0`）或通过 GitHub Actions 界面 `workflow_dispatch` 手动触发。
+- **三端并发打包**：
+  - **Windows** (`windows-latest`)：生成 NSIS 安装包（`.exe`）与 WiX 安装包（`.msi`）；
+  - **Linux** (`ubuntu-latest`)：安装 `webkit2gtk-4.1` 等必要系统依赖，生成 Debian 安装包（`.deb`）与 AppImage 便携包（`.AppImage`）；
+  - **macOS** (`macos-latest`)：生成原生 DMG 镜像（`.dmg`）与应用归档包（`.app.tar.gz`）。
+- **独立内嵌前端保障**：打包前严格执行前端 `npm run build`，先完成 TypeScript 编译与 Vite 生产构建，将 `apps/desktop/dist` 资源直接内嵌至桌面二进制，产出的安装包完全独立运行，不依赖本地 dev server。
+- **SHA256 完整性清单**：每次发布流水线会自动收集三端全部构建产物，统一计算并在 Release 资产中生成附带 `SHA256SUMS.txt`，供用户下载后运行 `sha256sum -c SHA256SUMS.txt` 完成完整性校验。
+- **透明边界与安全说明**：当前社区构建未引入任何私有代码签名、证书或 Apple 公证（未做 Authenticode 与 Gatekeeper 公证），安装或运行时若操作系统提示未知发布者属预期现象；`SHA256SUMS.txt` 仅代表传输完整性，不代表密码学数字签名。
+
+---
+
 ## 📖 为什么做 ProxyWeave？(Vision & Problem)
 
 优秀的开源 AI 反向代理、2API 转接工具和模型网关层出不穷（如 CLIProxyAPI、各类 *2API、Token 轮换网关等）。然而，每个项目往往都有自己的安装命令、运行依赖、凭证格式、监听端口、API 协议和更新方式。对开发者而言，最大的痛点不仅是“如何调用一个模型”，更是“如何长期维护多个彼此独立的代理程序”：
