@@ -596,7 +596,7 @@ const FLIGHT: [Check; 6] = [
 fn flight_report() {
     let mut failures = Vec::new();
     eprintln!("Compatibility Flight");
-    eprintln!("{:<4} {:<32} {}", "ID", "CHECK", "RESULT");
+    eprintln!("{:<4} {:<32} RESULT", "ID", "CHECK");
     for check in &FLIGHT {
         match (check.run)() {
             Ok(()) => eprintln!("{:<4} {:<32} PASS", check.id, check.name),

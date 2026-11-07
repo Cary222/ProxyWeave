@@ -36,7 +36,9 @@ fn codec(suite: ProtocolSuite) -> Box<dyn EndpointCodec> {
         ProtocolSuite::OpenAiCompatible => Box::new(ChatCompletionsCodec::new()),
         ProtocolSuite::AnthropicMessages => Box::new(MessagesCodec::new()),
         ProtocolSuite::OpenAiResponses => Box::new(ResponsesCodec::new()),
-        ProtocolSuite::GoogleGemini => unimplemented!("gemini codecs are out of scope (Round 11 non-goal)"),
+        ProtocolSuite::GoogleGemini => {
+            unimplemented!("gemini codecs are out of scope (Round 11 non-goal)")
+        }
     }
 }
 
@@ -154,7 +156,10 @@ fn assert_anthropic_block_contract(client: &str, label: &str) {
     for (position, event) in events.iter().enumerate() {
         match event["type"].as_str() {
             Some("content_block_start") => {
-                assert!(open.is_none(), "{label}: nested content_block_start at #{position}");
+                assert!(
+                    open.is_none(),
+                    "{label}: nested content_block_start at #{position}"
+                );
                 assert!(
                     !closed_terminal,
                     "{label}: content_block_start after terminal message_delta at #{position}"
@@ -194,7 +199,10 @@ fn assert_anthropic_block_contract(client: &str, label: &str) {
             _ => {}
         }
     }
-    assert!(open.is_none(), "{label}: stream ended with an open content block");
+    assert!(
+        open.is_none(),
+        "{label}: stream ended with an open content block"
+    );
 }
 
 /// Chat-Completions backend: two parallel calls whose argument fragments are
@@ -238,7 +246,11 @@ fn assert_parallel_association(src: ProtocolSuite, upstream: &str, label: &str) 
 
     // tool_ids: one non-empty, distinct id per call — never empty, never shared.
     assert_eq!(receipt.blocks.len(), 2, "{label}: client blocks {client}");
-    let ids: Vec<&str> = receipt.blocks.iter().map(|block| block.id.as_str()).collect();
+    let ids: Vec<&str> = receipt
+        .blocks
+        .iter()
+        .map(|block| block.id.as_str())
+        .collect();
     assert!(
         ids.iter().all(|id| !id.is_empty()),
         "{label}: empty tool_use id in {ids:?}"
@@ -286,7 +298,10 @@ fn assert_usage_preserved(src: ProtocolSuite, upstream: &str, label: &str) {
         .usage
         .unwrap_or_else(|| panic!("{label}: terminal message_delta carries no usage object"));
     assert!(
-        !usage.as_object().map(|object| object.is_empty()).unwrap_or(true),
+        !usage
+            .as_object()
+            .map(|object| object.is_empty())
+            .unwrap_or(true),
         "{label}: usage object is empty"
     );
     assert_eq!(
