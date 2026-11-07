@@ -12,7 +12,7 @@
 //! 5. Masked Projection: Sensitive credential values are masked (e.g. `sk-••••••`) before
 //!    being displayed in UI/logs, preventing credential leakage.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::manifest::{Manifest, Ownership};
