@@ -683,7 +683,7 @@ impl RuntimeManager {
 
         // Generic projection context
         let projection_ctx =
-            ProjectionContext::new(plugin_id, port, plugin_data_dir.clone(), api_key, secrets);
+            ProjectionContext::new(plugin_id, port, plugin_data_dir.clone(), api_key, secrets.clone());
 
         // Generic configuration and credential files projection with Windows Protected DACL
         let projected = project_managed_configuration(&record.manifest, &projection_ctx)
