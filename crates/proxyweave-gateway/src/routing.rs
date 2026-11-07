@@ -226,11 +226,30 @@ impl RoutePool {
 
     /// Select an ordered list of candidate backends based on session stickiness and strategy.
     /// Returns: (candidates, applied_strategy, is_sticky_hit)
+    /// Select an ordered list of candidate backends based on session stickiness and strategy.
+    /// Returns: (candidates, applied_strategy, is_sticky_hit)
     pub async fn select_candidates(
         &self,
         session_key: Option<&str>,
     ) -> (Vec<Backend>, RouteStrategy, bool) {
+        self.select_candidates_for_target(session_key, None).await
+    }
+
+    /// Select candidates optionally filtered by a specific target plugin_id.
+    pub async fn select_candidates_for_target(
+        &self,
+        session_key: Option<&str>,
+        target_plugin_id: Option<&str>,
+    ) -> (Vec<Backend>, RouteStrategy, bool) {
         let backends = self.backends.read().await.clone();
+        let backends: Vec<Backend> = if let Some(target) = target_plugin_id {
+            backends
+                .into_iter()
+                .filter(|b| b.plugin_id.eq_ignore_ascii_case(target))
+                .collect()
+        } else {
+            backends
+        };
         if backends.is_empty() {
             let strategy = *self.strategy.read().await;
             return (Vec::new(), strategy, false);
@@ -291,8 +310,6 @@ impl RoutePool {
 
         (candidates, strategy, is_sticky)
     }
-
-    /// Record outcome for metrics and bind session stickiness if successful.
     pub async fn record_outcome(
         &self,
         plugin_id: &str,
@@ -438,6 +455,27 @@ mod tests {
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].plugin_id, "ok_200");
         assert_eq!(candidates[1].plugin_id, "bad_500");
+    }
+
+    #[tokio::test]
+    async fn test_select_candidates_for_target_filtering() {
+        let pool = RoutePool::new();
+        pool.add_backend(dummy_backend("wb2api")).await;
+        pool.add_backend(dummy_backend("external-cpa")).await;
+
+        let (c_all, _, _) = pool.select_candidates(None).await;
+        assert_eq!(c_all.len(), 2);
+
+        let (c_wb, _, _) = pool.select_candidates_for_target(None, Some("wb2api")).await;
+        assert_eq!(c_wb.len(), 1);
+        assert_eq!(c_wb[0].plugin_id, "wb2api");
+
+        let (c_cpa, _, _) = pool.select_candidates_for_target(None, Some("external-cpa")).await;
+        assert_eq!(c_cpa.len(), 1);
+        assert_eq!(c_cpa[0].plugin_id, "external-cpa");
+
+        let (c_none, _, _) = pool.select_candidates_for_target(None, Some("nonexistent")).await;
+        assert!(c_none.is_empty());
     }
 
     #[tokio::test]

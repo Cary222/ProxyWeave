@@ -239,8 +239,18 @@
     </div>
     <div class="kpi-card">
       <div class="kpi-title">统一反向代理端口</div>
-      <div class="kpi-value" id="kpi-gw-port">28319</div>
+      <div class="kpi-value" id="kpi-gw-port">28317</div>
       <div class="kpi-sub" id="kpi-gw-status">● 活跃就绪 (127.0.0.1)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">活跃处理中请求</div>
+      <div class="kpi-value" id="kpi-gw-active" style="color: var(--accent-blue);">0</div>
+      <div class="kpi-sub">当前并发反向代理通道</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">累计转发请求</div>
+      <div class="kpi-value" id="kpi-gw-total" style="color: var(--accent-green);">0</div>
+      <div class="kpi-sub">网关已成功路由总计数</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-title">外部守护进程隔离</div>

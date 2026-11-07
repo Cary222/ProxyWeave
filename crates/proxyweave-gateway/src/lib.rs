@@ -22,6 +22,7 @@ use proxyweave_protocols::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
@@ -171,6 +172,8 @@ pub struct Gateway {
     client: Client<hyper_tls::HttpsConnector<HttpConnector>, Body>,
     header_timeout: Duration,
     traces: Arc<tokio::sync::Mutex<VecDeque<RequestTrace>>>,
+    active_requests: Arc<AtomicU64>,
+    total_routed: Arc<AtomicU64>,
 }
 
 impl Gateway {
@@ -203,6 +206,8 @@ impl Gateway {
             client,
             header_timeout,
             traces: Arc::new(tokio::sync::Mutex::new(VecDeque::with_capacity(100))),
+            active_requests: Arc::new(AtomicU64::new(0)),
+            total_routed: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -345,6 +350,14 @@ impl Gateway {
         list.clear();
     }
 
+    pub fn active_requests(&self) -> u64 {
+        self.active_requests.load(Ordering::Relaxed)
+    }
+
+    pub fn total_routed(&self) -> u64 {
+        self.total_routed.load(Ordering::Relaxed)
+    }
+
     fn router(&self) -> Router {
         let models = self.clone();
         let chat = self.clone();
@@ -409,11 +422,58 @@ impl Gateway {
         req: Request<Body>,
         ingress: IngressProtocol,
     ) -> Response<Body> {
+        self.total_routed.fetch_add(1, Ordering::Relaxed);
+        self.active_requests.fetch_add(1, Ordering::Relaxed);
+        struct ActiveGuard(Arc<AtomicU64>);
+        impl Drop for ActiveGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        let _active_guard = ActiveGuard(self.active_requests.clone());
+
         let client_ip = extract_client_ip(req.headers());
         let session_key = extract_session_key(req.headers(), client_ip.as_deref(), None);
+
+        // Header-based routing target
+        let header_target = req
+            .headers()
+            .get("x-proxyweave-target")
+            .or_else(|| req.headers().get("x-target-plugin"))
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.trim().to_string());
+
+        // Extract body bytes to inspect model prefix if header is absent
+        let (parts, body) = req.into_parts();
+        let body_bytes = match axum::body::to_bytes(body, 16 * 1024 * 1024).await {
+            Ok(b) => b,
+            Err(_) => {
+                return error_with_message(
+                    StatusCode::BAD_REQUEST,
+                    "bad_request",
+                    "Failed to read request body payload",
+                );
+            }
+        };
+
+        let mut model_target = None;
+        if header_target.is_none() {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+                if let Some(m) = val.get("model").and_then(|m| m.as_str()) {
+                    if let Some((prefix, _)) = m.split_once('/') {
+                        if !prefix.is_empty() {
+                            model_target = Some(prefix.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let target_plugin = header_target.or(model_target);
+
         let (candidates, strategy, is_sticky) = self
             .route_pool
-            .select_candidates(session_key.as_deref())
+            .select_candidates_for_target(session_key.as_deref(), target_plugin.as_deref())
             .await;
 
         let (backend, route_strategy) = if let Some(first) = candidates.first() {
@@ -423,13 +483,28 @@ impl Gateway {
                 strategy.as_str().to_string()
             };
             (first.clone(), label)
+        } else if let Some(target) = target_plugin {
+            // Explicit target requested but not found or ready in route pool -> 502 Bad Gateway
+            return error_with_message(
+                StatusCode::BAD_GATEWAY,
+                "bad_gateway",
+                &format!("Target plugin '{}' is not registered or unavailable", target),
+            );
         } else {
             let guard = self.backend.read().await;
             match guard.as_ref() {
                 Some(b) => (b.clone(), "Direct".to_string()),
-                None => return error(StatusCode::SERVICE_UNAVAILABLE, "no_backend"),
+                None => {
+                    return error_with_message(
+                        StatusCode::BAD_GATEWAY,
+                        "bad_gateway",
+                        "No active plugin backend available",
+                    );
+                }
             }
         };
+
+        let req = Request::from_parts(parts, Body::from(body_bytes));
 
         if ingress.matches_backend_protocol(&backend.protocol) {
             self.forward_with_backend(req, false, backend, route_strategy, session_key)
@@ -441,8 +516,28 @@ impl Gateway {
     }
 
     async fn forward(&self, req: Request<Body>, models: bool) -> Response<Body> {
+        self.total_routed.fetch_add(1, Ordering::Relaxed);
+        self.active_requests.fetch_add(1, Ordering::Relaxed);
+        struct ActiveGuard(Arc<AtomicU64>);
+        impl Drop for ActiveGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        let _active_guard = ActiveGuard(self.active_requests.clone());
+
+        let target_header = req
+            .headers()
+            .get("x-proxyweave-target")
+            .or_else(|| req.headers().get("x-target-plugin"))
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.trim().to_string());
+
         let backend = {
-            let (candidates, _, _) = self.route_pool.select_candidates(None).await;
+            let (candidates, _, _) = self
+                .route_pool
+                .select_candidates_for_target(None, target_header.as_deref())
+                .await;
             if let Some(first) = candidates.first() {
                 first.clone()
             } else if let Some(b) = self.backend.read().await.clone() {
@@ -471,20 +566,25 @@ impl Gateway {
                     model: None,
                     ingress_protocol,
                     route_strategy: "Direct".to_string(),
-                    target_plugin: "none".to_string(),
-                    status_code: 503,
+                    target_plugin: target_header.unwrap_or_else(|| "none".to_string()),
+                    status_code: 502,
                     duration_ms: 0,
                     first_token_ms: None,
                     input_tokens: None,
                     output_tokens: None,
                     cache_hit: None,
                     fallback_trail: Vec::new(),
-                    error: Some("no_backend".to_string()),
+                    error: Some("backend_unavailable".to_string()),
                 })
                 .await;
-                return error(StatusCode::SERVICE_UNAVAILABLE, "no_backend");
+                return error_with_message(
+                    StatusCode::BAD_GATEWAY,
+                    "bad_gateway",
+                    "No active plugin backend available",
+                );
             }
         };
+
         let strategy_str = if models {
             "Direct (Models)".to_string()
         } else {
@@ -1395,6 +1495,21 @@ fn error(status: StatusCode, code: &'static str) -> Response<Body> {
         .status(status)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(format!(r#"{{"error":{{"code":"{code}"}}}}"#)))
+        .expect("static response")
+}
+
+fn error_with_message(status: StatusCode, code: &'static str, message: &str) -> Response<Body> {
+    let payload = serde_json::json!({
+        "error": {
+            "message": message,
+            "type": code,
+            "code": status.as_u16(),
+        }
+    });
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&payload).unwrap_or_default()))
         .expect("static response")
 }
 struct LeasedBody {
