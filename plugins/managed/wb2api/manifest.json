@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "id": "wb2api",
+    "name": "WorkBuddy 2API Panel",
+    "version": "1.13.0",
+    "license": "MIT",
+    "source_commit": "84614197edb08068cd9dabf471b0ebef2a27af0b"
+  },
+  "runtime": {
+    "ownership": "managed",
+    "executable": "bin/wb2api.exe",
+    "sha256": "38c4d8e0421c6c8c24ec738459899c13d07e9a56730db3394a4021e460c1d485",
+    "args": [
+      "-config",
+      "{CONFIG_PATH}"
+    ],
+    "env": {
+      "WB2A_LISTEN": "127.0.0.1:{PORT}",
+      "WB2A_AUTH_DIR": "{AUTH_DIR}",
+      "WB2A_STATE_FILE": "{DATA_DIR}/state.json"
+    },
+    "resources": {
+      "LICENSE": "49b9e27ddfc7cceab55e19eb7d405bda30a8229de3cc094e6b4d0397ab76a34b"
+    }
+  },
+  "network": {
+    "health_check": {
+      "path": "/healthz",
+      "expected_status": 200,
+      "identity_header": "X-Service",
+      "identity_value": "workbuddy2api",
+      "timeout_ms": 2000,
+      "busy_statuses": [
+        503
+      ]
+    }
+  },
+  "lifecycle": {
+    "startup_timeout_ms": 15000,
+    "idle_timeout_ms": null,
+    "max_port_retries": 3
+  },
+  "capabilities": {
+    "protocol": "openai_chat",
+    "models_path": "/v1/models",
+    "inference_path": "/v1/chat/completions",
+    "streaming": true
+  },
+  "configuration": {
+    "settings": {
+      "label": "local-test"
+    },
+    "config_template": {
+      "listen": "127.0.0.1:{PORT}",
+      "api_key": "{PLUGIN_API_KEY}",
+      "auth_dir": "{AUTH_DIR}",
+      "state_file": "{DATA_DIR}/state.json"
+    },
+    "credential_files": {},
+    "required_secrets": [
+      "access_token",
+      "refresh_token",
+      "uid"
+    ]
+  },
+  "management": {
+    "path": "/panel/",
+    "presentation": "browser"
+  }
+}

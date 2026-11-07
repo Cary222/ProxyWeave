@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "id": "external-cpa",
+    "name": "Local CLIProxyAPI Instance",
+    "version": "7.2.115",
+    "license": "Proprietary"
+  },
+  "runtime": {
+    "ownership": "external",
+    "endpoint": "http://127.0.0.1:28317"
+  },
+  "network": {
+    "health_check": {
+      "path": "/health",
+      "expected_status": 200,
+      "identity_header": "X-Service",
+      "identity_value": "cliproxyapi",
+      "timeout_ms": 2000,
+      "busy_statuses": []
+    }
+  },
+  "lifecycle": {
+    "startup_timeout_ms": 5000,
+    "idle_timeout_ms": null,
+    "max_port_retries": 0
+  },
+  "capabilities": {
+    "protocol": "openai_chat",
+    "models_path": "/v1/models",
+    "inference_path": "/v1/chat/completions",
+    "streaming": true
+  },
+  "configuration": {
+    "settings": {},
+    "config_template": null,
+    "credential_files": {},
+    "required_secrets": []
+  }
+}
