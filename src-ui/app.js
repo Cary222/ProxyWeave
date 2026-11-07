@@ -16,7 +16,7 @@ class WorkbenchApp {
       return await window.__TAURI__.core.invoke(command, args);
     }
     // Standalone / headless mock fallback for browser inspection
-    if (command === "list_plugins") {
+    if (command === "list_plugins" || command === "refresh_plugins") {
       return [
         { manifest: { metadata: { id: "wb2api", name: "WorkBuddy 2API Panel", version: "1.13.0" }, runtime: { ownership: "managed" } } },
         { manifest: { metadata: { id: "external-cpa", name: "External CPA Provider", version: "1.0.0" }, runtime: { ownership: "external", endpoint: "http://127.0.0.1:28317" } } },
@@ -27,6 +27,19 @@ class WorkbenchApp {
       return { is_running: true, port: 28317, listen_address: "127.0.0.1:28317", active_backend: "wb2api", route_strategy: "SingleBackend", master_key_preview: "pk-pw-••••••••", active_requests: 0, total_routed: 42 };
     }
     return null;
+  }
+
+  async refreshPlugins() {
+    console.log("[Workbench] Refreshing plugin directory (hot discovery)...");
+    try {
+      const plugins = await this.invoke("refresh_plugins");
+      if (plugins) {
+        this.state.plugins = plugins;
+      }
+      await this.refreshAll();
+    } catch (err) {
+      console.error("[Workbench] refresh_plugins failed:", err);
+    }
   }
 
   async refreshAll() {
