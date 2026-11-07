@@ -20,6 +20,7 @@ pub mod probe;
 pub mod projection;
 pub mod registry;
 pub mod runtime;
+pub mod supervisor;
 pub mod updater;
 
 pub use detector::{detect_project, stage_and_import_project, DetectionReport};
@@ -40,6 +41,7 @@ pub use registry::{manifest_fingerprint, ImportResult, PluginRecord, Registry};
 pub use runtime::{
     ActivePlugin, ManagedInstance, RequestLease, RuntimeError, RuntimeManager, RuntimeStatus,
 };
+pub use supervisor::{ManagedHandle, PluginError, PluginSupervisor};
 pub use updater::{
     check_plugin_update, check_plugin_update_at, evaluate_release, DigestEvidence, Immutability,
     InstalledSource, PackageContract, PluginSource, SourceProvenance, UpdateCheck, UpdateStatus,
