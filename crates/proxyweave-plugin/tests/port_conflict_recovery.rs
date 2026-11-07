@@ -106,7 +106,9 @@ async fn managed_start_retries_after_a_proven_bind_conflict_and_recovers() {
     );
     assert_ne!(port, 8080, "a Managed instance never falls back to 8080");
     assert_eq!(
-        std::fs::read_to_string(&state).expect("attempt counter").trim(),
+        std::fs::read_to_string(&state)
+            .expect("attempt counter")
+            .trim(),
         "2",
         "exactly one conflict then one successful attempt"
     );
@@ -144,7 +146,10 @@ async fn managed_start_reports_a_structured_diagnostic_when_every_retry_conflict
         other => panic!("expected PortConflictExhausted, got {other:?}"),
     };
     assert_eq!(diagnostic.plugin_id, "port-fixture");
-    assert_eq!(diagnostic.max_retries, 3, "Plan.md §6.3 B caps retries at 3");
+    assert_eq!(
+        diagnostic.max_retries, 3,
+        "Plan.md §6.3 B caps retries at 3"
+    );
     assert_eq!(
         diagnostic.attempts.len(),
         4,
@@ -177,7 +182,9 @@ async fn managed_start_reports_a_structured_diagnostic_when_every_retry_conflict
         "a failed start leaks no port"
     );
     assert_eq!(
-        std::fs::read_to_string(&state).expect("attempt counter").trim(),
+        std::fs::read_to_string(&state)
+            .expect("attempt counter")
+            .trim(),
         "4"
     );
 }
@@ -234,6 +241,9 @@ async fn managed_stop_returns_the_port_and_the_next_start_gets_one_from_the_rang
         "the restarted instance is ready, not stuck in Failed"
     );
 
-    runtime.stop_plugin("port-fixture").await.expect("final stop");
+    runtime
+        .stop_plugin("port-fixture")
+        .await
+        .expect("final stop");
     assert_eq!(allocator.reserved_count(), 0);
 }

@@ -98,7 +98,11 @@ pub enum PortAllocatorError {
     /// The requested range is not usable.
     InvalidRange { start: u16, end: u16 },
     /// The port is already leased to another plugin in this process.
-    AlreadyReserved { port: u16, plugin_id: String, by: String },
+    AlreadyReserved {
+        port: u16,
+        plugin_id: String,
+        by: String,
+    },
     /// The plugin already holds a different port; release it first.
     PluginAlreadyActive { plugin_id: String, port: u16 },
     /// An empty plugin id cannot own a port.
@@ -138,12 +142,14 @@ impl std::error::Error for PortAllocatorError {}
 impl From<PortConflictError> for PortAllocatorError {
     fn from(err: PortConflictError) -> Self {
         match err {
-            PortConflictError::AddressInUse { port, .. } => Self::AddressInUse {
-                port,
-                attempts: 1,
-            },
+            PortConflictError::AddressInUse { port, .. } => {
+                Self::AddressInUse { port, attempts: 1 }
+            }
             PortConflictError::IoError { port, .. } => Self::RangeExhausted {
-                range: PortRange { start: port, end: port },
+                range: PortRange {
+                    start: port,
+                    end: port,
+                },
                 attempts: 1,
             },
         }
@@ -201,13 +207,10 @@ impl Ledger {
 
     /// Adds one lease. Returns the number of leases now held on that port.
     fn add_ref(&mut self, port: u16, plugin_id: &str) -> u32 {
-        let entry = self
-            .ports
-            .entry(port)
-            .or_insert_with(|| Reservation {
-                plugin_id: plugin_id.to_string(),
-                refs: 0,
-            });
+        let entry = self.ports.entry(port).or_insert_with(|| Reservation {
+            plugin_id: plugin_id.to_string(),
+            refs: 0,
+        });
         entry.refs = entry.refs.saturating_add(1);
         entry.refs
     }
@@ -355,7 +358,11 @@ impl PortAllocator {
                 Ok(()) => {
                     ledger.add_ref(candidate, plugin_id);
                     ledger.cursor = next_port(&self.range, candidate);
-                    return Ok(PortLease::new(self.clone(), plugin_id.to_string(), candidate));
+                    return Ok(PortLease::new(
+                        self.clone(),
+                        plugin_id.to_string(),
+                        candidate,
+                    ));
                 }
                 // Proven conflict: try the next candidate.
                 Err(PortConflictError::AddressInUse { .. }) => {
@@ -578,7 +585,10 @@ mod tests {
         let allocator = small_allocator();
         let lease = allocator.allocate("plugin-a").expect("allocate");
         assert!(allocator.range().contains(lease.port()));
-        assert_eq!(allocator.owner_of(lease.port()).as_deref(), Some("plugin-a"));
+        assert_eq!(
+            allocator.owner_of(lease.port()).as_deref(),
+            Some("plugin-a")
+        );
         assert_eq!(allocator.refs(lease.port()), 1);
         assert_eq!(check_port_available(lease.port()), Ok(()));
     }
@@ -636,7 +646,9 @@ mod tests {
     #[test]
     fn test_specific_port_is_idempotent_for_the_same_plugin() {
         let allocator = small_allocator();
-        let first = allocator.allocate_specific("plugin-a", 52002).expect("first");
+        let first = allocator
+            .allocate_specific("plugin-a", 52002)
+            .expect("first");
         let second = allocator
             .allocate_specific("plugin-a", 52002)
             .expect("same plugin, same port");
@@ -648,7 +660,9 @@ mod tests {
     #[test]
     fn test_dropping_one_of_two_leases_keeps_the_port_reserved() {
         let allocator = small_allocator();
-        let first = allocator.allocate_specific("plugin-a", 52003).expect("first");
+        let first = allocator
+            .allocate_specific("plugin-a", 52003)
+            .expect("first");
         let second = allocator
             .allocate_specific("plugin-a", 52003)
             .expect("second lease");
@@ -688,10 +702,7 @@ mod tests {
         let _a = allocator.allocate("plugin-a").expect("a");
         let _b = allocator.allocate("plugin-b").expect("b");
         let err = allocator.allocate("plugin-c").expect_err("range is full");
-        assert!(matches!(
-            err,
-            PortAllocatorError::RangeExhausted { .. }
-        ));
+        assert!(matches!(err, PortAllocatorError::RangeExhausted { .. }));
     }
 
     #[test]

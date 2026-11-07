@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 
 // Reuse the installed reviewer browser, not a new dependency or a native acceptance claim.
 const require = createRequire(import.meta.url);
-const { chromium } = require("D:/pi-web-0.8.9/pi-web-0.8.9/node_modules/playwright");
+const { chromium } = require('../../test-support/playwright-loader.cjs');
 const esbuild = require("esbuild");
 const desktop = process.cwd();
 const evidence = path.resolve(desktop, "../../.pi/development/ui-truth-wave1/browser");

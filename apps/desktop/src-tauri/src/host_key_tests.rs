@@ -55,6 +55,9 @@ configuration: {{required_secrets: [access_token], config_template: {{}}}}
         gateway_master_key: Arc::new(RwLock::new(key.into())),
         selected_plugin_id: Arc::new(RwLock::new(None)),
         events: Arc::new(Mutex::new(VecDeque::new())),
+        // The host state gained a directory watcher after these fixtures were
+        // written; an empty watcher is what a fresh host builds too.
+        watcher: Arc::new(proxyweave_plugin::watcher::DirectoryWatcher::new()),
         plugin_operations: Mutex::new(BTreeMap::new()),
     };
     (dir, state, record)

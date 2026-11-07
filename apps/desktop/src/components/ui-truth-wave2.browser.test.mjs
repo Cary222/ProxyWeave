@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { chromium } = require("D:/pi-web-0.8.9/pi-web-0.8.9/node_modules/playwright");
+const { chromium } = require('../../test-support/playwright-loader.cjs');
 const esbuild = require("esbuild");
 const desktop = process.cwd();
 const evidence = path.resolve(desktop, "../../.pi/development/ui-truth-wave2/browser");
@@ -19,6 +19,23 @@ beforeAll(async () => {
     const bytes = fs.readFileSync(desktop + "/src/components/" + name);
     fs.writeFileSync(evidence + "/snapshot/components/" + name, bytes);
     hashes[name] = crypto.createHash("sha256").update(bytes).digest("hex");
+  }
+  // A copied component may import its own sibling stylesheet. It is not part of
+  // the behavioural assertions, but esbuild still has to resolve it — without
+  // the file the suite dies at build time with "Could not resolve ./X.css".
+  for (const cssName of new Set(
+    ["DiscoverPanel.tsx", "AuditPanel.tsx", "SettingsPanel.tsx"].flatMap((name) =>
+      [
+        ...fs
+          .readFileSync(desktop + "/src/components/" + name, "utf8")
+          .matchAll(/import\s+["'](\.\/[^"']+\.css)["']/g),
+      ].map((m) => m[1].replace(/^\.\//, "")),
+    ),
+  )) {
+    fs.copyFileSync(
+      desktop + "/src/components/" + cssName,
+      evidence + "/snapshot/components/" + cssName,
+    );
   }
   fs.writeFileSync(evidence + "/snapshot/types.ts", fs.readFileSync(desktop + "/src/types.ts"));
   fs.writeFileSync(evidence + "/tested-source-sha.json", JSON.stringify(hashes, null, 2));

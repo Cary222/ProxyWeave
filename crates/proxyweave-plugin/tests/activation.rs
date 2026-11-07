@@ -470,7 +470,7 @@ fn resolve_active_package_returns_record_and_directory_from_one_generation() {
     let registry = Registry::open(tmp.path().join("profile")).unwrap();
     let id = "coherent-plugin";
     let v1 = registry
-        .import(&create_test_package(&tmp.path().join("v1"), id, "1.0.0"))
+        .import(create_test_package(&tmp.path().join("v1"), id, "1.0.0"))
         .unwrap()
         .record;
     let (legacy, container, stamp) = registry.resolve_active_package(id).unwrap();

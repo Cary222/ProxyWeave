@@ -160,15 +160,16 @@ const BIND_CONFLICT_MARKERS: [&str; 5] = [
 
 fn has_bind_conflict_evidence(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
-    BIND_CONFLICT_MARKERS.iter().any(|marker| lower.contains(marker))
+    BIND_CONFLICT_MARKERS
+        .iter()
+        .any(|marker| lower.contains(marker))
 }
 
 /// One-line evidence for the diagnostic, never echoing a peer-controlled header wholesale.
 fn bind_conflict_evidence(captured: &str, port_taken: bool, port: u16) -> String {
     let excerpt: String = captured
         .lines()
-        .filter(|line| !line.trim().is_empty())
-        .last()
+        .rfind(|line| !line.trim().is_empty())
         .unwrap_or("")
         .chars()
         .take(300)
@@ -371,7 +372,7 @@ impl RuntimeManager {
             }
             static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
             let serial = NEXT_TOKEN
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
                 .map_err(|_| RuntimeError::Io("maintenance token exhausted".into()))?;
             let token = MaintenanceToken {
                 plugin_id: plugin_id.into(),
@@ -876,8 +877,13 @@ impl RuntimeManager {
         }
 
         // Generic projection context
-        let projection_ctx =
-            ProjectionContext::new(plugin_id, port, plugin_data_dir.clone(), api_key, secrets.clone());
+        let projection_ctx = ProjectionContext::new(
+            plugin_id,
+            port,
+            plugin_data_dir.clone(),
+            api_key,
+            secrets.clone(),
+        );
 
         // Generic configuration and credential files projection with Windows Protected DACL
         let projected = project_managed_configuration(&record.manifest, &projection_ctx)

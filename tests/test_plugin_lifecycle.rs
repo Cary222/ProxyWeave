@@ -6,8 +6,8 @@
 //! 3. Credential preparation correctly formats `PROXYWEAVE_CREDENTIAL_*`.
 //! 4. Manifest 1.0 JSON instances parse and validate cleanly.
 
-use std::collections::HashMap;
 use proxyweave_plugin::{Manifest, Ownership, PluginError, PluginSupervisor};
+use std::collections::HashMap;
 
 #[test]
 fn test_external_plugin_is_immutable() {
@@ -23,7 +23,10 @@ fn test_external_plugin_is_immutable() {
         let spawn_res = supervisor.spawn(&manifest, None, &creds).await;
         match spawn_res {
             Err(PluginError::ExternalLifecycleImmutable) => {}
-            other => panic!("Expected ExternalLifecycleImmutable, got: {:?}", other.is_err()),
+            other => panic!(
+                "Expected ExternalLifecycleImmutable, got: {:?}",
+                other.is_err()
+            ),
         }
 
         let mut handle = None;

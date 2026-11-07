@@ -146,7 +146,6 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
     assert!(gh.is_none());
 }
 
-
 #[tokio::test]
 async fn test_inspect_project_from_github_url_validation_and_author_extraction() {
     use quotio_desktop_lib::host::{
@@ -177,9 +176,11 @@ async fn test_inspect_project_from_github_url_validation_and_author_extraction()
     assert!(err.contains("当前仅支持标准 GitHub 仓库 URL"));
 
     // 4. Valid GitHub URLs
-    let ok = validate_github_repo_url("  https://github.com/router-for-me/workbuddy2api  ").unwrap();
+    let ok =
+        validate_github_repo_url("  https://github.com/router-for-me/workbuddy2api  ").unwrap();
     assert_eq!(ok, "https://github.com/router-for-me/workbuddy2api");
-    let ok_ssh = validate_github_repo_url("git@github.com:router-for-me/workbuddy2api.git").unwrap();
+    let ok_ssh =
+        validate_github_repo_url("git@github.com:router-for-me/workbuddy2api.git").unwrap();
     assert_eq!(ok_ssh, "git@github.com:router-for-me/workbuddy2api.git");
 
     // 5. Author extraction

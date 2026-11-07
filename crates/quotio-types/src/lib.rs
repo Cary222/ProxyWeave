@@ -632,18 +632,13 @@ pub struct RequestStats {
 // === Usage statistics (persisted request-level events; modeled on cpa-manager) ===
 
 /// Success/failure filter for usage queries.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UsageStatusFilter {
+    #[default]
     All,
     Success,
     Failed,
-}
-
-impl Default for UsageStatusFilter {
-    fn default() -> Self {
-        UsageStatusFilter::All
-    }
 }
 
 /// One persisted request-level usage event (a row in `usage_events`). Drained
@@ -742,18 +737,13 @@ pub struct UsageAggregate {
 }
 
 /// Time bucket size for dashboard chart aggregations.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UsageChartBucket {
     TwentyMinute,
     Hour,
+    #[default]
     Day,
-}
-
-impl Default for UsageChartBucket {
-    fn default() -> Self {
-        UsageChartBucket::Day
-    }
 }
 
 /// One point in the dashboard usage trend chart.
@@ -1181,19 +1171,10 @@ impl Default for QuotaExceededConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteManagementConfig {
     pub allow_remote: bool,
     pub management_key: Option<String>,
-}
-
-impl Default for RemoteManagementConfig {
-    fn default() -> Self {
-        Self {
-            allow_remote: false,
-            management_key: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1398,7 +1379,7 @@ impl Default for PlatformFeatureState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ManagementSnapshot {
     pub auth_files: Vec<AuthFile>,
     pub usage: Option<UsageStats>,
@@ -1406,19 +1387,6 @@ pub struct ManagementSnapshot {
     pub config: Option<RemoteProxyConfig>,
     pub logs: Option<LogsResponse>,
     pub latest_version: Option<LatestVersionResponse>,
-}
-
-impl Default for ManagementSnapshot {
-    fn default() -> Self {
-        Self {
-            auth_files: Vec::new(),
-            usage: None,
-            api_keys: Vec::new(),
-            config: None,
-            logs: None,
-            latest_version: None,
-        }
-    }
 }
 
 /// 一个账号在某服务商「请求顺序」里的一项(给前端画圆圈数字徽章)。
@@ -1717,6 +1685,7 @@ pub fn default_providers() -> Vec<ProviderSummary> {
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn provider(
     id: &str,
     display_name: &str,

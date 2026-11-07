@@ -129,7 +129,9 @@ impl Drop for JobObject {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::*;
+    #[cfg(windows)]
     use std::time::Instant;
 
     #[cfg(windows)]

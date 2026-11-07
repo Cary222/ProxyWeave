@@ -587,7 +587,10 @@ impl Gateway {
             return error_with_message(
                 StatusCode::BAD_GATEWAY,
                 "bad_gateway",
-                &format!("Target plugin '{}' is not registered or unavailable", target),
+                &format!(
+                    "Target plugin '{}' is not registered or unavailable",
+                    target
+                ),
             );
         } else {
             let guard = self.backend.read().await;
