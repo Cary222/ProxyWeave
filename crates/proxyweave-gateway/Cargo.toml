@@ -28,6 +28,8 @@ url = "=2.5.8"
 tracing = "0.1"
 
 [dev-dependencies]
+# The spec v10 suite seeds runtime entries through the plugin crate's test-support helpers.
+proxyweave-plugin = { path = "../proxyweave-plugin", features = ["test-support"] }
 reqwest = { version = "=0.13.4", default-features = false, features = ["stream", "native-tls"] }
 futures-util = "0.3"
 tokio = { version = "1", features = ["io-util"] }
@@ -35,3 +37,13 @@ tempfile = "=3.27.0"
 serde_json.workspace = true
 sha2 = "=0.10.9"
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading", "Win32_Foundation"] }
+
+[[test]]
+name = "proxy-engine"
+path = "../../tests/test_proxy_engine.rs"
+
+# Spec-named integration suite (spec v10) lives in the workspace-level tests/ directory
+# and is compiled/run by this crate because it exercises both gateway and plugin crates.
+[[test]]
+name = "test_protocol_adapter_port"
+path = "../../tests/test_protocol_adapter_port.rs"

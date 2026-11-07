@@ -10,6 +10,13 @@ test-support = []
 [dev-dependencies]
 proxyweave-plugin = { path = ".", features = ["test-support"] }
 
+# Test-only Managed plugin stand-in (spec v10 port suite). Built only with `test-support`,
+# which is what the crate's own test targets enable.
+[[bin]]
+name = "pw-port-fixture"
+path = "src/bin/pw-port-fixture.rs"
+required-features = ["test-support"]
+
 [dependencies]
 quotio-platform = { path = "../quotio-platform" }
 serde.workspace = true
@@ -20,7 +27,7 @@ sha2 = "=0.10.9"
 semver = "=1.0.28"
 url = "=2.5.8"
 tempfile = "=3.27.0"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "process"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "process", "io-util"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "stream"] }
 zip = "2.4.2"
 flate2 = "1"
@@ -32,3 +39,19 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_JobObjects",
     "Win32_System_Threading",
 ] }
+
+[[test]]
+name = "plugin-lifecycle"
+path = "../../tests/test_plugin_lifecycle.rs"
+
+[[test]]
+name = "credential-contract"
+path = "../../tests/test_credential_contract.rs"
+
+[[test]]
+name = "directory-watcher"
+path = "../../tests/test_directory_watcher.rs"
+
+[[test]]
+name = "workbench-ipc"
+path = "../../tests/test_workbench_ipc.rs"

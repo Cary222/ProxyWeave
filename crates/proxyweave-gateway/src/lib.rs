@@ -14,7 +14,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
-use proxyweave_plugin::{Manifest, RequestLease, RuntimeError, RuntimeManager};
+use proxyweave_plugin::{Manifest, RequestLease, RuntimeError, RuntimeManager, RuntimeStatus};
 use proxyweave_protocols::{
     chat_completions::ChatCompletionsCodec, error_body::encode_error_body_for_suite,
     messages::MessagesCodec, protocol::lossy::check_lossy_conversion, responses::ResponsesCodec,
@@ -161,6 +161,21 @@ pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+}
+
+/// Live route-table entry: the exact dynamic port the gateway forwards to right now.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RouteBinding {
+    pub plugin_id: String,
+    pub protocol: String,
+    /// Dynamic port reported by the runtime; `None` while no instance is serving.
+    pub port: Option<u16>,
+    pub endpoint: Option<String>,
+    /// Generation this route entry is bound to; `None` means "any generation".
+    pub route_generation: Option<u64>,
+    pub runtime_generation: Option<u64>,
+    pub ready: bool,
+    pub state: String,
 }
 
 #[derive(Clone)]
@@ -312,6 +327,90 @@ impl Gateway {
 
     pub fn route_pool(&self) -> Arc<RoutePool> {
         self.route_pool.clone()
+    }
+
+    /// Re-binds one plugin's route entry to the generation the runtime reports now.
+    ///
+    /// A Managed plugin that restarted gets a new dynamic port and a new generation; the
+    /// route table is refreshed here so the gateway never forwards to a retired port.
+    pub async fn refresh_route(&self, plugin_id: &str) -> Option<u64> {
+        let generation = self.runtime.current_generation(plugin_id).await;
+        // A plugin without a live instance has no generation to follow. `None` in a route
+        // entry means "any generation", so writing it here would silently switch the
+        // stale-instance check off for that entry; the binding is left untouched instead and
+        // admission refuses the request explicitly.
+        if let Some(generation) = generation {
+            self.route_pool
+                .update_generation(plugin_id, Some(generation))
+                .await;
+            let mut guard = self.backend.write().await;
+            if let Some(active) = guard.as_mut() {
+                if active.plugin_id == plugin_id {
+                    active.instance_generation = Some(generation);
+                }
+            }
+        }
+        generation
+    }
+
+    /// Snapshot of every route entry with its live dynamic port and generation.
+    pub async fn route_snapshot(&self) -> Vec<RouteBinding> {
+        let mut bindings = Vec::new();
+        for backend in self.route_pool.list_backends().await {
+            let status = self.runtime.get_status(&backend.plugin_id).await;
+            let (port, ready, state) = match &status {
+                RuntimeStatus::Ready { port, .. } => (Some(*port), true, "ready".to_string()),
+                // Plan.md §6.3 B: a saturated 503 is not Ready and never a conflict signal.
+                RuntimeStatus::Busy { port, reason, .. } => {
+                    (Some(*port), false, format!("busy: {reason}"))
+                }
+                RuntimeStatus::Starting => (None, false, "starting".to_string()),
+                RuntimeStatus::Stopped => (None, false, "stopped".to_string()),
+                RuntimeStatus::Failed { error } => (None, false, format!("failed: {error}")),
+            };
+            bindings.push(RouteBinding {
+                plugin_id: backend.plugin_id.clone(),
+                protocol: backend.protocol.clone(),
+                port,
+                endpoint: port.map(|p| format!("http://127.0.0.1:{p}")),
+                route_generation: backend.instance_generation,
+                runtime_generation: self.runtime.current_generation(&backend.plugin_id).await,
+                ready,
+                state,
+            });
+        }
+        bindings
+    }
+
+    /// Admits one request, following the runtime when the instance generation moved.
+    ///
+    /// One refresh is attempted; a second mismatch is reported as-is instead of looping.
+    pub async fn acquire_lease_following_route(
+        &self,
+        backend: &mut Backend,
+    ) -> Result<RequestLease, RuntimeError> {
+        match self
+            .runtime
+            .acquire_request_for(&backend.plugin_id, backend.instance_generation)
+            .await
+        {
+            Err(RuntimeError::StaleGeneration { .. }) => {
+                // Exactly one refresh, then one retry: if the runtime cannot name a live
+                // generation the request is refused here rather than retried, and a second
+                // mismatch is returned as-is (no loop, no silent fallback).
+                let Some(generation) = self.refresh_route(&backend.plugin_id).await else {
+                    return Err(RuntimeError::HealthCheckFailed(format!(
+                        "Plugin '{}' has no live instance after the route refresh",
+                        backend.plugin_id
+                    )));
+                };
+                backend.instance_generation = Some(generation);
+                self.runtime
+                    .acquire_request_for(&backend.plugin_id, Some(generation))
+                    .await
+            }
+            other => other,
+        }
     }
 
     /// Actual successful attachment, not the desktop's persisted preference.
@@ -598,7 +697,7 @@ impl Gateway {
         &self,
         mut req: Request<Body>,
         models: bool,
-        backend: Backend,
+        mut backend: Backend,
         route_strategy: String,
         session_key: Option<String>,
     ) -> Response<Body> {
@@ -617,11 +716,7 @@ impl Gateway {
             "passthrough".to_string()
         };
 
-        let lease = match self
-            .runtime
-            .acquire_request_for(&backend.plugin_id, backend.instance_generation)
-            .await
-        {
+        let lease = match self.acquire_lease_following_route(&mut backend).await {
             Ok(lease) => {
                 if let Some(expected_gen) = backend.instance_generation {
                     if lease.instance_generation() != expected_gen {
@@ -792,7 +887,7 @@ impl Gateway {
         &self,
         req: Request<Body>,
         ingress: IngressProtocol,
-        backend: Backend,
+        mut backend: Backend,
         route_strategy: String,
         session_key: Option<String>,
     ) -> Response<Body> {
@@ -807,11 +902,7 @@ impl Gateway {
         let original_path = req.uri().path().to_string();
         let ingress_protocol_str = format!("{:?}", ingress);
 
-        let lease = match self
-            .runtime
-            .acquire_request_for(&backend.plugin_id, backend.instance_generation)
-            .await
-        {
+        let lease = match self.acquire_lease_following_route(&mut backend).await {
             Ok(lease) => {
                 if let Some(expected_gen) = backend.instance_generation {
                     if lease.instance_generation() != expected_gen {
