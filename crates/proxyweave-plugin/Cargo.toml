@@ -32,3 +32,19 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_JobObjects",
     "Win32_System_Threading",
 ] }
+
+[[test]]
+name = "plugin-lifecycle"
+path = "../../tests/test_plugin_lifecycle.rs"
+
+[[test]]
+name = "credential-contract"
+path = "../../tests/test_credential_contract.rs"
+
+[[test]]
+name = "directory-watcher"
+path = "../../tests/test_directory_watcher.rs"
+
+[[test]]
+name = "workbench-ipc"
+path = "../../tests/test_workbench_ipc.rs"

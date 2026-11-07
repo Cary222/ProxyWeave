@@ -35,3 +35,7 @@ tempfile = "=3.27.0"
 serde_json.workspace = true
 sha2 = "=0.10.9"
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading", "Win32_Foundation"] }
+
+[[test]]
+name = "proxy-engine"
+path = "../../tests/test_proxy_engine.rs"
