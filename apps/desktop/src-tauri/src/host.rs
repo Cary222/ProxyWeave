@@ -2369,6 +2369,8 @@ pub struct RouteStatusInfo {
     pub active_backend: Option<String>,
     pub route_strategy: String,
     pub master_key_preview: String,
+    pub active_requests: u64,
+    pub total_routed: u64,
 }
 
 #[tauri::command]
@@ -2401,7 +2403,9 @@ pub async fn probe_plugin(
 pub async fn get_route_status(
     state: State<'_, DesktopState>,
 ) -> Result<RouteStatusInfo, String> {
-    let gw = get_gateway_status(state).await?;
+    let gw = get_gateway_status(state.clone()).await?;
+    let active_requests = state.gateway.active_requests();
+    let total_routed = state.gateway.total_routed();
     Ok(RouteStatusInfo {
         is_running: gw.is_running,
         port: gw.port,
@@ -2409,5 +2413,7 @@ pub async fn get_route_status(
         active_backend: gw.active_backend,
         route_strategy: gw.route_strategy,
         master_key_preview: gw.master_key_preview,
+        active_requests,
+        total_routed,
     })
 }

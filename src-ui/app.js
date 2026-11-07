@@ -24,7 +24,7 @@ class WorkbenchApp {
     } else if (command === "probe_plugin") {
       return { id: args.id, status: "ready", healthy: true, latency_ms: Math.floor(Math.random() * 5) + 1, error: null };
     } else if (command === "get_route_status") {
-      return { is_running: true, port: 28319, listen_address: "127.0.0.1:28319", active_backend: "wb2api", route_strategy: "SingleBackend", master_key_preview: "pk-pw-••••••••" };
+      return { is_running: true, port: 28317, listen_address: "127.0.0.1:28317", active_backend: "wb2api", route_strategy: "SingleBackend", master_key_preview: "pk-pw-••••••••", active_requests: 0, total_routed: 42 };
     }
     return null;
   }
@@ -45,6 +45,12 @@ class WorkbenchApp {
       if (routeStatus) {
         document.getElementById("kpi-gw-port").textContent = routeStatus.port;
         document.getElementById("kpi-gw-status").textContent = routeStatus.is_running ? "● 活跃就绪 (" + (routeStatus.listen_address || "127.0.0.1") + ")" : "○ 已停止";
+        if (document.getElementById("kpi-gw-active")) {
+          document.getElementById("kpi-gw-active").textContent = routeStatus.active_requests ?? 0;
+        }
+        if (document.getElementById("kpi-gw-total")) {
+          document.getElementById("kpi-gw-total").textContent = routeStatus.total_routed ?? 0;
+        }
       }
 
       // Probe all plugins

@@ -1,7 +1,7 @@
 // Static validation script for src-ui workbench
 import fs from "fs";
 
-console.log("[ProxyWeave UI Gate] Validating src-ui assets against spec v6...");
+console.log("[ProxyWeave UI Gate] Validating src-ui assets against spec v7...");
 
 const html = fs.readFileSync(new URL("./index.html", import.meta.url), "utf-8");
 const appJs = fs.readFileSync(new URL("./app.js", import.meta.url), "utf-8");
@@ -28,3 +28,9 @@ if (html.includes("kill-external") || appJs.includes("stopExternal")) {
 console.log(" - External Daemon Protection Audit: PASS (External daemons have zero start/stop/kill controls)");
 
 console.log("[ProxyWeave UI Gate] src-ui build & static checks completed successfully.");
+
+// Red Line 4: Proxy engine metrics present
+if (!html.includes("kpi-gw-active") || !html.includes("kpi-gw-total")) {
+  throw new Error("Missing active/total routed KPI indicators");
+}
+console.log(" - Proxy Engine KPI Metrics: PASS (kpi-gw-active and kpi-gw-total verified)");
