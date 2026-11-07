@@ -371,7 +371,7 @@ impl RuntimeManager {
             }
             static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
             let serial = NEXT_TOKEN
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
                 .map_err(|_| RuntimeError::Io("maintenance token exhausted".into()))?;
             let token = MaintenanceToken {
                 plugin_id: plugin_id.into(),
