@@ -23,6 +23,7 @@ pub mod runtime;
 pub mod supervisor;
 pub mod updater;
 pub mod watcher;
+pub mod credential;
 
 pub use detector::{detect_project, stage_and_import_project, DetectionReport};
 pub use downloader::{download_and_install_release, DownloadProgress};
@@ -44,6 +45,10 @@ pub use runtime::{
 };
 pub use supervisor::{ManagedHandle, PluginError, PluginSupervisor};
 pub use watcher::{DirectoryWatcher, WatcherReport};
+pub use credential::{
+    mask_credential_value, resolve_and_verify_credentials, sanitize_credential_env_name,
+    CredentialError, CredentialVault, InMemoryVault, OsKeyringVault,
+};
 pub use updater::{
     check_plugin_update, check_plugin_update_at, evaluate_release, DigestEvidence, Immutability,
     InstalledSource, PackageContract, PluginSource, SourceProvenance, UpdateCheck, UpdateStatus,

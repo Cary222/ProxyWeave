@@ -25,6 +25,10 @@ class WorkbenchApp {
       return { id: args.id, status: "ready", healthy: true, latency_ms: Math.floor(Math.random() * 5) + 1, error: null };
     } else if (command === "get_route_status") {
       return { is_running: true, port: 28317, listen_address: "127.0.0.1:28317", active_backend: "wb2api", route_strategy: "SingleBackend", master_key_preview: "pk-pw-••••••••", active_requests: 0, total_routed: 42 };
+    } else if (command === "get_plugin_secrets_status") {
+      return [{ name: "API_KEY", is_set: true, masked_value: "sk-••••••" }];
+    } else if (command === "save_plugin_secret" || command === "delete_plugin_secret") {
+      return null;
     }
     return null;
   }
@@ -71,6 +75,7 @@ class WorkbenchApp {
         const id = p.manifest?.metadata?.id;
         if (id) {
           await this.probePlugin(id);
+          await this.loadCredentialStatus(id);
         }
       }
     } catch (err) {
@@ -106,16 +111,116 @@ class WorkbenchApp {
     }
   }
 
+
+  openCredentialModal(pluginId = "wb2api") {
+    const modal = document.getElementById("credential-modal");
+    if (modal) {
+      document.getElementById("credential-plugin-id").value = pluginId;
+      modal.style.display = "flex";
+      this.loadCredentialStatus(pluginId);
+    }
+  }
+
+  closeCredentialModal() {
+    const modal = document.getElementById("credential-modal");
+    if (modal) {
+      modal.style.display = "none";
+      const feedback = document.getElementById("credential-feedback");
+      if (feedback) feedback.textContent = "";
+      const valInput = document.getElementById("credential-value-input");
+      if (valInput) valInput.value = "";
+    }
+  }
+
+  async loadCredentialStatus(pluginId) {
+    try {
+      const secrets = await this.invoke("get_plugin_secrets_status", { id: pluginId });
+      const previewEl = document.getElementById("credential-masked-preview");
+      const cardStatusEl = document.getElementById(`cred-status-${pluginId}`);
+      if (secrets && secrets.length > 0) {
+        const s = secrets[0];
+        document.getElementById("credential-name-input").value = s.name;
+        if (s.is_set) {
+          if (previewEl) previewEl.textContent = `● 已配置 (${s.masked_value || "sk-••••••"})`;
+          if (cardStatusEl) {
+            cardStatusEl.textContent = `● 已安全配置 (${s.masked_value || "sk-••••••"})`;
+            cardStatusEl.className = "val pill pill-green";
+          }
+        } else {
+          if (previewEl) previewEl.textContent = "○ 未配置 (启动将阻断)";
+          if (cardStatusEl) {
+            cardStatusEl.textContent = "⚠️ 未配置 (启动阻断)";
+            cardStatusEl.className = "val pill pill-amber";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Workbench] loadCredentialStatus failed:", e);
+    }
+  }
+
+  async saveCredential() {
+    const pluginId = document.getElementById("credential-plugin-id").value;
+    const name = document.getElementById("credential-name-input").value;
+    const value = document.getElementById("credential-value-input").value;
+    const feedback = document.getElementById("credential-feedback");
+
+    if (!value || value.trim().length === 0) {
+      if (feedback) {
+        feedback.textContent = "⚠️ 凭据值不能为空";
+        feedback.style.color = "var(--accent-amber)";
+      }
+      return;
+    }
+
+    try {
+      await this.invoke("save_plugin_secret", { id: pluginId, name, value });
+      if (feedback) {
+        feedback.textContent = "✓ 凭据已安全存入 OS Keyring";
+        feedback.style.color = "var(--accent-green)";
+      }
+      document.getElementById("credential-value-input").value = "";
+      await this.loadCredentialStatus(pluginId);
+    } catch (err) {
+      if (feedback) {
+        feedback.textContent = `❌ 保存失败: ${err}`;
+        feedback.style.color = "var(--accent-red)";
+      }
+    }
+  }
+
+  async deleteCredential() {
+    const pluginId = document.getElementById("credential-plugin-id").value;
+    const name = document.getElementById("credential-name-input").value;
+    const feedback = document.getElementById("credential-feedback");
+
+    try {
+      await this.invoke("delete_plugin_secret", { id: pluginId, name });
+      if (feedback) {
+        feedback.textContent = "✓ 凭据已从 OS Keyring 清除";
+        feedback.style.color = "var(--accent-green)";
+      }
+      await this.loadCredentialStatus(pluginId);
+    } catch (err) {
+      if (feedback) {
+        feedback.textContent = `❌ 删除失败: ${err}`;
+        feedback.style.color = "var(--accent-red)";
+      }
+    }
+  }
+
   async startPlugin(id) {
     console.log(`[Workbench] Start requested for Managed plugin ${id}`);
     await this.invoke("start_plugin", { id });
     await this.probePlugin(id);
+          await this.loadCredentialStatus(id);
   }
 
   async stopPlugin(id) {
     console.log(`[Workbench] Stop requested for Managed plugin ${id}`);
     await this.invoke("stop_plugin", { id });
     await this.probePlugin(id);
+          await this.loadCredentialStatus(id);
   }
 }
 
