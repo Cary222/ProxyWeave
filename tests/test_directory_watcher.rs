@@ -50,7 +50,7 @@ const VALID_MANAGED_MANIFEST: &str = r#"{
   },
   "configuration": {
     "settings": {},
-    "config_template": null,
+    "config_template": {},
     "credential_files": {},
     "required_secrets": []
   }
