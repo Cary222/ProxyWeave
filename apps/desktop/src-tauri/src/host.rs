@@ -2345,3 +2345,69 @@ pub async fn graceful_exit(state: &DesktopState, app: &AppHandle) {
 
     app.exit(0);
 }
+
+
+// ============================================================================
+// Phase 5 Workbench IPC Aliases (spec v6)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginProbeResult {
+    pub id: String,
+    pub status: String,
+    pub port: Option<u16>,
+    pub latency_ms: Option<u64>,
+    pub healthy: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteStatusInfo {
+    pub is_running: bool,
+    pub port: u16,
+    pub listen_address: Option<String>,
+    pub active_backend: Option<String>,
+    pub route_strategy: String,
+    pub master_key_preview: String,
+}
+
+#[tauri::command]
+pub async fn list_plugins(
+    state: State<'_, DesktopState>,
+) -> Result<Vec<PluginRecord>, String> {
+    list_local_plugins(state).await
+}
+
+#[tauri::command]
+pub async fn probe_plugin(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<PluginProbeResult, String> {
+    let start = std::time::Instant::now();
+    let status_info = get_plugin_runtime_status(state, id.clone()).await?;
+    let elapsed = start.elapsed().as_millis() as u64;
+    let healthy = status_info.status == "ready" || status_info.status == "busy";
+    Ok(PluginProbeResult {
+        id,
+        status: status_info.status,
+        port: status_info.port,
+        latency_ms: Some(elapsed),
+        healthy,
+        error: status_info.error,
+    })
+}
+
+#[tauri::command]
+pub async fn get_route_status(
+    state: State<'_, DesktopState>,
+) -> Result<RouteStatusInfo, String> {
+    let gw = get_gateway_status(state).await?;
+    Ok(RouteStatusInfo {
+        is_running: gw.is_running,
+        port: gw.port,
+        listen_address: gw.listen_address,
+        active_backend: gw.active_backend,
+        route_strategy: gw.route_strategy,
+        master_key_preview: gw.master_key_preview,
+    })
+}
