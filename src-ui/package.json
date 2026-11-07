@@ -1,0 +1,10 @@
+{
+  "name": "proxyweave-workbench-ui",
+  "version": "0.1.0",
+  "description": "ProxyWeave Desktop Workbench lightweight UI (Phase 5 / spec v6)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node check.js"
+  }
+}

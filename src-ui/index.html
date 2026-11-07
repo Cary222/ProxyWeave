@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProxyWeave Desktop Workbench</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card-bg: #181b23;
+      --card-border: #282d3d;
+      --text-main: #f0f2f5;
+      --text-muted: #8c96a8;
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #8b5cf6;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge-zerodb {
+      font-size: 11px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .header-sub {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    /* KPI Summary */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .kpi-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 4px;
+      font-family: var(--font-mono);
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Route Panel */
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .route-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      font-family: var(--font-mono);
+    }
+    .route-table th, .route-table td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .route-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* Plugin Grid */
+    .plugin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .plugin-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .plugin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .plugin-name {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .plugin-id {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+    .pill {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pill-blue { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+    .pill-green { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
+    .pill-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+    .pill-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+    .pill-red { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+
+    .plugin-details {
+      margin: 12px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .plugin-details div {
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .plugin-details span.val {
+      color: var(--text-main);
+      font-family: var(--font-mono);
+    }
+
+    .plugin-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--card-border);
+    }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .btn-primary { background: var(--accent-blue); color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+    .btn-outline { background: transparent; color: var(--text-main); border-color: var(--card-border); }
+    .btn-outline:hover { background: rgba(255, 255, 255, 0.05); }
+
+    .isolation-notice {
+      font-size: 11px;
+      color: var(--accent-purple);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    .footer {
+      margin-top: 36px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>ProxyWeave Desktop Workbench <span class="badge-zerodb">● 纯内存状态 (Zero-DB)</span></h1>
+      <div class="header-sub">本地优先 AI 代理应用网关 · 架构守则：万物皆插件 · 上游易逝，平台长存</div>
+    </div>
+    <button class="btn btn-outline" id="refresh-all-btn" onclick="workbenchApp.refreshAll()">刷新状态 ↻</button>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-title">注册插件总数</div>
+      <div class="kpi-value" id="kpi-total-plugins">2</div>
+      <div class="kpi-sub">Managed (1) · External (1)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">统一反向代理端口</div>
+      <div class="kpi-value" id="kpi-gw-port">28319</div>
+      <div class="kpi-sub" id="kpi-gw-status">● 活跃就绪 (127.0.0.1)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">外部守护进程隔离</div>
+      <div class="kpi-value" style="color: var(--accent-purple);">100%</div>
+      <div class="kpi-sub">只读探针 · 零启停 · 永不 Kill</div>
+    </div>
+  </div>
+
+  <!-- Reverse Proxy Route Section -->
+  <div class="section-card">
+    <div class="section-title">
+      <span>统一反向代理与路由看板</span>
+      <span class="pill pill-green">单机多上游路由引擎</span>
+    </div>
+    <table class="route-table">
+      <thead>
+        <tr>
+          <th>客户端入口 Endpoint</th>
+          <th>协议类型</th>
+          <th>目标上游服务</th>
+          <th>路由策略</th>
+          <th>安全凭据状态</th>
+        </tr>
+      </thead>
+      <tbody id="route-table-body">
+        <tr>
+          <td>/v1/chat/completions</td>
+          <td>OpenAI Chat IR</td>
+          <td><span class="pill pill-blue">wb2api (Managed Dynamic Port)</span></td>
+          <td>SingleBackend</td>
+          <td>pk-pw-•••••••• (OS Keyring)</td>
+        </tr>
+        <tr>
+          <td>/v1/models</td>
+          <td>Catalog IR</td>
+          <td><span class="pill pill-blue">wb2api</span></td>
+          <td>SingleBackend</td>
+          <td>Ephemeral Bearer Injection</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Plugins Grid Section -->
+  <div class="section-card">
+    <div class="section-title">
+      <span>插件服务与生命周期监视器</span>
+      <span class="pill pill-purple">物理安全隔离已生效</span>
+    </div>
+
+    <div class="plugin-grid" id="plugins-container">
+      <!-- Plugin 1: wb2api (Managed) -->
+      <div class="plugin-card" id="plugin-card-wb2api">
+        <div>
+          <div class="plugin-header">
+            <div>
+              <div class="plugin-name">WorkBuddy 2API Panel</div>
+              <div class="plugin-id">wb2api · v1.13.0</div>
+            </div>
+            <span class="pill pill-blue">Managed 托管进程</span>
+          </div>
+          <div class="plugin-details">
+            <div><span>端口分配模式:</span> <span class="val">动态回环 (OS Port 0 探测)</span></div>
+            <div><span>健康探针:</span> <span class="val">/healthz (200 OK / 503 Busy)</span></div>
+            <div><span>孤儿进程防护:</span> <span class="val">Win32 JobObject Limit</span></div>
+            <div><span>探针延迟:</span> <span class="val" id="probe-latency-wb2api">&lt; 1 ms</span></div>
+            <div><span>运行状态:</span> <span class="pill pill-green" id="probe-status-wb2api">● READY</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="plugin-actions">
+            <button class="btn btn-primary" onclick="workbenchApp.startPlugin('wb2api')">启动</button>
+            <button class="btn btn-danger" onclick="workbenchApp.stopPlugin('wb2api')">停止</button>
+            <button class="btn btn-outline" onclick="workbenchApp.probePlugin('wb2api')">重新探测 (Probe)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plugin 2: external-cpa (External) -->
+      <div class="plugin-card" id="plugin-card-external-cpa">
+        <div>
+          <div class="plugin-header">
+            <div>
+              <div class="plugin-name">External CPA Provider</div>
+              <div class="plugin-id">external-cpa · v1.0.0</div>
+            </div>
+            <span class="pill pill-green">External 外部服务</span>
+          </div>
+          <div class="plugin-details">
+            <div><span>本地服务地址:</span> <span class="val">http://127.0.0.1:28317</span></div>
+            <div><span>健康探针:</span> <span class="val">/health (HTTP GET)</span></div>
+            <div><span>生命周期管控:</span> <span class="val" style="color: var(--accent-purple);">只读探测 · 拒绝启停</span></div>
+            <div><span>探针延迟:</span> <span class="val" id="probe-latency-external-cpa">2 ms</span></div>
+            <div><span>运行状态:</span> <span class="pill pill-green" id="probe-status-external-cpa">● READY</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="isolation-notice">🛡️ 外部服务物理隔离保护：禁止渲染 Start/Stop/Kill 按钮，杜绝误杀用户本地常驻进程。</div>
+          <div class="plugin-actions">
+            <!-- Strict requirement: External plugins ONLY have probe, NO start/stop/kill -->
+            <button class="btn btn-outline" style="width: 100%;" onclick="workbenchApp.probePlugin('external-cpa')">重新探测 (Probe Only)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    ProxyWeave v3.1.0 · Tauri v2 Desktop Workbench · 遵守 Plan.md 权威约束 · Zero-DB · Direct Reuse First
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
