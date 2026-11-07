@@ -20,7 +20,8 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::job::JobObject;
 use crate::manifest::{Ownership, Runtime};
-use crate::port::{check_port_available, pick_unused_port, PortConflictError};
+use crate::port::{check_port_available, PortConflictError};
+use crate::port_allocator::{PortAllocator, PortAllocatorError, PortLease};
 use crate::probe::{probe_http, ProbeStatus};
 use crate::registry::PluginRecord;
 
@@ -49,6 +50,10 @@ pub enum RuntimeError {
         actual: u64,
     },
     MissingRequiredCredential(String),
+    /// Plan.md §6.3 B: every port retry was refused with proven `AddrInUse` evidence.
+    PortConflictExhausted {
+        diagnostic: Box<PortConflictDiagnostic>,
+    },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -61,6 +66,14 @@ impl std::fmt::Display for RuntimeError {
             Self::AlreadyRunning(msg) => write!(f, "Plugin already running: {}", msg),
             Self::ExecutableNotFound(msg) => write!(f, "Executable not found: {}", msg),
             Self::MissingRequiredCredential(msg) => write!(f, "Missing required credential: {}", msg),
+            Self::PortConflictExhausted { diagnostic } => write!(
+                f,
+                "Port conflict retries exhausted for plugin '{}' after {} attempt(s) (max {} retries): {}",
+                diagnostic.plugin_id,
+                diagnostic.attempts.len(),
+                diagnostic.max_retries,
+                diagnostic.to_json()
+            ),
             Self::ConfigProjectionFailed(msg) => write!(f, "Config projection failed: {}", msg),
             Self::SpawnFailed(msg) => write!(f, "Process spawn failed: {}", msg),
             Self::ProbeTimeout(msg) => write!(f, "Probe timeout: {}", msg),
@@ -94,6 +107,83 @@ impl From<PortConflictError> for RuntimeError {
     }
 }
 
+impl From<PortAllocatorError> for RuntimeError {
+    fn from(err: PortAllocatorError) -> Self {
+        Self::PortConflict(err.to_string())
+    }
+}
+
+/// One startup attempt that produced provable bind-conflict evidence (Plan.md §6.3 B).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PortAttempt {
+    pub port: u16,
+    pub evidence: String,
+}
+
+/// Structured diagnosis produced when every port retry was refused by the OS
+/// (Plan.md §6.3 B). Serialisable so the API Doctor / desktop console can render it verbatim
+/// instead of parsing a log line.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PortConflictDiagnostic {
+    pub plugin_id: String,
+    pub max_retries: u8,
+    pub attempts: Vec<PortAttempt>,
+}
+
+impl PortConflictDiagnostic {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+/// Outcome of one Managed spawn attempt (Plan.md §6.3 B).
+enum ManagedAttempt {
+    /// The child settled and the runtime entry was written (Ready, Busy or Failed status).
+    Settled(RuntimeStatus),
+    /// The child exited and left proven `AddrInUse` evidence; the caller may re-screen.
+    BindConflict { port: u16, evidence: String },
+}
+
+/// Plan.md §6.3 B: at most three retries after the first attempt.
+pub const MAX_PORT_CONFLICT_RETRIES: u8 = 3;
+/// Used when the Manifest leaves `max_port_retries` at its default of 0 ("unspecified").
+pub const DEFAULT_PORT_CONFLICT_RETRIES: u8 = 3;
+
+/// Text only a real bind failure produces (Linux/macOS strerror, glibc, Windows Winsock).
+const BIND_CONFLICT_MARKERS: [&str; 5] = [
+    "address already in use",
+    "eaddrinuse",
+    "only one usage of each socket address",
+    "os error 98",
+    "os error 10048",
+];
+
+fn has_bind_conflict_evidence(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    BIND_CONFLICT_MARKERS.iter().any(|marker| lower.contains(marker))
+}
+
+/// One-line evidence for the diagnostic, never echoing a peer-controlled header wholesale.
+fn bind_conflict_evidence(captured: &str, port_taken: bool, port: u16) -> String {
+    let excerpt: String = captured
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .last()
+        .unwrap_or("")
+        .chars()
+        .take(300)
+        .collect();
+    if excerpt.trim().is_empty() {
+        if port_taken {
+            format!("AddrInUse on 127.0.0.1:{port} once the child exited")
+        } else {
+            "AddrInUse evidence reported by the child".to_string()
+        }
+    } else {
+        excerpt
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RuntimeStatus {
     Stopped,
@@ -116,6 +206,9 @@ pub enum RuntimeStatus {
 pub struct ManagedInstance {
     pub plugin_id: String,
     pub port: u16,
+    /// RAII reservation: the dynamic port returns to the pool when this instance drops
+    /// (stop, restart, crash reconciliation, or a failed spawn).
+    pub port_lease: PortLease,
     pub pid: u32,
     pub child: tokio::process::Child,
     pub job_object: JobObject,
@@ -150,6 +243,7 @@ pub struct RuntimeEntry {
 
 /// An admitted request owns this guard through response EOF or cancellation.
 /// Admission and explicit stop share the existing FIFO lifecycle lock.
+#[derive(Debug)]
 pub struct RequestLease {
     active_requests: Arc<AtomicUsize>,
     endpoint: String,
@@ -180,6 +274,8 @@ impl Drop for RequestLease {
 pub struct RuntimeManager {
     runtimes: Arc<RwLock<HashMap<String, Arc<Mutex<RuntimeEntry>>>>>,
     start_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
+    /// Process-local dynamic port ledger shared by every Managed plugin (spec v10).
+    ports: PortAllocator,
 }
 
 impl RuntimeManager {
@@ -187,7 +283,13 @@ impl RuntimeManager {
         Self {
             runtimes: Arc::new(RwLock::new(HashMap::new())),
             start_locks: Arc::new(RwLock::new(HashMap::new())),
+            ports: PortAllocator::new(),
         }
+    }
+
+    /// Shared allocator handle: the Workbench route view and tests read live reservations.
+    pub fn port_allocator(&self) -> PortAllocator {
+        self.ports.clone()
     }
 
     /// Gets or creates a singleflight startup lock for a specific plugin.
@@ -517,8 +619,16 @@ impl RuntimeManager {
         let result = match record.manifest.ownership() {
             Ownership::External => self.start_external(record, allocated_port).await,
             Ownership::Managed => {
-                let port = allocated_port.unwrap_or(8080);
-                self.start_managed(record, package_dir, port, data_dir, api_key)
+                // Dynamic allocation (spec v10): an explicit port is honoured, otherwise the
+                // ledger hands out a proven-free port inside the Plan.md §6.3 range. The
+                // Manifest's `max_port_retries` is the *conflict retry* count of Plan.md §6.3 B,
+                // consumed inside start_managed; it never widens the probe budget and is never
+                // used to infer a conflict from a slow start (ADR-003 evidence rule).
+                let lease = match allocated_port {
+                    Some(port) => self.ports.allocate_specific(plugin_id, port)?,
+                    None => self.ports.allocate(plugin_id)?,
+                };
+                self.start_managed(record, package_dir, lease, data_dir, api_key)
                     .await
             }
         };
@@ -613,29 +723,113 @@ impl RuntimeManager {
 
     /// Starts a Managed plugin: pre-projects config with Windows Protected DACL,
     /// checks port availability, creates Win32 Job Object, spawns child, and probes health.
+    /// Managed startup with Plan.md §6.3 B conflict recovery.
+    ///
+    /// Each attempt gets its own ledger lease; only provable `AddrInUse` evidence from the
+    /// child (or the port being held by someone else once it exited) moves the loop forward:
+    /// the port is blacklisted, a new one is screened, and the child is re-launched with the
+    /// re-rendered `{{PORT}}` environment/arguments. After the retries are spent the plugin is
+    /// reported as `PortConflictExhausted` with a structured diagnostic instead of a dead
+    /// `Failed` string. Probe timeouts, missing credentials and clean-timeout 503s never enter
+    /// this loop (ADR-003).
     async fn start_managed(
         &self,
         record: &PluginRecord,
         package_dir: &Path,
-        port: u16,
+        first_lease: PortLease,
         data_dir: &Path,
         api_key: Option<&str>,
     ) -> Result<RuntimeStatus, RuntimeError> {
-        let plugin_id = &record.manifest.metadata.id;
+        let plugin_id = record.manifest.metadata.id.clone();
+        let max_retries = match record.manifest.lifecycle.max_port_retries {
+            0 => DEFAULT_PORT_CONFLICT_RETRIES,
+            configured => configured.min(MAX_PORT_CONFLICT_RETRIES),
+        };
+        let mut lease = first_lease;
+        let mut blacklist: Vec<u16> = Vec::new();
+        let mut attempts: Vec<PortAttempt> = Vec::new();
+        let mut attempt_no: u8 = 0;
 
-        // Retry only proven bind conflicts, never infer conflict from a probe timeout.
-        let mut port = port;
-        let mut retries_left = record.manifest.lifecycle.max_port_retries;
         loop {
-            match check_port_available(port) {
-                Ok(()) => break,
-                Err(PortConflictError::AddressInUse { .. }) if retries_left > 0 => {
-                    retries_left -= 1;
-                    port = pick_unused_port().map_err(|e| RuntimeError::Io(e.to_string()))?;
+            attempt_no = attempt_no.saturating_add(1);
+            match self
+                .start_managed_once(record, package_dir, lease, data_dir, api_key)
+                .await?
+            {
+                ManagedAttempt::Settled(status) => return Ok(status),
+                ManagedAttempt::BindConflict { port, evidence } => {
+                    // The attempt consumed the lease, so the port is back in the ledger;
+                    // it stays blacklisted for the rest of this start.
+                    blacklist.push(port);
+                    attempts.push(PortAttempt { port, evidence });
+                    if attempt_no > max_retries {
+                        return Err(RuntimeError::PortConflictExhausted {
+                            diagnostic: Box::new(PortConflictDiagnostic {
+                                plugin_id,
+                                max_retries,
+                                attempts,
+                            }),
+                        });
+                    }
+                    lease = self.ports.allocate_excluding(&plugin_id, &blacklist)?;
                 }
-                Err(error) => return Err(error.into()),
             }
         }
+    }
+
+    /// Test-only: installs a runtime entry backed by an External plugin (no spawned process),
+    /// so route admission, generation following and route snapshots can be driven in tests.
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn install_external_entry_for_test(
+        &self,
+        plugin_id: &str,
+        port: u16,
+        base_url: &str,
+        generation: u64,
+        status: RuntimeStatus,
+        active: bool,
+    ) {
+        let entry_lock = {
+            let mut runtimes = self.runtimes.write().await;
+            runtimes
+                .entry(plugin_id.to_string())
+                .or_insert_with(|| {
+                    Arc::new(Mutex::new(RuntimeEntry {
+                        status: RuntimeStatus::Stopped,
+                        active_requests: Arc::new(AtomicUsize::new(0)),
+                        active: None,
+                        instance_generation: 0,
+                        maintenance: None,
+                    }))
+                })
+                .clone()
+        };
+        let mut entry = entry_lock.lock().await;
+        entry.status = status;
+        entry.instance_generation = generation;
+        entry.active = if active {
+            Some(ActivePlugin::External {
+                plugin_id: plugin_id.to_string(),
+                port,
+                base_url: base_url.to_string(),
+            })
+        } else {
+            None
+        };
+    }
+
+    async fn start_managed_once(
+        &self,
+        record: &PluginRecord,
+        package_dir: &Path,
+        port_lease: PortLease,
+        data_dir: &Path,
+        api_key: Option<&str>,
+    ) -> Result<ManagedAttempt, RuntimeError> {
+        let plugin_id = &record.manifest.metadata.id;
+        // The port is already proven free and reserved by the allocator; a lost race is
+        // reported by the child's own bind failure, never guessed here.
+        let port = port_lease.port();
         // Locate executable from Managed runtime
         let (exe_rel, args, env_vars) = match &record.manifest.runtime {
             Runtime::Managed {
@@ -694,6 +888,9 @@ impl RuntimeManager {
         cmd.current_dir(&plugin_data_dir);
         // Tokio owns abort/assignment-error cleanup before Job ownership is established.
         cmd.kill_on_drop(true);
+        // Bind evidence lives on the child's stderr (EADDRINUSE / Winsock 10048); it is
+        // drained into a bounded tail so a crash can be classified, never inferred.
+        cmd.stderr(std::process::Stdio::piped());
 
         // Generic template rendering for process arguments
         for arg in &args {
@@ -726,6 +923,29 @@ impl RuntimeManager {
             .spawn()
             .map_err(|e| RuntimeError::SpawnFailed(format!("Failed to spawn child: {}", e)))?;
         let pid = child.id().unwrap_or(0);
+        let stderr_tail: Arc<std::sync::Mutex<String>> =
+            Arc::new(std::sync::Mutex::new(String::new()));
+        if let Some(mut stderr) = child.stderr.take() {
+            let sink = stderr_tail.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncReadExt;
+                let mut chunk = [0u8; 512];
+                loop {
+                    match stderr.read(&mut chunk).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if let Ok(mut tail) = sink.lock() {
+                                tail.push_str(&String::from_utf8_lossy(&chunk[..n]));
+                                if tail.len() > 4096 {
+                                    let excess = tail.len() - 4096;
+                                    let _ = tail.drain(..excess);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // Assign child to Job Object immediately
         job.assign_tokio_child(&child).map_err(|e| {
@@ -746,6 +966,24 @@ impl RuntimeManager {
                 .try_wait()
                 .map_err(|e| RuntimeError::Io(e.to_string()))?
             {
+                // Let the stderr drainer finish before deciding, then rely on evidence only:
+                // a bind marker in the child's own output, or the port still being held by
+                // another process now that the child is gone.
+                tokio::time::sleep(Duration::from_millis(80)).await;
+                let captured = stderr_tail
+                    .lock()
+                    .map(|tail| tail.clone())
+                    .unwrap_or_default();
+                let port_taken = matches!(
+                    check_port_available(port),
+                    Err(PortConflictError::AddressInUse { .. })
+                );
+                if has_bind_conflict_evidence(&captured) || port_taken {
+                    return Ok(ManagedAttempt::BindConflict {
+                        port,
+                        evidence: bind_conflict_evidence(&captured, port_taken, port),
+                    });
+                }
                 final_status = RuntimeStatus::Failed {
                     error: format!("Managed process exited during startup: {exit}"),
                 };
@@ -800,6 +1038,7 @@ impl RuntimeManager {
         let instance = ManagedInstance {
             plugin_id: plugin_id.clone(),
             port,
+            port_lease,
             pid,
             child,
             job_object: job,
@@ -830,7 +1069,7 @@ impl RuntimeManager {
         entry.status = final_status.clone();
         entry.active = Some(ActivePlugin::Managed(Box::new(instance)));
 
-        Ok(final_status)
+        Ok(ManagedAttempt::Settled(final_status))
     }
 
     pub async fn restart_plugin(

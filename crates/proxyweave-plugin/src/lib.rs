@@ -16,6 +16,7 @@ pub mod management;
 pub mod manifest;
 pub mod marketplace;
 pub mod port;
+pub mod port_allocator;
 pub mod probe;
 pub mod projection;
 pub mod registry;
@@ -37,6 +38,10 @@ pub use marketplace::{
     MarketplacePluginItem,
 };
 pub use port::{check_port_available, PortConflictError};
+pub use port_allocator::{
+    PortAllocator, PortAllocatorError, PortAllocatorStats, PortLease, PortRange, PortReservation,
+    DEFAULT_MAX_ATTEMPTS, DEFAULT_PORT_RANGE_END, DEFAULT_PORT_RANGE_START,
+};
 pub use probe::{probe_http, ProbeReport, ProbeStatus};
 pub use projection::{project_managed_configuration, ProjectedFiles, ProjectionContext};
 pub use registry::{manifest_fingerprint, ImportResult, PluginRecord, Registry};

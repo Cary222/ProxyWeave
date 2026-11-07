@@ -205,6 +205,19 @@ impl RoutePool {
         }
     }
 
+    /// Re-binds an existing route entry to the instance generation the runtime reports.
+    /// Returns `true` when a matching entry was updated, `false` when the plugin is unknown.
+    pub async fn update_generation(&self, plugin_id: &str, generation: Option<u64>) -> bool {
+        let mut list = self.backends.write().await;
+        match list.iter_mut().find(|backend| backend.plugin_id == plugin_id) {
+            Some(backend) => {
+                backend.instance_generation = generation;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub async fn remove_backend(&self, plugin_id: &str) {
         let mut list = self.backends.write().await;
         list.retain(|b| b.plugin_id != plugin_id);
@@ -460,15 +473,15 @@ mod tests {
     #[tokio::test]
     async fn test_select_candidates_for_target_filtering() {
         let pool = RoutePool::new();
-        pool.add_backend(dummy_backend("wb2api")).await;
+        pool.add_backend(dummy_backend("generic-adapter-a")).await;
         pool.add_backend(dummy_backend("external-cpa")).await;
 
         let (c_all, _, _) = pool.select_candidates(None).await;
         assert_eq!(c_all.len(), 2);
 
-        let (c_wb, _, _) = pool.select_candidates_for_target(None, Some("wb2api")).await;
+        let (c_wb, _, _) = pool.select_candidates_for_target(None, Some("generic-adapter-a")).await;
         assert_eq!(c_wb.len(), 1);
-        assert_eq!(c_wb[0].plugin_id, "wb2api");
+        assert_eq!(c_wb[0].plugin_id, "generic-adapter-a");
 
         let (c_cpa, _, _) = pool.select_candidates_for_target(None, Some("external-cpa")).await;
         assert_eq!(c_cpa.len(), 1);
@@ -476,6 +489,24 @@ mod tests {
 
         let (c_none, _, _) = pool.select_candidates_for_target(None, Some("nonexistent")).await;
         assert!(c_none.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_update_generation_rebinds_only_the_named_backend() {
+        let pool = RoutePool::new();
+        pool.add_backend(dummy_backend("b1").with_instance_generation(Some(1)))
+            .await;
+        pool.add_backend(dummy_backend("b2").with_instance_generation(Some(7)))
+            .await;
+
+        assert!(pool.update_generation("b1", Some(2)).await);
+        assert!(!pool.update_generation("missing", Some(3)).await);
+
+        let backends = pool.list_backends().await;
+        assert_eq!(backends[0].instance_generation, Some(2));
+        assert_eq!(backends[1].instance_generation, Some(7));
+        assert!(backends[0].matches_generation(2));
+        assert!(!backends[0].matches_generation(1));
     }
 
     #[tokio::test]
