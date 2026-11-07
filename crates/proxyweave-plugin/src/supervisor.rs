@@ -28,6 +28,7 @@ pub enum PluginError {
     InvalidManifest(String),
     AlreadyRunning(String),
     NotRunning(String),
+    MissingRequiredCredential(String),
 }
 
 impl std::fmt::Display for PluginError {
@@ -46,6 +47,7 @@ impl std::fmt::Display for PluginError {
             Self::InvalidManifest(msg) => write!(f, "Invalid manifest: {}", msg),
             Self::AlreadyRunning(id) => write!(f, "Plugin already running: {}", id),
             Self::NotRunning(id) => write!(f, "Plugin not running: {}", id),
+            Self::MissingRequiredCredential(msg) => write!(f, "Missing required credential: {}", msg),
         }
     }
 }
@@ -120,11 +122,7 @@ impl PluginSupervisor {
     ) -> HashMap<String, String> {
         let mut envs = HashMap::new();
         for (key, val) in credentials {
-            let sanitized_key = key
-                .chars()
-                .map(|c| if c.is_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
-                .collect::<String>();
-            let env_name = format!("PROXYWEAVE_CREDENTIAL_{}", sanitized_key);
+            let env_name = crate::credential::sanitize_credential_env_name(key);
             envs.insert(env_name, val.clone());
         }
         envs
@@ -142,6 +140,19 @@ impl PluginSupervisor {
     ) -> Result<ManagedHandle, PluginError> {
         if manifest.ownership() == Ownership::External {
             return Err(PluginError::ExternalLifecycleImmutable);
+        }
+
+        let mut missing_keys = Vec::new();
+        for req in &manifest.configuration.required_secrets {
+            if !credentials.contains_key(req) {
+                missing_keys.push(req.clone());
+            }
+        }
+        if !missing_keys.is_empty() {
+            return Err(PluginError::MissingRequiredCredential(format!(
+                "Plugin '{}' missing required credentials: {:?}",
+                manifest.metadata.id, missing_keys
+            )));
         }
 
         let Runtime::Managed {

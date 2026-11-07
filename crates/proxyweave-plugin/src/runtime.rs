@@ -48,6 +48,7 @@ pub enum RuntimeError {
         expected: u64,
         actual: u64,
     },
+    MissingRequiredCredential(String),
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -59,6 +60,7 @@ impl std::fmt::Display for RuntimeError {
             Self::PluginNotFound(msg) => write!(f, "Plugin not found: {}", msg),
             Self::AlreadyRunning(msg) => write!(f, "Plugin already running: {}", msg),
             Self::ExecutableNotFound(msg) => write!(f, "Executable not found: {}", msg),
+            Self::MissingRequiredCredential(msg) => write!(f, "Missing required credential: {}", msg),
             Self::ConfigProjectionFailed(msg) => write!(f, "Config projection failed: {}", msg),
             Self::SpawnFailed(msg) => write!(f, "Process spawn failed: {}", msg),
             Self::ProbeTimeout(msg) => write!(f, "Probe timeout: {}", msg),
@@ -660,12 +662,23 @@ impl RuntimeManager {
 
         // Read all required secrets declared in manifest from OS Keyring
         let mut secrets = BTreeMap::new();
+        let mut missing_secrets = Vec::new();
         for secret_name in &record.manifest.configuration.required_secrets {
-            if let Ok(Some(secret_val)) =
-                quotio_platform::get_plugin_credential(plugin_id, secret_name)
-            {
-                secrets.insert(secret_name.clone(), secret_val);
+            match quotio_platform::get_plugin_credential(plugin_id, secret_name) {
+                Ok(Some(secret_val)) if !secret_val.trim().is_empty() => {
+                    secrets.insert(secret_name.clone(), secret_val.trim().to_string());
+                }
+                _ => {
+                    missing_secrets.push(secret_name.clone());
+                }
             }
+        }
+
+        if !missing_secrets.is_empty() {
+            return Err(RuntimeError::MissingRequiredCredential(format!(
+                "Plugin '{}' cannot start: missing required secret(s): {:?}",
+                plugin_id, missing_secrets
+            )));
         }
 
         // Generic projection context
@@ -696,6 +709,12 @@ impl RuntimeManager {
                 .render_str(v)
                 .map_err(RuntimeError::ConfigProjectionFailed)?;
             cmd.env(k, rendered_val);
+        }
+
+        // Standard PROXYWEAVE_CREDENTIAL_* environment variable injection
+        for (secret_name, secret_val) in &secrets {
+            let env_key = crate::credential::sanitize_credential_env_name(secret_name);
+            cmd.env(env_key, secret_val);
         }
 
         // Create Win32 Job Object before spawn

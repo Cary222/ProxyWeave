@@ -95,6 +95,8 @@ impl From<proxyweave_plugin::updater::UpdateCheck> for PluginUpdateStatusDto {
 pub struct SecretStatusInfo {
     pub name: String,
     pub is_set: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masked_value: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

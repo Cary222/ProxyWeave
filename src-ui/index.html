@@ -228,6 +228,7 @@
       <div class="header-sub">本地优先 AI 代理应用网关 · 架构守则：万物皆插件 · 上游易逝，平台长存</div>
     </div>
     <div style="display: flex; gap: 8px;">
+      <button class="btn btn-outline" id="manage-credentials-btn" onclick="workbenchApp.openCredentialModal('wb2api')">🔐 安全凭据管理 (Credentials)</button>
       <button class="btn btn-outline" id="scan-directory-btn" onclick="workbenchApp.refreshPlugins()">📁 动态扫描目录 (Scan Directory)</button>
       <button class="btn btn-outline" id="refresh-all-btn" onclick="workbenchApp.refreshAll()">刷新状态 ↻</button>
     </div>
@@ -319,6 +320,7 @@
             <div><span>端口分配模式:</span> <span class="val">动态回环 (OS Port 0 探测)</span></div>
             <div><span>健康探针:</span> <span class="val">/healthz (200 OK / 503 Busy)</span></div>
             <div><span>孤儿进程防护:</span> <span class="val">Win32 JobObject Limit</span></div>
+            <div><span>安全凭据:</span> <span class="val" id="cred-status-wb2api">● 已安全配置 (Keyring)</span></div>
             <div><span>探针延迟:</span> <span class="val" id="probe-latency-wb2api">&lt; 1 ms</span></div>
             <div><span>运行状态:</span> <span class="pill pill-green" id="probe-status-wb2api">● READY</span></div>
           </div>
@@ -357,6 +359,48 @@
             <button class="btn btn-outline" style="width: 100%;" onclick="workbenchApp.probePlugin('external-cpa')">重新探测 (Probe Only)</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Credential Management Modal -->
+  <div id="credential-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; width: 480px; max-width: 90vw; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">🔐 插件安全凭据配置 (OS Keyring)</h3>
+        <button class="btn btn-outline" style="padding: 4px 10px; font-size: 14px;" onclick="workbenchApp.closeCredentialModal()">✕</button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+        凭据直接受管于操作系统原生 Keyring（Windows Credential Manager / macOS Keychain）。<br>
+        <span class="badge-zerodb" style="margin-top: 4px; display: inline-block;">● Zero-DB Invariant</span> 内存与 Keyring 隔离，绝不存入 SQLite/数据库。
+      </p>
+      <div id="credential-fields-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">目标插件 (Plugin ID)</label>
+          <input type="text" id="credential-plugin-id" class="btn-outline" style="width: 100%; padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px;" value="wb2api" readonly />
+        </div>
+        <div>
+          <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">凭据名称 (Secret Name)</label>
+          <input type="text" id="credential-name-input" class="btn-outline" style="width: 100%; padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px;" value="API_KEY" readonly />
+        </div>
+        <div>
+          <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">凭据脱敏回显 (Masked Preview)</label>
+          <div id="credential-masked-preview" style="padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px dashed var(--card-border); border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--accent-green);">
+            未配置
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">更新凭据值 (Secret Value / Token)</label>
+          <input type="password" id="credential-value-input" class="btn-outline" style="width: 100%; padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px;" placeholder="sk-••••••••••••••••" />
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">输入值经过脱敏保护，注入进程时映射为 PROXYWEAVE_CREDENTIAL_*</div>
+        </div>
+        <div id="credential-feedback" style="font-size: 12px; min-height: 18px;"></div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-danger" id="btn-delete-credential" onclick="workbenchApp.deleteCredential()">清除凭据</button>
+        <button class="btn btn-outline" onclick="workbenchApp.closeCredentialModal()">取消</button>
+        <button class="btn btn-primary" id="btn-save-credential" onclick="workbenchApp.saveCredential()">保存至 Keyring</button>
       </div>
     </div>
   </div>

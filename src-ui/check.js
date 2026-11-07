@@ -43,3 +43,15 @@ if (!html.includes("scan-directory-btn") || !html.includes("refreshPlugins")) {
   throw new Error("RED LINE VIOLATION: Missing scan-directory-btn in index.html");
 }
 console.log(" - Dynamic Directory Watcher: PASS (refresh_plugins IPC & UI trigger verified)");
+
+// Red Line 6: Credential Contract & Security Modal
+if (!html.includes("credential-modal") || !html.includes("btn-save-credential")) {
+  throw new Error("RED LINE VIOLATION: Missing credential-modal or btn-save-credential in index.html");
+}
+if (!html.includes('type="password"') || !html.includes("credential-value-input")) {
+  throw new Error("RED LINE VIOLATION: Credential input must use type='password' for visual masking");
+}
+if (!appJs.includes("save_plugin_secret") && !appJs.includes("saveCredential")) {
+  throw new Error("RED LINE VIOLATION: Missing credential save IPC invocation in app.js");
+}
+console.log(" - Credential Security Contract: PASS (Modal, password masking & Keyring IPC verified)");
