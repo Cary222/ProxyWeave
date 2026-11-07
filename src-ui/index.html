@@ -227,7 +227,10 @@
       <h1>ProxyWeave Desktop Workbench <span class="badge-zerodb">● 纯内存状态 (Zero-DB)</span></h1>
       <div class="header-sub">本地优先 AI 代理应用网关 · 架构守则：万物皆插件 · 上游易逝，平台长存</div>
     </div>
-    <button class="btn btn-outline" id="refresh-all-btn" onclick="workbenchApp.refreshAll()">刷新状态 ↻</button>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-outline" id="scan-directory-btn" onclick="workbenchApp.refreshPlugins()">📁 动态扫描目录 (Scan Directory)</button>
+      <button class="btn btn-outline" id="refresh-all-btn" onclick="workbenchApp.refreshAll()">刷新状态 ↻</button>
+    </div>
   </div>
 
   <!-- KPI Cards -->

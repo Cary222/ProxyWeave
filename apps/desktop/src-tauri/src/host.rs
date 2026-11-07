@@ -159,6 +159,7 @@ pub struct DesktopState {
     pub gateway_master_key: Arc<RwLock<String>>,
     pub selected_plugin_id: Arc<RwLock<Option<String>>>,
     pub events: Arc<Mutex<VecDeque<HostEvent>>>,
+    pub watcher: Arc<proxyweave_plugin::watcher::DirectoryWatcher>,
     plugin_operations: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
 }
 
@@ -238,6 +239,11 @@ impl DesktopState {
             DesktopConfig::default()
         };
 
+        let watcher = Arc::new(proxyweave_plugin::watcher::DirectoryWatcher::new());
+        watcher.add_watch_dir(profile_dir.join("plugins"));
+        watcher.add_watch_dir(PathBuf::from("plugins"));
+        let _ = watcher.scan_all();
+
         Ok(Self {
             profile_dir,
             registry,
@@ -249,6 +255,7 @@ impl DesktopState {
             gateway_master_key: Arc::new(RwLock::new(master_key)),
             selected_plugin_id: Arc::new(RwLock::new(config.selected_plugin_id)),
             events: Arc::new(Mutex::new(VecDeque::new())),
+            watcher,
             plugin_operations: Mutex::new(BTreeMap::new()),
         })
     }
@@ -2377,7 +2384,39 @@ pub struct RouteStatusInfo {
 pub async fn list_plugins(
     state: State<'_, DesktopState>,
 ) -> Result<Vec<PluginRecord>, String> {
-    list_local_plugins(state).await
+    let mut plugins = list_local_plugins(state.clone()).await?;
+    let discovered = state.watcher.list_discovered();
+    for item in discovered {
+        if !plugins.iter().any(|p| p.manifest.metadata.id == item.manifest.metadata.id) {
+            plugins.push(item);
+        }
+    }
+    plugins.sort_by(|a, b| a.manifest.metadata.id.cmp(&b.manifest.metadata.id));
+    Ok(plugins)
+}
+
+#[tauri::command]
+pub async fn refresh_plugins(
+    state: State<'_, DesktopState>,
+) -> Result<Vec<PluginRecord>, String> {
+    let watcher = state.watcher.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        watcher.scan_all();
+    })
+    .await
+    .map_err(|_| "watcher scan panicked".to_string())?;
+
+    state
+        .record_event(
+            "watcher",
+            "refresh",
+            "plugins",
+            true,
+            "Plugin directory scanned and refreshed",
+        )
+        .await;
+
+    list_plugins(state).await
 }
 
 #[tauri::command]
@@ -2386,16 +2425,49 @@ pub async fn probe_plugin(
     id: String,
 ) -> Result<PluginProbeResult, String> {
     let start = std::time::Instant::now();
-    let status_info = get_plugin_runtime_status(state, id.clone()).await?;
+    let status_res = get_plugin_runtime_status(state.clone(), id.clone()).await;
+    let (status, port, error, healthy) = match status_res {
+        Ok(status_info) => {
+            let healthy = status_info.status == "ready" || status_info.status == "busy";
+            (status_info.status, status_info.port, status_info.error, healthy)
+        }
+        Err(e) => {
+            if let Some(record) = state.watcher.get_plugin(&id) {
+                if let proxyweave_plugin::Runtime::External { endpoint } = &record.manifest.runtime {
+                    let health_path = &record.manifest.network.health_check.path;
+                    let full_url = format!("{}{}", endpoint.trim_end_matches('/'), health_path);
+                    let client = reqwest::Client::builder()
+                        .timeout(Duration::from_millis(record.manifest.network.health_check.timeout_ms))
+                        .build()
+                        .map_err(|err| err.to_string())?;
+                    let resp = client.get(&full_url).send().await;
+                    match resp {
+                        Ok(res) if res.status().as_u16() == record.manifest.network.health_check.expected_status => {
+                            ("ready".to_string(), None, None, true)
+                        }
+                        Ok(res) => {
+                            (format!("http_{}", res.status().as_u16()), None, None, false)
+                        }
+                        Err(err) => {
+                            ("unreachable".to_string(), None, Some(err.to_string()), false)
+                        }
+                    }
+                } else {
+                    ("stopped".to_string(), None, Some(e), false)
+                }
+            } else {
+                ("stopped".to_string(), None, Some(e), false)
+            }
+        }
+    };
     let elapsed = start.elapsed().as_millis() as u64;
-    let healthy = status_info.status == "ready" || status_info.status == "busy";
     Ok(PluginProbeResult {
         id,
-        status: status_info.status,
-        port: status_info.port,
+        status,
+        port,
         latency_ms: Some(elapsed),
         healthy,
-        error: status_info.error,
+        error,
     })
 }
 

@@ -34,3 +34,12 @@ if (!html.includes("kpi-gw-active") || !html.includes("kpi-gw-total")) {
   throw new Error("Missing active/total routed KPI indicators");
 }
 console.log(" - Proxy Engine KPI Metrics: PASS (kpi-gw-active and kpi-gw-total verified)");
+
+// Red Line 5: Dynamic directory watcher & refresh_plugins IPC verification
+if (!appJs.includes("refresh_plugins") || !appJs.includes("refreshPlugins")) {
+  throw new Error("RED LINE VIOLATION: Missing refresh_plugins IPC invocation in app.js");
+}
+if (!html.includes("scan-directory-btn") || !html.includes("refreshPlugins")) {
+  throw new Error("RED LINE VIOLATION: Missing scan-directory-btn in index.html");
+}
+console.log(" - Dynamic Directory Watcher: PASS (refresh_plugins IPC & UI trigger verified)");

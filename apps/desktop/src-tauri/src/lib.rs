@@ -189,6 +189,7 @@ pub fn run() {
             host::update_plugin_to_release,
             host::list_local_plugins,
             host::list_plugins,
+            host::refresh_plugins,
             host::probe_plugin,
             host::get_route_status,
             host::save_plugin_settings,
