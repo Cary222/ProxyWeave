@@ -1,7 +1,9 @@
+#[cfg(windows)]
+use proxyweave_plugin::activation::PluginFileLock;
 use proxyweave_plugin::{
     activation::{
-        validate_version_key, ActivationPhase, CompatibilityDecision, CompatibilityPermit,
-        PluginFileLock, Stamp, VersionLocation, VersionPointer, ACTIVATION_SCHEMA_VERSION,
+        validate_version_key, ActivationPhase, CompatibilityDecision, CompatibilityPermit, Stamp,
+        VersionLocation, VersionPointer, ACTIVATION_SCHEMA_VERSION,
     },
     Registry,
 };
@@ -72,6 +74,10 @@ fn test_version_key_validation() {
     assert!(validate_version_key(&"a".repeat(65)).is_err());
 }
 
+// Win32 exclusive `.lock` semantics: `share_mode(0)` makes the second open
+// fail. The non-Windows path opens the lock file without an OS exclusive
+// lock, so this contract only holds on Windows.
+#[cfg(windows)]
 #[test]
 fn test_windows_file_lock_mutual_exclusion() {
     let tmp = tempfile::tempdir().unwrap();

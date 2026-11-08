@@ -1863,9 +1863,14 @@ mod tests {
         assert!(err_401.contains("401 Unauthorized"));
         assert!(!err_401.contains("wrong-key"));
 
-        // 2. Correct master key but unattached backend -> 503 Service Unavailable
-        let err_503 = list_models_core(port, local_key, None).await.unwrap_err();
-        assert!(err_503.contains("网关后端服务不可用"));
+        // 2. Correct master key but no attached backend -> 502 Bad Gateway with the
+        // gateway's own diagnostic surfaced verbatim (spec v7 error shape).
+        let err_502 = list_models_core(port, local_key, None).await.unwrap_err();
+        assert!(
+            err_502.contains("网关请求失败 (502)"),
+            "unexpected error: {err_502}"
+        );
+        assert!(err_502.contains("No active plugin backend available"));
 
         // 3. Chat stream with unattached backend -> Failed event with 503
         let input = FlightChatRequestInput {

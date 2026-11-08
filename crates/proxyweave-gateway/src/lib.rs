@@ -1754,7 +1754,7 @@ mod tests {
                 .await
                 .unwrap()
                 .status(),
-            StatusCode::SERVICE_UNAVAILABLE
+            StatusCode::BAD_GATEWAY
         );
         assert_eq!(
             client
@@ -1799,7 +1799,7 @@ mod tests {
                 .await
                 .unwrap()
                 .status(),
-            StatusCode::SERVICE_UNAVAILABLE
+            StatusCode::BAD_GATEWAY
         );
 
         handle.shutdown().await.expect("shutdown");
@@ -1824,7 +1824,7 @@ mod tests {
                 .await
                 .unwrap()
                 .status(),
-            StatusCode::SERVICE_UNAVAILABLE
+            StatusCode::BAD_GATEWAY
         );
         handle2.shutdown().await.expect("shutdown 2");
     }

@@ -641,13 +641,13 @@ pub enum UsageStatusFilter {
     Failed,
 }
 
-/// One persisted request-level usage event (a row in `usage_events`). Drained
-/// from the proxy's destructive usage queue and written to SQLite so the
-/// dashboard can aggregate history across arbitrary time ranges.
+/// One request-level usage event drained from the proxy's destructive usage
+/// queue. ProxyWeave keeps no external database (SECURITY.md 3.3), so the host
+/// holds these in its in-memory ring buffer for the dashboard to aggregate.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageEvent {
-    /// Stable SHA-256 over the event's identifying fields; UNIQUE in SQLite so a
-    /// record re-seen across drains is ignored rather than double-counted.
+    /// Stable SHA-256 over the event's identifying fields: a record re-seen
+    /// across drains is ignored rather than double-counted.
     pub event_hash: String,
     pub request_id: Option<String>,
     pub timestamp_ms: i64,

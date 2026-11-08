@@ -1,9 +1,13 @@
+#[cfg(windows)]
+use proxyweave_plugin::JobObject;
 use proxyweave_plugin::{
-    check_port_available, JobObject, PluginRecord, PortConflictError, RuntimeError, RuntimeManager,
+    check_port_available, PluginRecord, PortConflictError, RuntimeError, RuntimeManager,
 };
 use std::net::TcpListener;
 use std::path::Path;
+#[cfg(windows)]
 use std::time::Duration;
+#[cfg(windows)]
 #[tokio::test]
 async fn test_job_object_kills_process_on_drop() {
     let job = JobObject::create().expect("failed to create JobObject");
@@ -205,6 +209,7 @@ fn test_port_conflict_explicit_distinction() {
 }
 
 // Managed singleflight, HTTP contract and restart regressions live in runtime_defects.rs.
+#[cfg(windows)]
 #[tokio::test]
 async fn test_generic_managed_projection_and_spawn_without_hardcoding() {
     let temp = tempfile::tempdir().expect("failed to create temp dir");

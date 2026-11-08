@@ -628,6 +628,16 @@ fn directory_links_or_windows_junction_ancestors_rejected() {
     let registry = Registry::open(profile.path()).unwrap();
     assert!(stage(&registry, &source).is_err());
     assert!(registry.list().unwrap().is_empty());
-    fs::remove_dir(linked).unwrap();
-    fs::remove_dir(bin).unwrap();
+    // Unix directory symlinks are removed with `remove_file`; Windows junctions
+    // are real directory entries and need `remove_dir`.
+    #[cfg(unix)]
+    {
+        fs::remove_file(linked).unwrap();
+        fs::remove_file(bin).unwrap();
+    }
+    #[cfg(windows)]
+    {
+        fs::remove_dir(linked).unwrap();
+        fs::remove_dir(bin).unwrap();
+    }
 }

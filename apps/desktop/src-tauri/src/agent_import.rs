@@ -2971,7 +2971,10 @@ mod tests {
         let home = owned.join("home");
         let code = home.join(".claude");
         assert_eq!(home_dir(), home);
+        #[cfg(windows)]
         assert_eq!(local_app_data(), home.join("AppData/Local"));
+        #[cfg(not(windows))]
+        assert_eq!(local_app_data(), home.join(".local").join("share"));
         let base = "http://127.0.0.1:28319/v1";
         let key = "owned-fixture-key";
         let models: Vec<String> = (1..=5).map(|i| format!("owned-model-{i}")).collect();
