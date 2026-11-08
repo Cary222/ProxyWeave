@@ -16,6 +16,38 @@ fn fixture_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pw-port-fixture"))
 }
 
+/// Text only a real bind refusal produces, in every platform's wording: Linux/macOS
+/// `EADDRINUSE` ("address already in use", "os error 98") and Windows Winsock
+/// `WSAEADDRINUSE` ("only one usage of each socket address", "os error 10048").
+const OS_BIND_CONFLICT_MARKERS: [&str; 6] = [
+    "address already in use",
+    "eaddrinuse",
+    "os error 98",
+    "only one usage of each socket address",
+    "os error 10048",
+    "wsaeaddrinuse",
+];
+
+/// The runtime's own synthetic evidence, produced when the child left no stderr behind.
+/// It names a conflict without quoting one, so it must never satisfy the OS-evidence check.
+const SYNTHETIC_EVIDENCE_MARKERS: [&str; 2] = [
+    "addrinuse on 127.0.0.1",
+    "addrinuse evidence reported by the child",
+];
+
+/// Whether `evidence` quotes the operating system's own bind refusal rather than the
+/// runtime's fallback string. Platform-neutral on purpose: the three CI runners word the
+/// same `EADDRINUSE` verdict differently, and the assertion has to hold on all of them.
+fn is_os_bind_conflict_evidence(evidence: &str) -> bool {
+    let lowered = evidence.to_ascii_lowercase();
+    OS_BIND_CONFLICT_MARKERS
+        .iter()
+        .any(|marker| lowered.contains(marker))
+        && !SYNTHETIC_EVIDENCE_MARKERS
+            .iter()
+            .any(|marker| lowered.contains(marker))
+}
+
 /// Stages the fixture as a plugin package and builds a Manifest that renders `{{PORT}}` into
 /// the fixture's environment, exactly as a real Managed plugin is started.
 fn staged_plugin(package_dir: &Path, conflict_attempts: u32, state: &Path) -> PluginRecord {
@@ -161,9 +193,8 @@ async fn managed_start_reports_a_structured_diagnostic_when_every_retry_conflict
     ports.dedup();
     assert_eq!(ports.len(), attempted, "every retry screened a fresh port");
     for attempt in &diagnostic.attempts {
-        let evidence = attempt.evidence.to_ascii_lowercase();
         assert!(
-            evidence.contains("address already in use") || evidence.contains("addrinuse"),
+            is_os_bind_conflict_evidence(&attempt.evidence),
             "evidence must be the OS bind error, got {:?}",
             attempt.evidence
         );
