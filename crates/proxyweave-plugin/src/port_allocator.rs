@@ -33,7 +33,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::port::{check_port_available, PortConflictError};
+use crate::port::{check_port_available, PortConflictError, ProbeFailureKind};
 
 /// First port of the default dynamic range (Plan.md §6.3 A).
 pub const DEFAULT_PORT_RANGE_START: u16 = 20_000;
@@ -41,6 +41,9 @@ pub const DEFAULT_PORT_RANGE_START: u16 = 20_000;
 pub const DEFAULT_PORT_RANGE_END: u16 = 60_000;
 /// Default probe budget for one allocation.
 pub const DEFAULT_MAX_ATTEMPTS: u16 = 64;
+/// Consecutive OS-reserved refusals after which the scan steps over the rest of the segment
+/// instead of walking it port by port.
+const MAX_SEGMENT_RUN: u32 = 256;
 
 /// Inclusive loopback port range the allocator hands out from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -95,6 +98,18 @@ pub enum PortAllocatorError {
     /// The range was fully scanned without finding a free port (or the budget ran out
     /// with no proven conflict, e.g. repeated OS errors).
     RangeExhausted { range: PortRange, attempts: u16 },
+    /// The scan could reach no bindable port: the OS refused every candidate for a reason
+    /// other than `AddrInUse` (Windows WinNAT / Hyper-V reserved segments answer
+    /// `WSAEACCES`, 10013). The underlying verdict is carried verbatim instead of being
+    /// swallowed, so the real OS error code is visible in the log and the diagnostic.
+    ProbeDenied {
+        range: PortRange,
+        /// Candidates that produced a real verdict (free, busy, or unrelated failure).
+        attempts: u16,
+        /// Reserved-segment refusals that were refunded and stepped over.
+        skipped: u32,
+        failure: PortProbeFailure,
+    },
     /// The requested range is not usable.
     InvalidRange { start: u16, end: u16 },
     /// The port is already leased to another plugin in this process.
@@ -121,6 +136,16 @@ impl std::fmt::Display for PortAllocatorError {
                 "Port range {}-{} exhausted after {attempts} probes",
                 range.start, range.end
             ),
+            Self::ProbeDenied {
+                range,
+                attempts,
+                skipped,
+                failure,
+            } => write!(
+                f,
+                "No bindable port in range {}-{}: {attempts} probes, {skipped} reserved-segment refusals skipped; last OS verdict {failure}",
+                range.start, range.end
+            ),
             Self::InvalidRange { start, end } => {
                 write!(f, "Invalid port range {start}-{end}")
             }
@@ -137,20 +162,64 @@ impl std::fmt::Display for PortAllocatorError {
     }
 }
 
+/// One refused bind probe, kept verbatim: the caller sees the OS verdict, not a summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortProbeFailure {
+    pub port: u16,
+    pub kind: ProbeFailureKind,
+    /// `io::ErrorKind` behind an `IoError` verdict (`None` for `AddrInUse`).
+    pub io_kind: Option<std::io::ErrorKind>,
+    /// Raw OS error code, e.g. `10013` = `WSAEACCES` on Windows.
+    pub raw_os_error: Option<i32>,
+    pub message: String,
+}
+
+impl PortProbeFailure {
+    fn from_error(port: u16, err: &PortConflictError) -> Self {
+        let message = match err {
+            PortConflictError::AddressInUse { detail, .. } => detail.clone(),
+            PortConflictError::IoError { message, .. } => message.clone(),
+        };
+        Self {
+            port,
+            kind: err.failure_kind(),
+            io_kind: err.io_kind(),
+            raw_os_error: err.raw_os_error(),
+            message,
+        }
+    }
+}
+
+impl std::fmt::Display for PortProbeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.raw_os_error {
+            Some(code) => write!(
+                f,
+                "port {}: {} ({}, os error {code})",
+                self.port, self.message, self.kind
+            ),
+            None => write!(f, "port {}: {} ({})", self.port, self.message, self.kind),
+        }
+    }
+}
+
 impl std::error::Error for PortAllocatorError {}
 
 impl From<PortConflictError> for PortAllocatorError {
     fn from(err: PortConflictError) -> Self {
-        match err {
-            PortConflictError::AddressInUse { port, .. } => {
-                Self::AddressInUse { port, attempts: 1 }
-            }
-            PortConflictError::IoError { port, .. } => Self::RangeExhausted {
+        let port = err.port();
+        match err.failure_kind() {
+            ProbeFailureKind::AddressInUse => Self::AddressInUse { port, attempts: 1 },
+            // A non-conflict verdict keeps the OS evidence instead of collapsing into a
+            // bare `RangeExhausted`, which used to discard kind and raw error code.
+            _ => Self::ProbeDenied {
                 range: PortRange {
                     start: port,
                     end: port,
                 },
                 attempts: 1,
+                skipped: 0,
+                failure: PortProbeFailure::from_error(port, &err),
             },
         }
     }
@@ -330,23 +399,56 @@ impl PortAllocator {
         if plugin_id.trim().is_empty() {
             return Err(PortAllocatorError::EmptyPluginId);
         }
-        let mut ledger = self.lock();
+        let ledger = self.lock();
         if let Some(port) = ledger.port_of(plugin_id) {
             return Err(PortAllocatorError::PluginAlreadyActive {
                 plugin_id: plugin_id.to_string(),
                 port,
             });
         }
+        drop(ledger);
+        self.allocate_screened(plugin_id, max_attempts, excluded, check_port_available)
+    }
 
+    /// Screening core shared by every allocation path. `probe` is the bind evidence source:
+    /// a candidate is handed out only after it proved bindable, and a refusal is classified
+    /// before it is allowed to spend the probe budget.
+    fn allocate_screened<F>(
+        &self,
+        plugin_id: &str,
+        max_attempts: u16,
+        excluded: &[u16],
+        mut probe: F,
+    ) -> Result<PortLease, PortAllocatorError>
+    where
+        F: FnMut(u16) -> Result<(), PortConflictError>,
+    {
+        let mut ledger = self.lock();
         let span = self.range.len();
         let budget = u32::from(max_attempts.max(1)).min(span);
         let start = u32::from(self.range.start);
         // Randomised screening pass, then a forward walk from there (Plan.md §6.3 A).
         let mut offset = (ledger.next_random() % u64::from(span)) as u32;
         let mut last_conflict: Option<u16> = None;
+        let mut last_failure: Option<PortProbeFailure> = None;
         let mut attempts: u16 = 0;
+        // Windows WinNAT / Hyper-V reserve whole port segments and answer `WSAEACCES`
+        // (10013) for every port inside them, not `WSAEADDRINUSE`. A reserved port is not a
+        // screened candidate: its probe is refunded, because spending the budget on a
+        // segment nobody can bind would exhaust it before the scan ever reached free space.
+        // The scan walks forward through the segment and steps over the remainder of a long
+        // one, so a reserved block of any width costs a bounded number of probes. A fixed
+        // refusal cap would be wrong here: a Windows host routinely reserves thousands of
+        // consecutive ports, and stopping after a few hundred would report "nothing
+        // bindable" while most of the range is free. Termination is tied to real coverage
+        // instead - the whole range refused, or twice the range probed - so a range that
+        // truly is unreachable still ends with the OS verdict rather than a bare exhaustion.
+        let mut reserved_run: u32 = 0;
+        let mut reserved_refusals: u32 = 0;
+        let max_probes: u32 = span.saturating_mul(2).max(budget);
+        let mut probes: u32 = 0;
 
-        for _ in 0..budget {
+        while u32::from(attempts) < budget {
             let candidate = (start + offset) as u16;
             offset = (offset + 1) % span;
             attempts = attempts.saturating_add(1);
@@ -354,7 +456,8 @@ impl PortAllocator {
             if excluded.contains(&candidate) || ledger.ports.contains_key(&candidate) {
                 continue;
             }
-            match check_port_available(candidate) {
+            probes = probes.saturating_add(1);
+            match probe(candidate) {
                 Ok(()) => {
                     ledger.add_ref(candidate, plugin_id);
                     ledger.cursor = next_port(&self.range, candidate);
@@ -364,22 +467,49 @@ impl PortAllocator {
                         candidate,
                     ));
                 }
-                // Proven conflict: try the next candidate.
-                Err(PortConflictError::AddressInUse { .. }) => {
-                    last_conflict = Some(candidate);
+                Err(ref err) if err.is_reserved_segment() => {
+                    last_failure = Some(PortProbeFailure::from_error(candidate, err));
+                    // A reserved segment is not a screened candidate: refund the budget.
+                    attempts = attempts.saturating_sub(1);
+                    reserved_run = reserved_run.saturating_add(1);
+                    reserved_refusals = reserved_refusals.saturating_add(1);
+                    if reserved_run >= span || probes >= max_probes {
+                        // The whole range was refused: report the OS verdict verbatim.
+                        break;
+                    }
+                    if reserved_run >= MAX_SEGMENT_RUN {
+                        // Step over the rest of the segment instead of walking it.
+                        offset = (offset + reserved_run + 1) % span;
+                        reserved_run = 0;
+                    }
                 }
-                // Not conflict evidence; skip this candidate and keep scanning.
-                Err(PortConflictError::IoError { .. }) => {}
+                Err(err) => {
+                    // Verbatim evidence: a proven conflict, or an unrelated failure that is
+                    // preserved and never read as a conflict.
+                    reserved_run = 0;
+                    if err.failure_kind() == ProbeFailureKind::AddressInUse {
+                        last_conflict = Some(candidate);
+                    }
+                    last_failure = Some(PortProbeFailure::from_error(candidate, &err));
+                }
             }
         }
 
-        match last_conflict {
-            Some(port) => Err(PortAllocatorError::AddressInUse { port, attempts }),
-            None => Err(PortAllocatorError::RangeExhausted {
+        if let Some(port) = last_conflict {
+            return Err(PortAllocatorError::AddressInUse { port, attempts });
+        }
+        if let Some(failure) = last_failure {
+            return Err(PortAllocatorError::ProbeDenied {
                 range: self.range,
                 attempts,
-            }),
+                skipped: reserved_refusals,
+                failure,
+            });
         }
+        Err(PortAllocatorError::RangeExhausted {
+            range: self.range,
+            attempts,
+        })
     }
 
     /// Reserves one exact port (an explicit Manifest or user-chosen port).
@@ -763,5 +893,107 @@ mod tests {
         ports.dedup();
         assert_eq!(ports.len(), 20);
         assert_eq!(allocator.reserved_count(), 20);
+    }
+
+    /// A `WSAEACCES`-style refusal: the OS excludes the whole segment, nothing holds it.
+    fn reserved(port: u16) -> PortConflictError {
+        PortConflictError::IoError {
+            port,
+            kind: std::io::ErrorKind::PermissionDenied,
+            raw_os_error: Some(10013),
+            message: format!("TCP bind error on 127.0.0.1:{port}: WSAEACCES"),
+        }
+    }
+
+    #[test]
+    fn test_reserved_segment_is_stepped_over_without_spending_the_budget() {
+        let allocator = PortAllocator::with_range(PortRange::new(52000, 52199).expect("range"));
+        // Every port but one answers the Windows reserved-range way. Counting those as
+        // screened candidates would spend the 64-probe budget long before 52099.
+        let lease = allocator
+            .allocate_screened("plugin-a", DEFAULT_MAX_ATTEMPTS, &[], |port| {
+                if port == 52099 {
+                    Ok(())
+                } else {
+                    Err(reserved(port))
+                }
+            })
+            .expect("a reserved segment must not consume the probe budget");
+        assert_eq!(lease.port(), 52099);
+    }
+
+    #[test]
+    fn test_long_reserved_segment_is_stepped_over() {
+        let allocator = PortAllocator::with_range(PortRange::new(52000, 52999).expect("range"));
+        // A 500-port reservation is longer than the run the scan walks one candidate at a
+        // time; the allocation must still land outside it.
+        let lease = allocator
+            .allocate_screened("plugin-a", DEFAULT_MAX_ATTEMPTS, &[], |port| {
+                if (52000..52500).contains(&port) {
+                    Err(reserved(port))
+                } else {
+                    Ok(())
+                }
+            })
+            .expect("a long reserved segment must be stepped over");
+        assert!(!(52000..52500).contains(&lease.port()));
+        assert!(allocator.range().contains(lease.port()));
+    }
+
+    #[test]
+    fn test_fully_reserved_range_returns_the_os_verdict_verbatim() {
+        let allocator = PortAllocator::with_range(PortRange::new(52000, 52009).expect("range"));
+        let err = allocator
+            .allocate_screened("plugin-a", DEFAULT_MAX_ATTEMPTS, &[], |port| {
+                Err(reserved(port))
+            })
+            .expect_err("nothing in the range is bindable");
+        match err {
+            PortAllocatorError::ProbeDenied {
+                attempts,
+                skipped,
+                failure,
+                ..
+            } => {
+                assert_eq!(attempts, 0, "reserved probes are refunded, not counted");
+                assert!(skipped > 0, "the skip count is what bounds the scan");
+                assert_eq!(failure.kind, ProbeFailureKind::PermissionDenied);
+                assert_eq!(failure.io_kind, Some(std::io::ErrorKind::PermissionDenied));
+                assert_eq!(failure.raw_os_error, Some(10013));
+                assert!(failure.message.contains("WSAEACCES"));
+            }
+            other => panic!("expected ProbeDenied, got {other}"),
+        }
+    }
+
+    #[test]
+    fn test_reserved_verdict_is_never_read_as_a_conflict() {
+        let denied = reserved(52000);
+        assert!(denied.is_reserved_segment());
+        assert_ne!(denied.failure_kind(), ProbeFailureKind::AddressInUse);
+
+        let unrelated = PortConflictError::IoError {
+            port: 52001,
+            kind: std::io::ErrorKind::ConnectionRefused,
+            raw_os_error: None,
+            message: "other failure".to_string(),
+        };
+        assert!(!unrelated.is_reserved_segment());
+        assert_eq!(unrelated.failure_kind(), ProbeFailureKind::Other);
+
+        let busy = PortConflictError::AddressInUse {
+            port: 52002,
+            detail: "in use".to_string(),
+        };
+        assert_eq!(busy.failure_kind(), ProbeFailureKind::AddressInUse);
+
+        // `From` keeps the underlying verdict instead of collapsing it into exhaustion.
+        match PortAllocatorError::from(denied) {
+            PortAllocatorError::ProbeDenied { failure, .. } => {
+                assert_eq!(failure.raw_os_error, Some(10013));
+                assert_eq!(failure.kind, ProbeFailureKind::PermissionDenied);
+            }
+            other => panic!("expected ProbeDenied, got {other}"),
+        }
     }
 }

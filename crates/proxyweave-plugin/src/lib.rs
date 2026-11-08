@@ -41,10 +41,10 @@ pub use marketplace::{
     get_builtin_catalog, get_marketplace_catalog, search_marketplace, MarketplaceCatalogResponse,
     MarketplacePluginItem,
 };
-pub use port::{check_port_available, PortConflictError};
+pub use port::{check_port_available, PortConflictError, ProbeFailureKind};
 pub use port_allocator::{
-    PortAllocator, PortAllocatorError, PortAllocatorStats, PortLease, PortRange, PortReservation,
-    DEFAULT_MAX_ATTEMPTS, DEFAULT_PORT_RANGE_END, DEFAULT_PORT_RANGE_START,
+    PortAllocator, PortAllocatorError, PortAllocatorStats, PortLease, PortProbeFailure, PortRange,
+    PortReservation, DEFAULT_MAX_ATTEMPTS, DEFAULT_PORT_RANGE_END, DEFAULT_PORT_RANGE_START,
 };
 pub use probe::{probe_http, ProbeReport, ProbeStatus};
 pub use projection::{project_managed_configuration, ProjectedFiles, ProjectionContext};
