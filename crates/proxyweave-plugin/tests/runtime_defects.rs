@@ -702,9 +702,14 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
         )
         .await
         .unwrap_err();
+    // Ordering is part of the contract: a name declared in `required_secrets` but not present in
+    // the vault is refused by the pre-projection credential check (src/runtime.rs:860-877), so the
+    // caller gets the precise `MissingRequiredCredential` diagnostic rather than a generic
+    // projection failure. The declaration name is manifest metadata the operator must see to fix
+    // the plugin; no supplied value may ever appear.
     assert!(
-        matches!(&error, RuntimeError::ConfigProjectionFailed(_)),
-        "expected a config projection failure, got {error:?}"
+        matches!(&error, RuntimeError::MissingRequiredCredential(_)),
+        "a declared but absent secret must be refused before projection, got {error:?}"
     );
     let public_error = format!("{error:?} {error}");
     let status = manager.get_status(&plugin_id).await;
@@ -714,8 +719,11 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
         assert!(!public.contains(opaque));
         assert!(!public.contains(api_key));
         assert!(!public.contains("dummy-"));
-        assert!(!public.contains("absent"));
     }
+    assert!(
+        public_error.contains("absent"),
+        "the diagnostic must name the missing declaration: {public_error}"
+    );
     assert_eq!(
         std::fs::read_to_string(plugin_data.join("spawn.log"))
             .unwrap()
