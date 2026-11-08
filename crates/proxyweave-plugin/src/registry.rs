@@ -1413,6 +1413,7 @@ mod publication_tests {
 #[cfg(test)]
 mod root_alias_tests {
     use super::*;
+    #[cfg(unix)]
     use std::fs;
 
     // -----------------------------------------------------------------------
