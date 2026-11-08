@@ -5,7 +5,7 @@
 //! 2. Zero-DB invariant: no database dependencies in workbench IPC or UI.
 //! 3. WhatsApp exclusion: zero WhatsApp code or manifests present in project.
 
-use proxyweave_plugin::{Manifest, Ownership, PluginSupervisor, PluginError};
+use proxyweave_plugin::{Manifest, Ownership, PluginError, PluginSupervisor};
 
 #[test]
 fn test_external_plugin_cannot_be_killed_or_stopped_by_workbench() {

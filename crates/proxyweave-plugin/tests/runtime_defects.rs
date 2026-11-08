@@ -332,28 +332,31 @@ async fn def003_starting_visible_and_queued_stop_cleans_delayed_child() {
 }
 
 #[tokio::test]
-async fn def004_conflict_reselects_port_and_templates_reach_real_child() {
+async fn def004_pinned_busy_port_is_refused_even_with_retries_left() {
     let temp = sandbox();
     let manager = RuntimeManager::new();
     let occupied = TcpListener::bind("127.0.0.1:0").unwrap();
     let original = occupied.local_addr().unwrap().port();
-    let (port, pid) = ready(
-        manager
-            .start_plugin(
-                &record(0, "review-fixture", 200, 3),
-                temp.path(),
-                Some(original),
-                temp.path(),
-                None,
-            )
-            .await
-            .unwrap(),
+    // A pinned port is never silently re-routed: the allocator proves it is held and refuses
+    // it (tests\test_protocol_adapter_port.rs:101, `a_port_held_by_another_process_is_never_handed_out`).
+    // The Plan.md §6.3 B reselect loop is driven by conflict evidence from the started child,
+    // which port_conflict_recovery.rs covers; a retry budget must not move a pinned port.
+    let error = manager
+        .start_plugin(
+            &record(0, "review-fixture", 200, 3),
+            temp.path(),
+            Some(original),
+            temp.path(),
+            None,
+        )
+        .await
+        .expect_err("a pinned port held by another process must be refused");
+    assert!(
+        matches!(&error, RuntimeError::PortConflict(_)),
+        "expected the proven conflict, got {error:?}"
     );
-    assert_ne!(port, original);
-    assert!(alive(pid));
-    assert_eq!(pids(temp.path()), vec![pid]);
-    manager.stop_plugin("review-fixture").await.unwrap();
-    wait_for_exit(pid).await;
+    assert!(pids(temp.path()).is_empty());
+    assert!(!temp.path().join("plugins").exists());
     assert!(occupied.local_addr().is_ok());
 }
 
@@ -688,11 +691,26 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
     record.manifest.configuration.config_template =
         serde_json::json!({"value": "{SECRET:a}:{SECRET:absent}"});
     record.manifest.validate().unwrap();
+    let fresh_port = proxyweave_plugin::port::pick_unused_port().unwrap();
     let error = manager
-        .start_plugin(&record, temp.path(), Some(port), &data_root, Some(api_key))
+        .start_plugin(
+            &record,
+            temp.path(),
+            Some(fresh_port),
+            &data_root,
+            Some(api_key),
+        )
         .await
         .unwrap_err();
-    assert!(matches!(error, RuntimeError::ConfigProjectionFailed(_)));
+    // Ordering is part of the contract: a name declared in `required_secrets` but not present in
+    // the vault is refused by the pre-projection credential check (src/runtime.rs:860-877), so the
+    // caller gets the precise `MissingRequiredCredential` diagnostic rather than a generic
+    // projection failure. The declaration name is manifest metadata the operator must see to fix
+    // the plugin; no supplied value may ever appear.
+    assert!(
+        matches!(&error, RuntimeError::MissingRequiredCredential(_)),
+        "a declared but absent secret must be refused before projection, got {error:?}"
+    );
     let public_error = format!("{error:?} {error}");
     let status = manager.get_status(&plugin_id).await;
     assert!(matches!(status, RuntimeStatus::Failed { .. }));
@@ -701,8 +719,11 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
         assert!(!public.contains(opaque));
         assert!(!public.contains(api_key));
         assert!(!public.contains("dummy-"));
-        assert!(!public.contains("absent"));
     }
+    assert!(
+        public_error.contains("absent"),
+        "the diagnostic must name the missing declaration: {public_error}"
+    );
     assert_eq!(
         std::fs::read_to_string(plugin_data.join("spawn.log"))
             .unwrap()

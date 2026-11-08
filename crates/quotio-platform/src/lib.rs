@@ -1265,6 +1265,12 @@ mod tests {
 
     #[test]
     fn plugin_keyring_lifecycle_isolates_namespace_and_roundtrips() {
+        if credential_availability() != CredentialAvailability::Available {
+            eprintln!(
+                "skipping plugin_keyring_lifecycle_isolates_namespace_and_roundtrips: platform secure storage unavailable on this host"
+            );
+            return;
+        }
         let nonce = current_unix_millis();
         let p1 = format!("test_p1_{}_{nonce}", std::process::id());
         let p2 = format!("test_p2_{}_{nonce}", std::process::id());
@@ -1372,6 +1378,12 @@ mod tests {
 
     #[test]
     fn long_credential_roundtrip_supports_tokens_up_to_platform_blob_limit() {
+        if credential_availability() != CredentialAvailability::Available {
+            eprintln!(
+                "skipping long_credential_roundtrip_supports_tokens_up_to_platform_blob_limit: platform secure storage unavailable on this host"
+            );
+            return;
+        }
         let account = format!(
             "test_long_token_{}_{}",
             std::process::id(),

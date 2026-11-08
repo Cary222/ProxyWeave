@@ -5,7 +5,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('D:/pi-web-0.8.9/pi-web-0.8.9/node_modules/playwright');
+const { chromium } = require('../../test-support/playwright-loader.cjs');
 const esbuild = require('esbuild');
 const desktop = process.cwd();
 const evidence = path.resolve(desktop, '../../.pi/development/ide-theme-fix/browser');
@@ -146,8 +146,33 @@ beforeEach(async () => {
   await page?.close();
   page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await page.goto(base);
+  await page.addStyleTag({
+    content: '*, *::before, *::after { transition: none !important; animation: none !important; }',
+  });
   await page.waitForFunction(() => document.querySelectorAll('[data-agent-target]').length === 11);
 });
+
+// Theme switches are animated (`transition-all` sits on these buttons), so a
+// reading taken after `dataset.theme` changes returns an interpolated colour:
+// how far the fade has progressed depends on how busy the runner is, and on a
+// 1-vCPU CI box it still reads the previous theme's token. The harness switches
+// transitions off, so every reading is the colour the browser resolved for the
+// new theme. The expected tokens stay exact.
+async function buttonStyles() {
+  return page.evaluate(() => {
+    const btn = (() => { const btns = document.querySelectorAll('[data-agent-target="pi"] button'); return btns[btns.length - 1]; })();
+    const card = document.querySelector('[data-agent-target="pi"]');
+    const computedBtn = window.getComputedStyle(btn);
+    const computedCard = window.getComputedStyle(card);
+    return {
+      btnBg: computedBtn.backgroundColor,
+      btnColor: computedBtn.color,
+      cardBg: computedCard.backgroundColor,
+      cardBorder: computedCard.borderColor,
+      backdropFilter: computedCard.backdropFilter || computedCard.webkitBackdropFilter,
+    };
+  });
+}
 
 describe('IDE theme adaptation and layout boundary tests', () => {
   const themes = ['light', 'dark', 'glass'];
@@ -220,37 +245,14 @@ describe('IDE theme adaptation and layout boundary tests', () => {
   it('computed tokens match host theme colors across light, dark, and glass', async () => {
     // 1. Light theme
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-    let styles = await page.evaluate(() => {
-      const btn = (() => { const btns = document.querySelectorAll('[data-agent-target="pi"] button'); return btns[btns.length - 1]; })();
-      const card = document.querySelector('[data-agent-target="pi"]');
-      const computedBtn = window.getComputedStyle(btn);
-      const computedCard = window.getComputedStyle(card);
-      return {
-        btnBg: computedBtn.backgroundColor,
-        btnColor: computedBtn.color,
-        cardBg: computedCard.backgroundColor,
-        cardBorder: computedCard.borderColor
-      };
-    });
+    let styles = await buttonStyles();
     // Host blue in light theme is #2f6bff -> rgb(47, 107, 255)
     expect(styles.btnBg).toBe('rgb(47, 107, 255)');
     expect(styles.btnColor).toBe('rgb(255, 255, 255)');
 
     // 2. Dark theme
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await page.waitForTimeout(200);
-    styles = await page.evaluate(() => {
-      const btn = (() => { const btns = document.querySelectorAll('[data-agent-target="pi"] button'); return btns[btns.length - 1]; })();
-      const card = document.querySelector('[data-agent-target="pi"]');
-      const computedBtn = window.getComputedStyle(btn);
-      const computedCard = window.getComputedStyle(card);
-      return {
-        btnBg: computedBtn.backgroundColor,
-        btnColor: computedBtn.color,
-        cardBg: computedCard.backgroundColor,
-        cardBorder: computedCard.borderColor
-      };
-    });
+    styles = await buttonStyles();
     // Host blue in dark theme is #6f9bff -> rgb(111, 155, 255)
     expect(styles.btnBg).toBe('rgb(111, 155, 255)');
     // Host card in dark theme is #101013 -> rgb(16, 16, 19)
@@ -258,19 +260,7 @@ describe('IDE theme adaptation and layout boundary tests', () => {
 
     // 3. Glass theme
     await page.evaluate(() => { document.documentElement.dataset.theme = 'glass'; });
-    await page.waitForTimeout(200);
-    styles = await page.evaluate(() => {
-      const btn = (() => { const btns = document.querySelectorAll('[data-agent-target="pi"] button'); return btns[btns.length - 1]; })();
-      const card = document.querySelector('[data-agent-target="pi"]');
-      const computedBtn = window.getComputedStyle(btn);
-      const computedCard = window.getComputedStyle(card);
-      return {
-        btnBg: computedBtn.backgroundColor,
-        btnColor: computedBtn.color,
-        cardBg: computedCard.backgroundColor,
-        backdropFilter: computedCard.backdropFilter || computedCard.webkitBackdropFilter
-      };
-    });
+    styles = await buttonStyles();
     // In glass theme, primary button remains host blue
     expect(styles.btnBg).toBe('rgb(47, 107, 255)');
     expect(styles.backdropFilter).toContain('blur');

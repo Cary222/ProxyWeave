@@ -1,6 +1,53 @@
 //! Owned dummy credentials only; no DesktopState::new/shared master-key access.
 use super::*;
 
+fn platform_keyring_available() -> bool {
+    quotio_platform::credential_availability() == quotio_types::CredentialAvailability::Available
+}
+
+/// These vectors drive the real platform credential store (Secret Service /
+/// Credential Manager / Keychain). A headless runner has none, so skip instead of
+/// panicking on the platform error; they still run wherever secure storage exists.
+fn skip_without_platform_keyring(test: &str) -> bool {
+    if platform_keyring_available() {
+        return false;
+    }
+    eprintln!("skipping {test}: platform secure storage unavailable");
+    true
+}
+
+/// Placeholder package payload for records whose vectors only need a manifest.
+/// The crate's debug test binary is several hundred MiB, past the 256 MiB
+/// per-file package cap, and none of these vectors spawn it: the managed
+/// regression builds its own package in `managed_record`.
+fn placeholder_executable() -> Vec<u8> {
+    let mut bytes = b"proxyweave owned managed fixture (placeholder, never executed)\n".to_vec();
+    bytes.resize(1024, 0);
+    bytes
+}
+
+/// The lightweight Managed stand-in these vectors spawn. It is a workspace binary target,
+/// so `cargo test --workspace --all-targets` builds it next to the test binary's `deps`
+/// directory and no release build of the shell ever contains it. The package executable is
+/// never `current_exe()`: that is this crate's debug test binary (hundreds of MiB, past the
+/// 256 MiB per-file package cap) and Windows refuses to write to or hard-link a binary it is
+/// currently running.
+fn owned_key_fixture_executable() -> std::path::PathBuf {
+    let name = format!("pw-owned-key-fixture{}", std::env::consts::EXE_SUFFIX);
+    let exe = std::env::current_exe().unwrap();
+    let deps = exe.parent().unwrap();
+    let mut candidates = vec![deps.join(&name)];
+    if let Some(profile_dir) = deps.parent() {
+        candidates.push(profile_dir.join(&name));
+    }
+    for candidate in candidates {
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    panic!("managed fixture {name} is missing: build the workspace targets (cargo test --workspace --all-targets) before running these vectors");
+}
+
 fn state_and_record(protocol: &str) -> (tempfile::TempDir, DesktopState, PluginRecord) {
     use sha2::{Digest, Sha256};
     let dir = tempfile::tempdir().unwrap();
@@ -16,9 +63,8 @@ fn state_and_record(protocol: &str) -> (tempfile::TempDir, DesktopState, PluginR
     );
     let source = dir.path().join("source");
     std::fs::create_dir_all(&source).unwrap();
-    let exe = std::env::current_exe().unwrap();
-    let bytes = std::fs::read(&exe).unwrap();
-    std::fs::copy(&exe, source.join("fixture.exe")).unwrap();
+    let bytes = placeholder_executable();
+    std::fs::write(source.join("fixture.exe"), &bytes).unwrap();
     let hash = format!("{:x}", Sha256::digest(&bytes));
     let yaml = format!(
         r#"schema_version: '1.0'
@@ -55,27 +101,39 @@ configuration: {{required_secrets: [access_token], config_template: {{}}}}
         gateway_master_key: Arc::new(RwLock::new(key.into())),
         selected_plugin_id: Arc::new(RwLock::new(None)),
         events: Arc::new(Mutex::new(VecDeque::new())),
+        // The host state gained a directory watcher after these fixtures were
+        // written; an empty watcher is what a fresh host builds too.
+        watcher: Arc::new(proxyweave_plugin::watcher::DirectoryWatcher::new()),
         plugin_operations: Mutex::new(BTreeMap::new()),
     };
     (dir, state, record)
 }
 
+/// Builds the runnable managed package for the owned child vectors through the real
+/// `Registry::import` path: the record and its `packages/<id>/record.json` are produced and
+/// persisted by the registry itself, so the vectors exercise the same load path the host
+/// uses (`save_plugin_secret_value` -> `registry.load`), and the declared SHA256 is the hash
+/// of the staged fixture.
 fn managed_record(state: &DesktopState, record: &PluginRecord, mode: &str) -> PluginRecord {
     use sha2::{Digest, Sha256};
-    let source = state.profile_dir.with_file_name(format!("managed-{mode}"));
-    std::fs::create_dir_all(&source).unwrap();
-    let bytes = std::fs::read(std::env::current_exe().unwrap()).unwrap();
-    std::fs::write(source.join("fixture.exe"), &bytes).unwrap();
-    let id = &record.manifest.metadata.id;
+    let fixture = owned_key_fixture_executable();
+    let source = tempfile::tempdir().unwrap();
+    let executable_name = "fixture.exe";
+    // `fs::copy` keeps the executable bit cargo built the fixture with; `import` stages the
+    // declared file's bytes and persists the record.
+    let executable = source.path().join(executable_name);
+    std::fs::copy(&fixture, &executable).unwrap();
+    let bytes = std::fs::read(&executable).unwrap();
     let hash = format!("{:x}", Sha256::digest(&bytes));
+    let id = format!("{}-owned-{mode}", record.manifest.metadata.id);
     let yaml = format!(
         r#"schema_version: '1.0'
-metadata: {{id: '{id}-owned', name: Owned, version: 1.0.0, license: MIT}}
+metadata: {{id: '{id}', name: Owned, version: 1.0.0, license: MIT}}
 runtime:
   ownership: managed
-  executable: fixture.exe
+  executable: {executable_name}
   sha256: '{hash}'
-  args: ['--exact', 'host::key_tests::owned_managed_key_child', '--ignored']
+  args: []
   env: {{OWNED_KEY_PORT: '{{PORT}}', OWNED_KEY_MODE: '{mode}'}}
 network:
   health_check: {{path: /health, expected_status: 200, busy_statuses: [503], identity_header: X-Owned, identity_value: fixture, timeout_ms: 100}}
@@ -84,12 +142,31 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
 configuration: {{required_secrets: [api_key], config_template: {{}}}}
 "#
     );
-    std::fs::write(source.join("manifest.yaml"), yaml).unwrap();
-    state
+    std::fs::write(source.path().join("manifest.yaml"), &yaml).unwrap();
+    let imported = state
         .registry
-        .import(source.join("manifest.yaml"))
-        .unwrap()
-        .record
+        .import(source.path().join("manifest.yaml"))
+        .unwrap();
+    assert!(!imported.already_registered);
+    let package = state
+        .registry
+        .package_dir(&imported.record.manifest.metadata.id)
+        .unwrap();
+    assert!(
+        package.join("record.json").is_file(),
+        "the registry must persist the record it just imported"
+    );
+    // `import` stages content only (no permission bits travel with the bytes); the real
+    // spawn needs the execute bit on Unix. The hash and the record are left untouched.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let staged = package.join(executable_name);
+        let mut permissions = std::fs::metadata(&staged).unwrap().permissions();
+        permissions.set_mode(permissions.mode() | 0o755);
+        std::fs::set_permissions(&staged, permissions).unwrap();
+    }
+    imported.record
 }
 
 #[test]
@@ -112,8 +189,85 @@ fn owned_managed_key_child() {
     }
 }
 
+/// The packaging contract the keyring vectors rely on, checked without a platform keyring
+/// (headless Linux has none, so the credential vectors return early there): the record the
+/// host loads back is the one `Registry::import` persisted, the declared executable is the
+/// lightweight fixture rather than the running test binary, and the staged artifact really
+/// executes and answers with the mode's identity.
+#[test]
+fn managed_package_is_imported_with_the_fixture_and_the_staged_binary_serves() {
+    for (mode, status, identity) in [
+        ("busy", "503 Service Unavailable", "fixture"),
+        ("failed", "200 OK", "wrong-identity"),
+    ] {
+        let (_dir, state, base) = state_and_record("openai_chat");
+        let record = managed_record(&state, &base, mode);
+        let id = record.manifest.metadata.id.clone();
+        let package = state.registry.package_dir(&id).unwrap();
+        assert!(
+            package.join("record.json").is_file(),
+            "the registry must persist the imported record"
+        );
+        assert_eq!(
+            state.registry.load(&id).unwrap().fingerprint,
+            record.fingerprint
+        );
+        let staged_path = package.join("fixture.exe");
+        let staged = std::fs::metadata(&staged_path).unwrap().len();
+        let running = std::fs::metadata(std::env::current_exe().unwrap())
+            .unwrap()
+            .len();
+        assert!(
+            staged < running,
+            "package executable must not be the running test binary"
+        );
+        assert!(
+            staged < 8 * 1024 * 1024,
+            "package executable must stay a lightweight fixture, got {staged} bytes"
+        );
+        // Spawn the staged artifact exactly as the runtime does and speak to it.
+        let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+        let mut child = std::process::Command::new(&staged_path)
+            .env("OWNED_KEY_PORT", port.to_string())
+            .env("OWNED_KEY_MODE", mode)
+            .spawn()
+            .unwrap();
+        let reply = answer(port);
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(reply.starts_with(&format!("HTTP/1.1 {status}")), "{reply}");
+        assert!(reply.contains(&format!("X-Owned: {identity}")), "{reply}");
+    }
+}
+
+fn answer(port: u16) -> String {
+    use std::io::{Read, Write};
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) {
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.write_all(b"GET /health HTTP/1.1\r\n\r\n").unwrap();
+            let mut reply = String::new();
+            let _ = stream.read_to_string(&mut reply);
+            return reply;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "fixture never listened"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 #[tokio::test]
 async fn real_managed_busy_failed_child_cannot_edit_credentials_then_stop_can() {
+    if skip_without_platform_keyring(
+        "real_managed_busy_failed_child_cannot_edit_credentials_then_stop_can",
+    ) {
+        return;
+    }
     for mode in ["busy", "failed"] {
         let (_dir, state, base) = state_and_record("openai_chat");
         let record = managed_record(&state, &base, mode);
@@ -215,6 +369,11 @@ async fn ready(
 
 #[tokio::test]
 async fn credential_save_uses_same_fifo_lock_until_keyring_and_event_complete() {
+    if skip_without_platform_keyring(
+        "credential_save_uses_same_fifo_lock_until_keyring_and_event_complete",
+    ) {
+        return;
+    }
     let (_dir, state, record) = state_and_record("openai_chat");
     let id = record.manifest.metadata.id;
     let _cleanup = DummyCredential(id.clone());
@@ -247,6 +406,11 @@ async fn credential_save_uses_same_fifo_lock_until_keyring_and_event_complete() 
 
 #[tokio::test]
 async fn credential_save_refuses_ready_busy_failed_and_failed_write_has_no_success() {
+    if skip_without_platform_keyring(
+        "credential_save_refuses_ready_busy_failed_and_failed_write_has_no_success",
+    ) {
+        return;
+    }
     for busy in [false, true] {
         let (_dir, state, mut record) = state_and_record("openai_chat");
         let id = record.manifest.metadata.id.clone();
@@ -309,6 +473,11 @@ async fn credential_save_refuses_ready_busy_failed_and_failed_write_has_no_succe
 
 #[tokio::test]
 async fn failed_backend_selection_does_not_publish_new_choice_or_success() {
+    if skip_without_platform_keyring(
+        "failed_backend_selection_does_not_publish_new_choice_or_success",
+    ) {
+        return;
+    }
     let (_dir, state, mut record) = state_and_record("openai_chat");
     let id = record.manifest.metadata.id.clone();
     let _cleanup = DummyCredential(id.clone());
@@ -395,9 +564,9 @@ async fn master_key_rotation_updates_gateway_auth_and_persists_keyring() {
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let url = format!("http://127.0.0.1:{port}/v1/models");
 
-    // Old key authorizes (503 Service Unavailable because no backend attached yet)
+    // Old key authorizes (502 Bad Gateway because no backend is attached yet)
     let res_old = client.get(&url).bearer_auth(&old_key).send().await.unwrap();
-    assert_eq!(res_old.status().as_u16(), 503);
+    assert_eq!(res_old.status().as_u16(), 502);
 
     // Stop gateway before rotation
     handle.shutdown().await.unwrap();
@@ -422,9 +591,9 @@ async fn master_key_rotation_updates_gateway_auth_and_persists_keyring() {
     let res_old_after = client.get(&url).bearer_auth(&old_key).send().await.unwrap();
     assert_eq!(res_old_after.status().as_u16(), 401);
 
-    // New key is now authorized (503 Service Unavailable because no backend)
+    // New key is now authorized (502 Bad Gateway because no backend is attached)
     let res_new = client.get(&url).bearer_auth(&rotated).send().await.unwrap();
-    assert_eq!(res_new.status().as_u16(), 503);
+    assert_eq!(res_new.status().as_u16(), 502);
 
     handle.shutdown().await.unwrap();
 
@@ -456,7 +625,7 @@ async fn master_key_rotation_fails_atomically_on_keyring_persistence_error() {
     // Restart gateway, verify old key still works and was not changed
     let handle = state.gateway.listen(port).await.unwrap();
     let res_old = client.get(&url).bearer_auth(&old_key).send().await.unwrap();
-    assert_eq!(res_old.status().as_u16(), 503);
+    assert_eq!(res_old.status().as_u16(), 502);
     handle.shutdown().await.unwrap();
 
     let events = state.events.lock().await;

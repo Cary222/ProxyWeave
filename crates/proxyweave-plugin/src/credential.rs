@@ -12,7 +12,7 @@
 //! 5. Masked Projection: Sensitive credential values are masked (e.g. `sk-••••••`) before
 //!    being displayed in UI/logs, preventing credential leakage.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::manifest::{Manifest, Ownership};
@@ -167,7 +167,13 @@ pub fn mask_credential_value(val: &str) -> String {
 pub fn sanitize_credential_env_name(key: &str) -> String {
     let sanitized: String = key
         .chars()
-        .map(|c| if c.is_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
         .collect();
     format!("PROXYWEAVE_CREDENTIAL_{}", sanitized)
 }

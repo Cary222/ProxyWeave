@@ -108,7 +108,9 @@ fn test_in_memory_vault_isolation() {
     let plugin_b = "plugin-b";
 
     // Set credentials for Plugin A
-    vault.set_credential(plugin_a, "API_KEY", "secret-val-a").unwrap();
+    vault
+        .set_credential(plugin_a, "API_KEY", "secret-val-a")
+        .unwrap();
     assert_eq!(
         vault.get_credential(plugin_a, "API_KEY").unwrap(),
         Some("secret-val-a".to_string())
@@ -148,7 +150,10 @@ fn test_missing_required_credential_blocks_startup() {
     // 1. None provided -> blocked
     let res = resolve_and_verify_credentials(&vault, &manifest);
     match res {
-        Err(CredentialError::MissingRequiredCredential { plugin_id, missing_keys }) => {
+        Err(CredentialError::MissingRequiredCredential {
+            plugin_id,
+            missing_keys,
+        }) => {
             assert_eq!(plugin_id, "managed-with-secrets");
             assert!(missing_keys.contains(&"OPENAI_API_KEY".to_string()));
             assert!(missing_keys.contains(&"ANTHROPIC_KEY".to_string()));
@@ -157,7 +162,9 @@ fn test_missing_required_credential_blocks_startup() {
     }
 
     // 2. Partial provided -> still blocked
-    vault.set_credential("managed-with-secrets", "OPENAI_API_KEY", "sk-test-key").unwrap();
+    vault
+        .set_credential("managed-with-secrets", "OPENAI_API_KEY", "sk-test-key")
+        .unwrap();
     let res2 = resolve_and_verify_credentials(&vault, &manifest);
     match res2 {
         Err(CredentialError::MissingRequiredCredential { missing_keys, .. }) => {
@@ -167,7 +174,9 @@ fn test_missing_required_credential_blocks_startup() {
     }
 
     // 3. All provided -> succeeds
-    vault.set_credential("managed-with-secrets", "ANTHROPIC_KEY", "sk-ant-test").unwrap();
+    vault
+        .set_credential("managed-with-secrets", "ANTHROPIC_KEY", "sk-ant-test")
+        .unwrap();
     let resolved = resolve_and_verify_credentials(&vault, &manifest).unwrap();
     assert_eq!(resolved.get("OPENAI_API_KEY").unwrap(), "sk-test-key");
     assert_eq!(resolved.get("ANTHROPIC_KEY").unwrap(), "sk-ant-test");
@@ -188,7 +197,10 @@ fn test_env_var_sanitization_and_injection() {
     let mut creds = HashMap::new();
     creds.insert("api-key".to_string(), "val-123".to_string());
     let envs = supervisor.prepare_credentials(&creds);
-    assert_eq!(envs.get("PROXYWEAVE_CREDENTIAL_API_KEY").unwrap(), "val-123");
+    assert_eq!(
+        envs.get("PROXYWEAVE_CREDENTIAL_API_KEY").unwrap(),
+        "val-123"
+    );
 }
 
 #[test]
@@ -198,7 +210,10 @@ fn test_external_plugin_credential_isolation() {
 
     let vault = InMemoryVault::new();
     let res = resolve_and_verify_credentials(&vault, &manifest);
-    assert!(res.is_ok(), "External with no required secrets resolves cleanly");
+    assert!(
+        res.is_ok(),
+        "External with no required secrets resolves cleanly"
+    );
 
     // Supervisor rejects spawn/stop/kill on external plugins
     let supervisor = PluginSupervisor::new();
@@ -206,7 +221,10 @@ fn test_external_plugin_credential_isolation() {
     rt.block_on(async {
         let creds = HashMap::new();
         let spawn_res = supervisor.spawn(&manifest, None, &creds).await;
-        assert_eq!(spawn_res.err(), Some(PluginError::ExternalLifecycleImmutable));
+        assert_eq!(
+            spawn_res.err(),
+            Some(PluginError::ExternalLifecycleImmutable)
+        );
     });
 }
 
@@ -216,7 +234,9 @@ fn test_zero_db_credential_invariant() {
     let credential_src = include_str!("../crates/proxyweave-plugin/src/credential.rs");
     let plugin_toml = include_str!("../crates/proxyweave-plugin/Cargo.toml");
     let root_toml = include_str!("../Cargo.toml");
-    let forbidden_db = ["sqlx", "rusqlite", "sqlite3", "diesel", "sea-orm", "mongodb"];
+    let forbidden_db = [
+        "sqlx", "rusqlite", "sqlite3", "diesel", "sea-orm", "mongodb",
+    ];
     for db in forbidden_db {
         assert!(
             !plugin_toml.contains(db) && !root_toml.contains(db) && !credential_src.contains(db),

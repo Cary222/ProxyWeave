@@ -664,9 +664,7 @@ pub fn validate_github_repo_url(url: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn inspect_project_from_github(
-    url: String,
-) -> Result<InspectProjectResult, String> {
+pub async fn inspect_project_from_github(url: String) -> Result<InspectProjectResult, String> {
     let raw_url = validate_github_repo_url(&url)?;
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -1555,7 +1553,15 @@ pub async fn get_plugin_secrets_status(
         let is_set = quotio_platform::get_plugin_credential(&id, &name)
             .map_err(|_| "无法读取插件凭据状态".to_string())?
             .is_some_and(|value| !value.is_empty());
-        list.push(SecretStatusInfo { name, is_set });
+        list.push(SecretStatusInfo {
+            name,
+            is_set,
+            // The vault contract (spec v9) carries an optional masked preview;
+            // this status endpoint never exposes one, and `skip_serializing_if`
+            // keeps the field out of the payload. Behaviour is unchanged — the
+            // struct literal simply has to name every field to compile.
+            masked_value: None,
+        });
     }
 
     Ok(list)
@@ -2355,7 +2361,6 @@ pub async fn graceful_exit(state: &DesktopState, app: &AppHandle) {
     app.exit(0);
 }
 
-
 // ============================================================================
 // Phase 5 Workbench IPC Aliases (spec v6)
 // ============================================================================
@@ -2383,13 +2388,14 @@ pub struct RouteStatusInfo {
 }
 
 #[tauri::command]
-pub async fn list_plugins(
-    state: State<'_, DesktopState>,
-) -> Result<Vec<PluginRecord>, String> {
+pub async fn list_plugins(state: State<'_, DesktopState>) -> Result<Vec<PluginRecord>, String> {
     let mut plugins = list_local_plugins(state.clone()).await?;
     let discovered = state.watcher.list_discovered();
     for item in discovered {
-        if !plugins.iter().any(|p| p.manifest.metadata.id == item.manifest.metadata.id) {
+        if !plugins
+            .iter()
+            .any(|p| p.manifest.metadata.id == item.manifest.metadata.id)
+        {
             plugins.push(item);
         }
     }
@@ -2398,9 +2404,7 @@ pub async fn list_plugins(
 }
 
 #[tauri::command]
-pub async fn refresh_plugins(
-    state: State<'_, DesktopState>,
-) -> Result<Vec<PluginRecord>, String> {
+pub async fn refresh_plugins(state: State<'_, DesktopState>) -> Result<Vec<PluginRecord>, String> {
     let watcher = state.watcher.clone();
     tauri::async_runtime::spawn_blocking(move || {
         watcher.scan_all();
@@ -2431,28 +2435,40 @@ pub async fn probe_plugin(
     let (status, port, error, healthy) = match status_res {
         Ok(status_info) => {
             let healthy = status_info.status == "ready" || status_info.status == "busy";
-            (status_info.status, status_info.port, status_info.error, healthy)
+            (
+                status_info.status,
+                status_info.port,
+                status_info.error,
+                healthy,
+            )
         }
         Err(e) => {
             if let Some(record) = state.watcher.get_plugin(&id) {
-                if let proxyweave_plugin::Runtime::External { endpoint } = &record.manifest.runtime {
+                if let proxyweave_plugin::Runtime::External { endpoint } = &record.manifest.runtime
+                {
                     let health_path = &record.manifest.network.health_check.path;
                     let full_url = format!("{}{}", endpoint.trim_end_matches('/'), health_path);
                     let client = reqwest::Client::builder()
-                        .timeout(Duration::from_millis(record.manifest.network.health_check.timeout_ms))
+                        .timeout(Duration::from_millis(
+                            record.manifest.network.health_check.timeout_ms,
+                        ))
                         .build()
                         .map_err(|err| err.to_string())?;
                     let resp = client.get(&full_url).send().await;
                     match resp {
-                        Ok(res) if res.status().as_u16() == record.manifest.network.health_check.expected_status => {
+                        Ok(res)
+                            if res.status().as_u16()
+                                == record.manifest.network.health_check.expected_status =>
+                        {
                             ("ready".to_string(), None, None, true)
                         }
-                        Ok(res) => {
-                            (format!("http_{}", res.status().as_u16()), None, None, false)
-                        }
-                        Err(err) => {
-                            ("unreachable".to_string(), None, Some(err.to_string()), false)
-                        }
+                        Ok(res) => (format!("http_{}", res.status().as_u16()), None, None, false),
+                        Err(err) => (
+                            "unreachable".to_string(),
+                            None,
+                            Some(err.to_string()),
+                            false,
+                        ),
                     }
                 } else {
                     ("stopped".to_string(), None, Some(e), false)
@@ -2474,9 +2490,7 @@ pub async fn probe_plugin(
 }
 
 #[tauri::command]
-pub async fn get_route_status(
-    state: State<'_, DesktopState>,
-) -> Result<RouteStatusInfo, String> {
+pub async fn get_route_status(state: State<'_, DesktopState>) -> Result<RouteStatusInfo, String> {
     let gw = get_gateway_status(state.clone()).await?;
     let active_requests = state.gateway.active_requests();
     let total_routed = state.gateway.total_routed();

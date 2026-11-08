@@ -30,4 +30,19 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // The browser-backed acceptance suites drive a real Chromium once per file.
+  // Vitest's 5s default measures a warm desktop machine; on a 1-vCPU CI runner
+  // one navigation plus a paint can exceed it, and the suite then fails for the
+  // runner's speed rather than for the behaviour it asserts. These bounds only
+  // cap failures: a passing assertion still returns the moment the browser
+  // reports.
+  test: {
+    testTimeout: 120_000,
+    hookTimeout: 60_000,
+    // Each suite drives a real Chromium. On a 1-vCPU runner the default worker
+    // pool runs several at once and the box swaps or OOMs before the assertions
+    // matter; one file at a time keeps peak memory inside the runner.
+    fileParallelism: false,
+  },
 }));

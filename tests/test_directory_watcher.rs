@@ -7,9 +7,7 @@
 //! 4. Dynamic updates: modifying an existing manifest in the directory hot-reloads the updated in-memory record.
 //! 5. Zero-DB invariant: all watcher states and plugin registries operate 100% in-memory without persistent databases.
 
-use proxyweave_plugin::{
-    watcher::DirectoryWatcher, Manifest, Ownership, PluginError, PluginSupervisor,
-};
+use proxyweave_plugin::{watcher::DirectoryWatcher, Ownership, PluginError, PluginSupervisor};
 use std::fs;
 use tempfile::tempdir;
 
@@ -118,11 +116,15 @@ fn test_dynamic_watcher_load_valid_manifests() {
     let plugins = watcher.list_discovered();
     assert_eq!(plugins.len(), 2);
 
-    let ext = watcher.get_plugin("dynamic-ext-1").expect("find dynamic-ext-1");
+    let ext = watcher
+        .get_plugin("dynamic-ext-1")
+        .expect("find dynamic-ext-1");
     assert_eq!(ext.manifest.metadata.name, "Dynamic External Daemon");
     assert_eq!(ext.manifest.ownership(), Ownership::External);
 
-    let managed = watcher.get_plugin("dynamic-managed-1").expect("find dynamic-managed-1");
+    let managed = watcher
+        .get_plugin("dynamic-managed-1")
+        .expect("find dynamic-managed-1");
     assert_eq!(managed.manifest.metadata.name, "Dynamic Managed Plugin");
     assert_eq!(managed.manifest.ownership(), Ownership::Managed);
 }
@@ -137,7 +139,9 @@ fn test_dynamic_watcher_external_physical_isolation() {
     watcher.add_watch_dir(dir.path().to_path_buf());
     let _ = watcher.scan_all();
 
-    let ext_rec = watcher.get_plugin("dynamic-ext-1").expect("ext plugin exists");
+    let ext_rec = watcher
+        .get_plugin("dynamic-ext-1")
+        .expect("ext plugin exists");
     assert_eq!(ext_rec.manifest.ownership(), Ownership::External);
     assert!(watcher.is_external("dynamic-ext-1"));
 
@@ -168,8 +172,11 @@ fn test_dynamic_watcher_corrupted_manifest_graceful_degradation() {
 
     // 3. Schema invalid file (missing required metadata)
     let invalid_schema_path = dir.path().join("invalid_schema.manifest.json");
-    fs::write(&invalid_schema_path, r#"{"schema_version": "1.0", "metadata": {}}"#)
-        .expect("write invalid");
+    fs::write(
+        &invalid_schema_path,
+        r#"{"schema_version": "1.0", "metadata": {}}"#,
+    )
+    .expect("write invalid");
 
     let watcher = DirectoryWatcher::new();
     watcher.add_watch_dir(dir.path().to_path_buf());

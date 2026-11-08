@@ -80,7 +80,9 @@ fn test_sse_truncation_guard_invariants() {
     let gateway_lib = include_str!("../crates/proxyweave-gateway/src/lib.rs");
 
     // Must contain the strict failure assertion
-    assert!(gateway_lib.contains("HTTP EOF never proves protocol completion. Fail transport, not a synthetic DONE."));
+    assert!(gateway_lib.contains(
+        "HTTP EOF never proves protocol completion. Fail transport, not a synthetic DONE."
+    ));
     assert!(gateway_lib.contains("upstream SSE ended without a protocol terminal event"));
 
     // Ensure no code injects a synthetic "data: [DONE]" upon error or EOF

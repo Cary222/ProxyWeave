@@ -905,13 +905,13 @@ pub(crate) fn reject_existing_links(path: &Path) -> Result<(), String> {
     for p in path.ancestors() {
         match fs::symlink_metadata(p) {
             Ok(m) => {
-                if m.file_type().is_symlink() {
+                if m.file_type().is_symlink() && !is_os_root_alias(p) {
                     return Err("links are not allowed in package or registry paths".into());
                 }
                 #[cfg(windows)]
                 {
                     use std::os::windows::fs::MetadataExt;
-                    if m.file_attributes() & 0x400 != 0 {
+                    if m.file_attributes() & 0x400 != 0 && !is_os_root_alias(p) {
                         return Err("Windows reparse points are not allowed".into());
                     }
                 }
@@ -921,6 +921,78 @@ pub(crate) fn reject_existing_links(path: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Root-level aliases the operating system itself maintains: the entry as it appears under a
+/// filesystem root, and the system directory the alias must resolve to.
+///
+/// This is a whitelist, not a category. A root-level link is exempt only when its exact name
+/// is listed *and* its canonical target is still the directory the OS put there, so a root
+/// entry that was repointed elsewhere stays a boundary violation. Only macOS ships such
+/// aliases (`/var`, `/tmp` and `/etc` are links into `/private`); the table is plain data so
+/// the decision itself is testable on every platform, but `is_os_root_alias` consults it only
+/// on macOS.
+const OS_ROOT_ALIASES: &[(&str, &str)] = &[
+    ("/var", "/private/var"),
+    ("/tmp", "/private/tmp"),
+    ("/etc", "/private/etc"),
+];
+
+/// Target a whitelisted root alias must resolve to; `None` when the name is not a known OS
+/// alias.
+fn os_root_alias_target(name: &Path) -> Option<&'static Path> {
+    for entry in OS_ROOT_ALIASES {
+        let (alias, target) = *entry;
+        if Path::new(alias) == name {
+            return Some(Path::new(target));
+        }
+    }
+    None
+}
+
+/// Whitelist verdict for one root-level entry: a listed name whose canonical target is the
+/// expected system directory (or below it). A listed name resolving anywhere else, and an
+/// unlisted name however it resolves, are both refused.
+fn root_alias_allowed(name: &Path, resolved: Option<&Path>) -> bool {
+    match (os_root_alias_target(name), resolved) {
+        (Some(expected), Some(resolved)) => resolved == expected || resolved.starts_with(expected),
+        _ => false,
+    }
+}
+
+/// Whether a root-level entry is exempt from link rejection.
+///
+/// Only a direct child of a filesystem root (`/var`) or of a Windows volume root is eligible:
+/// that is the one place where the operating system keeps an alias layer this crate did not
+/// create. Eligibility alone is not enough - the name must be whitelisted in
+/// [`OS_ROOT_ALIASES`] and the link must still resolve to that alias's system directory.
+/// Linux has no root aliases to trust and Windows has no trustworthy root alias set (an
+/// administrator-created junction may point anywhere), so on both every root-level symlink or
+/// reparse point is rejected. Every component at or below the caller's own root keeps being
+/// validated one by one by [`reject_existing_links`].
+fn is_os_root_alias(path: &Path) -> bool {
+    if !is_root_child(path) || !cfg!(target_os = "macos") {
+        return false;
+    }
+    let resolved = fs::canonicalize(path).ok();
+    root_alias_allowed(path, resolved.as_deref())
+}
+
+/// True only for a direct child of a filesystem root (`/var`) or of a Windows volume root
+/// (`C:\var`).
+fn is_root_child(path: &Path) -> bool {
+    use std::path::Component;
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    let mut components = parent.components();
+    match components.next() {
+        Some(Component::RootDir) => components.next().is_none(),
+        Some(Component::Prefix(_)) => {
+            matches!(components.next(), Some(Component::RootDir)) && components.next().is_none()
+        }
+        _ => false,
+    }
 }
 
 // Windows retry loop extracted from upstream-rs 2.16.3
@@ -1332,5 +1404,149 @@ mod publication_tests {
             .unwrap());
         assert!(!root_path.exists());
         let _ = worker.await;
+    }
+}
+
+/// Root-level link exemption is a whitelist with a target check (spec v14, registry boundary):
+/// the OS's own aliases pass, everything else stays rejected, and nothing below a root-level
+/// entry is exempted.
+#[cfg(test)]
+mod root_alias_tests {
+    use super::*;
+    #[cfg(unix)]
+    use std::fs;
+
+    // -----------------------------------------------------------------------
+    // Positive: a whitelisted root alias that still resolves to its own target
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_whitelisted_root_alias_with_its_own_target_is_exempt() {
+        for entry in OS_ROOT_ALIASES {
+            let (alias, target) = *entry;
+            let name = Path::new(alias);
+            let expected = Path::new(target);
+            assert_eq!(
+                os_root_alias_target(name),
+                Some(expected),
+                "{alias} must be in the whitelist"
+            );
+            assert!(
+                root_alias_allowed(name, Some(expected)),
+                "{alias} -> {target}"
+            );
+            // The macOS aliases resolve to a system directory; anything below it is still the
+            // same aliased tree, so the verdict is unchanged.
+            let nested = expected.join("nested");
+            assert!(root_alias_allowed(name, Some(nested.as_path())));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_whitelisted_root_alias_is_exempt_on_the_live_macos_root() {
+        for alias in ["/var", "/tmp", "/etc"] {
+            let path = Path::new(alias);
+            let is_link = fs::symlink_metadata(path)
+                .map(|meta| meta.file_type().is_symlink())
+                .unwrap_or(false);
+            if is_link {
+                assert!(is_os_root_alias(path), "{alias} is the OS's own alias");
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Negative: a root-level entry that is not a whitelisted alias is rejected
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_root_entry_outside_the_whitelist_is_never_exempt() {
+        let unknown = Path::new("/forge-not-an-os-alias");
+        assert_eq!(os_root_alias_target(unknown), None);
+        assert!(!root_alias_allowed(
+            unknown,
+            Some(Path::new("/private/var"))
+        ));
+        assert!(!is_os_root_alias(unknown));
+        // A whitelisted name whose link was repointed is a violation, not an alias.
+        assert!(!root_alias_allowed(
+            Path::new("/var"),
+            Some(Path::new("/tmp"))
+        ));
+        assert!(!root_alias_allowed(
+            Path::new("/var"),
+            Some(Path::new("/Users/forged"))
+        ));
+        assert!(!root_alias_allowed(Path::new("/var"), None));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_root_level_symlink_outside_the_whitelist_is_still_rejected() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("sentinel"), b"untouched").unwrap();
+        let link = root.path().join("linked");
+        symlink(outside.path(), &link).unwrap();
+
+        // Nothing exempts it, and the walk refuses the link instead of following it.
+        assert!(!is_os_root_alias(&link));
+        let error = reject_existing_links(&link.join("sentinel")).unwrap_err();
+        assert!(error.contains("links are not allowed"), "{error}");
+        assert_eq!(
+            fs::read(outside.path().join("sentinel")).unwrap(),
+            b"untouched"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_root_entry_is_never_exempt() {
+        // No trustworthy Windows root alias set: not even a name that looks like one is
+        // exempt, so a root-level junction pointing elsewhere cannot pass as an alias.
+        assert!(!is_os_root_alias(Path::new(r"C:\var")));
+        assert!(!is_os_root_alias(Path::new(r"C:\forge-not-an-os-alias")));
+        assert!(!is_os_root_alias(Path::new(r"C:\")));
+    }
+
+    // -----------------------------------------------------------------------
+    // Boundary: only a direct child of the root is a candidate, everything
+    // below it is validated component by component
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_only_a_direct_child_of_the_root_is_a_candidate() {
+        assert!(is_root_child(Path::new("/var")));
+        assert!(!is_root_child(Path::new("/private/var")));
+        assert!(!is_root_child(Path::new("/var/tmp")));
+        assert!(!is_root_child(Path::new("var")));
+        assert!(!is_root_child(Path::new("/")));
+        // A listed name that is not directly under the root is not a root alias at all.
+        assert!(!is_os_root_alias(Path::new("/private/var")));
+        assert!(!root_alias_allowed(
+            Path::new("/var/tmp"),
+            Some(Path::new("/private/var/tmp"))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_components_below_the_alias_layer_are_validated_one_by_one() {
+        use std::os::unix::fs::symlink;
+        // A tree shaped like the macOS alias layer: every component below the alias is
+        // checked on its own, so a link one level down is refused.
+        let root = tempfile::tempdir().unwrap();
+        let var = root.path().join("private").join("var");
+        fs::create_dir_all(&var).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("sentinel"), b"untouched").unwrap();
+
+        let nested = var.join("db");
+        symlink(outside.path(), &nested).unwrap();
+        assert!(!is_os_root_alias(&nested));
+        let error = reject_existing_links(&nested.join("sentinel")).unwrap_err();
+        assert!(error.contains("links are not allowed"), "{error}");
     }
 }

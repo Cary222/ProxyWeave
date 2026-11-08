@@ -119,9 +119,7 @@ fn a_full_window_reports_exhaustion_instead_of_reusing_a_port() {
     let _a = allocator.allocate("plugin-a").expect("a");
     let _b = allocator.allocate("plugin-b").expect("b");
 
-    let err = allocator
-        .allocate("plugin-c")
-        .expect_err("window is full");
+    let err = allocator.allocate("plugin-c").expect_err("window is full");
     assert!(
         matches!(err, PortAllocatorError::RangeExhausted { .. }),
         "expected RangeExhausted, got {err}"
@@ -165,7 +163,7 @@ fn a_dropped_instance_record_reclaims_the_port() {
     }
     // Simulates a panic/abort path: the ledger must not leak the reservation.
     assert_eq!(allocator.reserved_count(), 0);
-    assert_eq!(allocator.allocate("crashing-plugin").is_ok(), true);
+    assert!(allocator.allocate("crashing-plugin").is_ok());
 }
 
 #[test]
@@ -190,7 +188,10 @@ fn the_runtime_manager_shares_one_ledger_with_its_callers() {
     let handle = runtime.port_allocator();
     let lease = handle.allocate("managed-plugin").expect("allocate");
 
-    assert_eq!(runtime.port_allocator().owner_of(lease.port()).as_deref(), Some("managed-plugin"));
+    assert_eq!(
+        runtime.port_allocator().owner_of(lease.port()).as_deref(),
+        Some("managed-plugin")
+    );
     assert_eq!(runtime.port_allocator().stats().reserved, 1);
 }
 
@@ -263,7 +264,11 @@ async fn admission_refreshes_the_route_once_and_retries_on_a_stale_generation() 
         .await
         .expect("admission follows the restarted instance");
 
-    assert_eq!(lease.generation(), 7, "the lease belongs to the live instance");
+    assert_eq!(
+        lease.generation(),
+        7,
+        "the lease belongs to the live instance"
+    );
     assert_eq!(route.instance_generation, Some(7), "the caller is re-bound");
     let snapshot = gateway.route_snapshot().await;
     assert_eq!(
@@ -345,8 +350,10 @@ async fn a_saturated_instance_is_reported_but_never_ready() {
 async fn route_pool_rebinds_only_the_named_backend() {
     let gateway = gateway_with(RuntimeManager::new());
     let pool = gateway.route_pool();
-    pool.add_backend(backend("plugin-a", "openai", Some(3))).await;
-    pool.add_backend(backend("plugin-b", "openai", Some(5))).await;
+    pool.add_backend(backend("plugin-a", "openai", Some(3)))
+        .await;
+    pool.add_backend(backend("plugin-b", "openai", Some(5)))
+        .await;
 
     assert!(pool.update_generation("plugin-a", Some(9)).await);
     assert!(!pool.update_generation("unknown-plugin", Some(9)).await);
@@ -355,9 +362,16 @@ async fn route_pool_rebinds_only_the_named_backend() {
     let a = backends.iter().find(|b| b.plugin_id == "plugin-a").unwrap();
     let b = backends.iter().find(|b| b.plugin_id == "plugin-b").unwrap();
     assert_eq!(a.instance_generation, Some(9));
-    assert_eq!(b.instance_generation, Some(5), "unrelated route is untouched");
+    assert_eq!(
+        b.instance_generation,
+        Some(5),
+        "unrelated route is untouched"
+    );
     assert!(a.matches_generation(9));
-    assert!(!a.matches_generation(3), "the retired generation no longer matches");
+    assert!(
+        !a.matches_generation(3),
+        "the retired generation no longer matches"
+    );
 }
 
 #[tokio::test]
@@ -418,10 +432,7 @@ fn adapter_and_host_layers_contain_no_plugin_specific_code() {
 
     // Adapter layer and host layer both: the red line is that no plugin name reaches code.
     let mut sources = Vec::new();
-    for crate_name in [
-        "proxyweave-protocols",
-        "proxyweave-gateway",
-    ] {
+    for crate_name in ["proxyweave-protocols", "proxyweave-gateway"] {
         let root = crates_dir.join(crate_name).join("src");
         let mut found = Vec::new();
         collect_rs_sources(&root, &mut found);

@@ -47,7 +47,9 @@ impl std::fmt::Display for PluginError {
             Self::InvalidManifest(msg) => write!(f, "Invalid manifest: {}", msg),
             Self::AlreadyRunning(id) => write!(f, "Plugin already running: {}", id),
             Self::NotRunning(id) => write!(f, "Plugin not running: {}", id),
-            Self::MissingRequiredCredential(msg) => write!(f, "Missing required credential: {}", msg),
+            Self::MissingRequiredCredential(msg) => {
+                write!(f, "Missing required credential: {}", msg)
+            }
         }
     }
 }

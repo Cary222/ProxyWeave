@@ -134,7 +134,11 @@ impl DirectoryWatcher {
                 Ok(m) => m,
                 Err(e) => {
                     rejected_count += 1;
-                    errors.push(format!("{}: invalid manifest schema: {}", path.display(), e));
+                    errors.push(format!(
+                        "{}: invalid manifest schema: {}",
+                        path.display(),
+                        e
+                    ));
                     continue;
                 }
             };

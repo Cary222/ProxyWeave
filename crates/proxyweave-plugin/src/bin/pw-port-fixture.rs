@@ -90,7 +90,7 @@ fn serve(mut stream: TcpStream) -> std::io::Result<()> {
         line.clear();
     }
 
-    let body = format!("{{\"service\":\"port-fixture\"}}");
+    let body = "{\"service\":\"port-fixture\"}";
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{}: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),

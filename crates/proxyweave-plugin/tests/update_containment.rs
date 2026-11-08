@@ -144,7 +144,9 @@ async fn public_entries_reject_before_registry_load_and_callback_for_managed_and
 
 #[test]
 fn disabled_library_bodies_cannot_load_stop_publish_or_restore() {
-    let updater = include_str!("../src/updater.rs");
+    // Line endings are a checkout property, not a source property: Windows runners check
+    // tracked sources out with CRLF, so normalise before comparing exact function bodies.
+    let updater = include_str!("../src/updater.rs").replace("\r\n", "\n");
     let apply = updater
         .split_once("pub async fn apply_plugin_update(")
         .unwrap()
@@ -168,7 +170,7 @@ fn disabled_library_bodies_cannot_load_stop_publish_or_restore() {
         .0;
     assert_eq!(backend.trim(), "let _ = (registry, runtime, id, staged, api_key, set_backend);\n    Err(\"update_unavailable_pending_safety_validation\".into())");
     assert!(!updater.contains("async fn restore_update"));
-    let registry = include_str!("../src/registry.rs");
+    let registry = include_str!("../src/registry.rs").replace("\r\n", "\n");
     let swap = registry
         .split_once("pub fn atomic_swap_package(")
         .unwrap()

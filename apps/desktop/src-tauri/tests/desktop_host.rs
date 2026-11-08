@@ -2,6 +2,33 @@ use proxyweave_plugin::{Manifest, Ownership, Registry};
 use quotio_desktop_lib::host::{DesktopConfig, DesktopState};
 use tempfile::tempdir;
 
+type MemoryKeyStore = std::sync::Arc<std::sync::Mutex<Option<String>>>;
+
+/// In-memory master-key store. Integration tests must not touch the OS keychain:
+/// a headless Linux runner has no Secret Service, and a developer machine must not
+/// be mutated. Same wiring as `DesktopState::new`, credential store injected.
+fn open_state_with_memory_keyring(
+    profile_dir: std::path::PathBuf,
+    registry: Registry,
+    store: MemoryKeyStore,
+) -> Result<DesktopState, String> {
+    let get_store = store.clone();
+    let set_store = store;
+    DesktopState::new_with_credential_store(
+        profile_dir,
+        registry,
+        move || Ok(get_store.lock().unwrap().clone()),
+        move |key| {
+            *set_store.lock().unwrap() = Some(key.to_string());
+            Ok(())
+        },
+    )
+}
+
+fn memory_key_store() -> MemoryKeyStore {
+    MemoryKeyStore::default()
+}
+
 #[allow(dead_code)]
 fn sample_manifest(id: &str, ownership: Ownership) -> Manifest {
     let yaml = format!(
@@ -46,7 +73,9 @@ async fn test_desktop_state_master_key_and_config_persistence() {
     std::fs::create_dir_all(&prof_dir).unwrap();
 
     let registry = Registry::open(&reg_dir).expect("registry");
-    let state = DesktopState::new(prof_dir.clone(), registry).expect("desktop state");
+    let keys: MemoryKeyStore = memory_key_store();
+    let state = open_state_with_memory_keyring(prof_dir.clone(), registry, keys.clone())
+        .expect("desktop state");
 
     // 1. Master Key was generated and starts with pw_
     let key = state.gateway_master_key.read().await.clone();
@@ -64,7 +93,13 @@ async fn test_desktop_state_master_key_and_config_persistence() {
     state.save_desktop_config(&new_config).expect("save config");
 
     let reg2 = Registry::open(&reg_dir).expect("registry");
-    let state2 = DesktopState::new(prof_dir, reg2).expect("desktop state reloaded");
+    let state2 =
+        open_state_with_memory_keyring(prof_dir, reg2, keys).expect("desktop state reloaded");
+    assert_eq!(
+        *state2.gateway_master_key.read().await,
+        key,
+        "reloaded state must reuse the persisted master key"
+    );
     assert_eq!(*state2.gateway_port.read().await, 29999);
     assert_eq!(
         state2.selected_plugin_id.read().await.as_deref(),
@@ -80,7 +115,8 @@ async fn test_host_events_bounded_fifo() {
     std::fs::create_dir_all(&prof_dir).unwrap();
 
     let registry = Registry::open(&reg_dir).expect("registry");
-    let state = DesktopState::new(prof_dir, registry).expect("desktop state");
+    let state = open_state_with_memory_keyring(prof_dir, registry, memory_key_store())
+        .expect("desktop state");
 
     // Insert 60 events, should clamp at 50
     for i in 0..60 {
@@ -103,7 +139,8 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
     std::fs::create_dir_all(&prof_dir).unwrap();
 
     let registry = Registry::open(&reg_dir).expect("registry");
-    let state = DesktopState::new(prof_dir, registry).expect("desktop state");
+    let state = open_state_with_memory_keyring(prof_dir, registry, memory_key_store())
+        .expect("desktop state");
 
     // Pick an unused port for test gateway
     let port = proxyweave_plugin::port::pick_unused_port().expect("free port");
@@ -122,7 +159,7 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
         *gh = Some(handle);
     }
 
-    // Verify gateway responds 503 Service Unavailable when no backend attached
+    // Verify gateway responds 502 Bad Gateway when no backend attached (spec v7 shape)
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let key = state.gateway_master_key.read().await.clone();
     let resp = client
@@ -131,7 +168,7 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
         .send()
         .await
         .expect("send");
-    assert_eq!(resp.status().as_u16(), 503);
+    assert_eq!(resp.status().as_u16(), 502);
 
     // 2. Stop gateway gracefully
     let handle_to_stop = {
@@ -145,7 +182,6 @@ async fn test_desktop_gateway_lifecycle_and_backend_attachment() {
     let gh = state.gateway_handle.lock().await;
     assert!(gh.is_none());
 }
-
 
 #[tokio::test]
 async fn test_inspect_project_from_github_url_validation_and_author_extraction() {
@@ -177,9 +213,11 @@ async fn test_inspect_project_from_github_url_validation_and_author_extraction()
     assert!(err.contains("当前仅支持标准 GitHub 仓库 URL"));
 
     // 4. Valid GitHub URLs
-    let ok = validate_github_repo_url("  https://github.com/router-for-me/workbuddy2api  ").unwrap();
+    let ok =
+        validate_github_repo_url("  https://github.com/router-for-me/workbuddy2api  ").unwrap();
     assert_eq!(ok, "https://github.com/router-for-me/workbuddy2api");
-    let ok_ssh = validate_github_repo_url("git@github.com:router-for-me/workbuddy2api.git").unwrap();
+    let ok_ssh =
+        validate_github_repo_url("git@github.com:router-for-me/workbuddy2api.git").unwrap();
     assert_eq!(ok_ssh, "git@github.com:router-for-me/workbuddy2api.git");
 
     // 5. Author extraction

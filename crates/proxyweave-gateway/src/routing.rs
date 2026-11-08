@@ -209,7 +209,10 @@ impl RoutePool {
     /// Returns `true` when a matching entry was updated, `false` when the plugin is unknown.
     pub async fn update_generation(&self, plugin_id: &str, generation: Option<u64>) -> bool {
         let mut list = self.backends.write().await;
-        match list.iter_mut().find(|backend| backend.plugin_id == plugin_id) {
+        match list
+            .iter_mut()
+            .find(|backend| backend.plugin_id == plugin_id)
+        {
             Some(backend) => {
                 backend.instance_generation = generation;
                 true
@@ -479,15 +482,21 @@ mod tests {
         let (c_all, _, _) = pool.select_candidates(None).await;
         assert_eq!(c_all.len(), 2);
 
-        let (c_wb, _, _) = pool.select_candidates_for_target(None, Some("generic-adapter-a")).await;
+        let (c_wb, _, _) = pool
+            .select_candidates_for_target(None, Some("generic-adapter-a"))
+            .await;
         assert_eq!(c_wb.len(), 1);
         assert_eq!(c_wb[0].plugin_id, "generic-adapter-a");
 
-        let (c_cpa, _, _) = pool.select_candidates_for_target(None, Some("external-cpa")).await;
+        let (c_cpa, _, _) = pool
+            .select_candidates_for_target(None, Some("external-cpa"))
+            .await;
         assert_eq!(c_cpa.len(), 1);
         assert_eq!(c_cpa[0].plugin_id, "external-cpa");
 
-        let (c_none, _, _) = pool.select_candidates_for_target(None, Some("nonexistent")).await;
+        let (c_none, _, _) = pool
+            .select_candidates_for_target(None, Some("nonexistent"))
+            .await;
         assert!(c_none.is_empty());
     }
 
