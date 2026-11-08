@@ -2625,6 +2625,17 @@ fn replace_toml_table(text: &str, table: &str, body: &str) -> String {
 mod tests {
     use super::*;
 
+    /// `CURSOR_CONFIG` / `WINDSURF_CONFIG` are process-global: the test that points them at a
+    /// temp file and every test that resolves the real default path must not overlap, or the
+    /// reader observes the writer's temp file and its path assertion fails.
+    static AGENT_CONFIG_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_agent_config_env() -> std::sync::MutexGuard<'static, ()> {
+        AGENT_CONFIG_ENV
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn zcode_config_declares_image_modality() {
         let out =
@@ -3331,6 +3342,7 @@ mod tests {
 
     #[test]
     fn preview_target_generates_diff_without_writing() {
+        let _env = lock_agent_config_env();
         let preview = preview_target(
             "cursor",
             "http://127.0.0.1:28319",
@@ -3342,7 +3354,12 @@ mod tests {
         assert_eq!(preview.target, "cursor");
         assert_eq!(preview.diffs.len(), 1);
         assert_eq!(preview.files().len(), 1);
-        assert!(preview.diffs[0].path.contains("Cursor"));
+        let expected_path = cursor_config_path();
+        assert_eq!(
+            preview.diffs[0].path.as_str(),
+            expected_path.to_string_lossy().as_ref(),
+            "preview must target the production Cursor settings path"
+        );
         assert!(preview.diffs[0]
             .proposed_content
             .contains("cursor.cpp.overrideBaseUrl"));
@@ -3355,6 +3372,7 @@ mod tests {
 
     #[test]
     fn preview_target_cursor_and_windsurf_zero_writes_and_correct_diff() {
+        let _env = lock_agent_config_env();
         let temp_dir = std::env::temp_dir().join(format!("pw-test-preview-{}", now_ms()));
         std::fs::create_dir_all(&temp_dir).unwrap();
         let cursor_path = temp_dir.join("cursor_settings.json");
