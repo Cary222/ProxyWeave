@@ -693,7 +693,13 @@ async fn def006_actual_managed_args_env_and_keyring_projection_preserve_data() {
     record.manifest.validate().unwrap();
     let fresh_port = proxyweave_plugin::port::pick_unused_port().unwrap();
     let error = manager
-        .start_plugin(&record, temp.path(), Some(fresh_port), &data_root, Some(api_key))
+        .start_plugin(
+            &record,
+            temp.path(),
+            Some(fresh_port),
+            &data_root,
+            Some(api_key),
+        )
         .await
         .unwrap_err();
     assert!(
