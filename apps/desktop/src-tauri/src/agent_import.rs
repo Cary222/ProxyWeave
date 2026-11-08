@@ -138,8 +138,14 @@ fn local_app_data() -> PathBuf {
         .unwrap_or_else(|| home_dir().join("AppData").join("Local"))
 }
 
-/// 非 Windows 平台。
-#[cfg(not(windows))]
+/// macOS 的本地 App 数据目录：原生为 `~/Library/Application Support`。
+#[cfg(target_os = "macos")]
+fn local_app_data() -> PathBuf {
+    home_dir().join("Library").join("Application Support")
+}
+
+/// 其余非 Windows 平台（XDG）。
+#[cfg(all(not(windows), not(target_os = "macos")))]
 fn local_app_data() -> PathBuf {
     home_dir().join(".local").join("share")
 }
@@ -2973,7 +2979,12 @@ mod tests {
         assert_eq!(home_dir(), home);
         #[cfg(windows)]
         assert_eq!(local_app_data(), home.join("AppData/Local"));
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            local_app_data(),
+            home.join("Library").join("Application Support")
+        );
+        #[cfg(all(not(windows), not(target_os = "macos")))]
         assert_eq!(local_app_data(), home.join(".local").join("share"));
         let base = "http://127.0.0.1:28319/v1";
         let key = "owned-fixture-key";

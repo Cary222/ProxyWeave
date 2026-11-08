@@ -501,8 +501,10 @@ async fn concurrent_leases_block_stop_and_release_only_after_last_drop() {
     f.runtime.stop_plugin("gateway-fixture").await.unwrap();
     wait_exit(f.pid).await;
     assert_eq!(f.request("normal").await.status(), 503);
+    // With no attached backend the gateway answers 502 Bad Gateway (spec v7 shape); the 503
+    // `backend_unavailable` shape needs an attached backend whose plugin is not running.
     f.gateway.clear_backend().await;
-    assert_eq!(f.request("normal").await.status(), 503);
+    assert_eq!(f.request("normal").await.status(), 502);
     // Reuse after stop, dynamic new port is read from lease.
     let status = f
         .runtime

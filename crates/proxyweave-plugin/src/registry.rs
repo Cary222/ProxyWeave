@@ -905,13 +905,13 @@ pub(crate) fn reject_existing_links(path: &Path) -> Result<(), String> {
     for p in path.ancestors() {
         match fs::symlink_metadata(p) {
             Ok(m) => {
-                if m.file_type().is_symlink() {
+                if m.file_type().is_symlink() && !is_os_root_alias(p) {
                     return Err("links are not allowed in package or registry paths".into());
                 }
                 #[cfg(windows)]
                 {
                     use std::os::windows::fs::MetadataExt;
-                    if m.file_attributes() & 0x400 != 0 {
+                    if m.file_attributes() & 0x400 != 0 && !is_os_root_alias(p) {
                         return Err("Windows reparse points are not allowed".into());
                     }
                 }
@@ -921,6 +921,27 @@ pub(crate) fn reject_existing_links(path: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// An entry sitting directly under a filesystem or volume root is the operating system's
+/// own alias layer, not part of any tree this crate creates: macOS keeps `/var`, `/tmp` and
+/// `/etc` as links into `/private`, and only a privileged account can add an entry to `/`
+/// or to a volume root on Windows. Resolving such an alias cannot move a package outside
+/// its own root, so it is not a boundary violation; every component at or below the
+/// caller's own root is still rejected.
+fn is_os_root_alias(path: &Path) -> bool {
+    use std::path::Component;
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    let mut components = parent.components();
+    match components.next() {
+        Some(Component::RootDir) => components.next().is_none(),
+        Some(Component::Prefix(_)) => {
+            matches!(components.next(), Some(Component::RootDir)) && components.next().is_none()
+        }
+        _ => false,
+    }
 }
 
 // Windows retry loop extracted from upstream-rs 2.16.3

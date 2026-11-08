@@ -26,37 +26,26 @@ fn placeholder_executable() -> Vec<u8> {
     bytes
 }
 
-fn sha256_of_file(path: &std::path::Path) -> String {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-    let mut file = std::fs::File::open(path).unwrap();
-    let mut hash = Sha256::new();
-    let mut buf = vec![0u8; 1024 * 1024];
-    loop {
-        let count = file.read(&mut buf).unwrap();
-        if count == 0 {
-            break;
-        }
-        hash.update(&buf[..count]);
-    }
-    format!("{:x}", hash.finalize())
-}
-
-/// Builds the manageable package for the managed child vectors without going
-/// through `Registry::import`: import stages a copy of the declared executable
-/// and refuses any file past 256 MiB, which this crate's debug test binary
-/// exceeds on every platform. The package keeps the same verified layout
-/// (manifest hash of the real executable, executable beside it), linked to the
-/// running binary so the child vector stays a real spawn.
-fn build_runnable_package(state: &DesktopState, id: &str) {
+/// The lightweight Managed stand-in these vectors spawn. It is a workspace binary target,
+/// so `cargo test --workspace --all-targets` builds it next to the test binary's `deps`
+/// directory and no release build of the shell ever contains it. The package executable is
+/// never `current_exe()`: that is this crate's debug test binary (hundreds of MiB, past the
+/// 256 MiB per-file package cap) and Windows refuses to write to or hard-link a binary it is
+/// currently running.
+fn owned_key_fixture_executable() -> std::path::PathBuf {
+    let name = format!("pw-owned-key-fixture{}", std::env::consts::EXE_SUFFIX);
     let exe = std::env::current_exe().unwrap();
-    let package = state.registry.package_dir(id).unwrap();
-    std::fs::create_dir_all(&package).unwrap();
-    let target = package.join("fixture.exe");
-    let _ = std::fs::remove_file(&target);
-    if std::fs::hard_link(&exe, &target).is_err() {
-        std::fs::copy(&exe, &target).unwrap();
+    let deps = exe.parent().unwrap();
+    let mut candidates = vec![deps.join(&name)];
+    if let Some(profile_dir) = deps.parent() {
+        candidates.push(profile_dir.join(&name));
     }
+    for candidate in candidates {
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    panic!("managed fixture {name} is missing: build the workspace targets (cargo test --workspace --all-targets) before running these vectors");
 }
 
 fn state_and_record(protocol: &str) -> (tempfile::TempDir, DesktopState, PluginRecord) {
@@ -120,17 +109,31 @@ configuration: {{required_secrets: [access_token], config_template: {{}}}}
     (dir, state, record)
 }
 
+/// Builds the runnable managed package for the owned child vectors through the real
+/// `Registry::import` path: the record and its `packages/<id>/record.json` are produced and
+/// persisted by the registry itself, so the vectors exercise the same load path the host
+/// uses (`save_plugin_secret_value` -> `registry.load`), and the declared SHA256 is the hash
+/// of the staged fixture.
 fn managed_record(state: &DesktopState, record: &PluginRecord, mode: &str) -> PluginRecord {
-    let id = &record.manifest.metadata.id;
-    let hash = sha256_of_file(&std::env::current_exe().unwrap());
+    use sha2::{Digest, Sha256};
+    let fixture = owned_key_fixture_executable();
+    let source = tempfile::tempdir().unwrap();
+    let executable_name = "fixture.exe";
+    // `fs::copy` keeps the executable bit cargo built the fixture with; `import` stages the
+    // declared file's bytes and persists the record.
+    let executable = source.path().join(executable_name);
+    std::fs::copy(&fixture, &executable).unwrap();
+    let bytes = std::fs::read(&executable).unwrap();
+    let hash = format!("{:x}", Sha256::digest(&bytes));
+    let id = format!("{}-owned-{mode}", record.manifest.metadata.id);
     let yaml = format!(
         r#"schema_version: '1.0'
-metadata: {{id: '{id}-owned', name: Owned, version: 1.0.0, license: MIT}}
+metadata: {{id: '{id}', name: Owned, version: 1.0.0, license: MIT}}
 runtime:
   ownership: managed
-  executable: fixture.exe
+  executable: {executable_name}
   sha256: '{hash}'
-  args: ['--exact', 'host::key_tests::owned_managed_key_child', '--ignored']
+  args: []
   env: {{OWNED_KEY_PORT: '{{PORT}}', OWNED_KEY_MODE: '{mode}'}}
 network:
   health_check: {{path: /health, expected_status: 200, busy_statuses: [503], identity_header: X-Owned, identity_value: fixture, timeout_ms: 100}}
@@ -139,15 +142,31 @@ capabilities: {{protocol: openai_chat, models_path: /v1/models, inference_path: 
 configuration: {{required_secrets: [api_key], config_template: {{}}}}
 "#
     );
-    let owned_id = format!("{id}-owned");
-    build_runnable_package(state, &owned_id);
-    let manifest = proxyweave_plugin::Manifest::parse(yaml.as_bytes()).unwrap();
-    proxyweave_plugin::PluginRecord {
-        settings: manifest.configuration.settings.clone(),
-        fingerprint: proxyweave_plugin::manifest_fingerprint(&manifest).unwrap(),
-        manifest,
-        source: None,
+    std::fs::write(source.path().join("manifest.yaml"), &yaml).unwrap();
+    let imported = state
+        .registry
+        .import(source.path().join("manifest.yaml"))
+        .unwrap();
+    assert!(!imported.already_registered);
+    let package = state
+        .registry
+        .package_dir(&imported.record.manifest.metadata.id)
+        .unwrap();
+    assert!(
+        package.join("record.json").is_file(),
+        "the registry must persist the record it just imported"
+    );
+    // `import` stages content only (no permission bits travel with the bytes); the real
+    // spawn needs the execute bit on Unix. The hash and the record are left untouched.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let staged = package.join(executable_name);
+        let mut permissions = std::fs::metadata(&staged).unwrap().permissions();
+        permissions.set_mode(permissions.mode() | 0o755);
+        std::fs::set_permissions(&staged, permissions).unwrap();
     }
+    imported.record
 }
 
 #[test]
@@ -167,6 +186,78 @@ fn owned_managed_key_child() {
             ("200 OK", "wrong-identity")
         };
         let _ = stream.write_all(format!("HTTP/1.1 {status}\r\nX-Owned: {identity}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes());
+    }
+}
+
+/// The packaging contract the keyring vectors rely on, checked without a platform keyring
+/// (headless Linux has none, so the credential vectors return early there): the record the
+/// host loads back is the one `Registry::import` persisted, the declared executable is the
+/// lightweight fixture rather than the running test binary, and the staged artifact really
+/// executes and answers with the mode's identity.
+#[test]
+fn managed_package_is_imported_with_the_fixture_and_the_staged_binary_serves() {
+    for (mode, status, identity) in [
+        ("busy", "503 Service Unavailable", "fixture"),
+        ("failed", "200 OK", "wrong-identity"),
+    ] {
+        let (_dir, state, base) = state_and_record("openai_chat");
+        let record = managed_record(&state, &base, mode);
+        let id = record.manifest.metadata.id.clone();
+        let package = state.registry.package_dir(&id).unwrap();
+        assert!(
+            package.join("record.json").is_file(),
+            "the registry must persist the imported record"
+        );
+        assert_eq!(
+            state.registry.load(&id).unwrap().fingerprint,
+            record.fingerprint
+        );
+        let staged_path = package.join("fixture.exe");
+        let staged = std::fs::metadata(&staged_path).unwrap().len();
+        let running = std::fs::metadata(std::env::current_exe().unwrap())
+            .unwrap()
+            .len();
+        assert!(
+            staged < running,
+            "package executable must not be the running test binary"
+        );
+        assert!(
+            staged < 8 * 1024 * 1024,
+            "package executable must stay a lightweight fixture, got {staged} bytes"
+        );
+        // Spawn the staged artifact exactly as the runtime does and speak to it.
+        let port = proxyweave_plugin::port::pick_unused_port().unwrap();
+        let mut child = std::process::Command::new(&staged_path)
+            .env("OWNED_KEY_PORT", port.to_string())
+            .env("OWNED_KEY_MODE", mode)
+            .spawn()
+            .unwrap();
+        let reply = answer(port);
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(reply.starts_with(&format!("HTTP/1.1 {status}")), "{reply}");
+        assert!(reply.contains(&format!("X-Owned: {identity}")), "{reply}");
+    }
+}
+
+fn answer(port: u16) -> String {
+    use std::io::{Read, Write};
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) {
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.write_all(b"GET /health HTTP/1.1\r\n\r\n").unwrap();
+            let mut reply = String::new();
+            let _ = stream.read_to_string(&mut reply);
+            return reply;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "fixture never listened"
+        );
+        std::thread::sleep(Duration::from_millis(20));
     }
 }
 
